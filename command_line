@@ -1,0 +1,8 @@
+make -f _fcrts.mak TARGET=4CPC DEBUG=0  PRODUCT="USE_CROSSTABLE" SOURCERY_GCC=1 all
+
+SOURCERY_GCC=1 to build with codesourcery gcc
+FREESCALE_GCC=1 to build with freescale gcc
+PRODUCT="USE_NO_CROSSTABLE" To build the runtime for TPAC hardware 
+PRODUCT="USE_CROSSTABLE" To build the runtime for HW119 aka ATN01 or P04 hardware 
+
+You can build the runtime only for one kind of hardware so the two define cannot be active at the same time
