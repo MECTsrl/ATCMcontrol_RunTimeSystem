@@ -27,7 +27,7 @@
 /* ----  Includes:	 ---------------------------------------------------------- */
 
 #include "stdInc.h"
-#include "fcDef.h" // per FC_PRIO_IO_TEST
+#include "fcDef.h"
 
 //#include <sys/io.h> // ioperm()
 

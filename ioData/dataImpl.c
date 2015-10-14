@@ -313,7 +313,11 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // start the thread
     pthread_attr_t pattr;
     pthread_attr_init(&pattr);
+#ifndef __XENO__
     if (pthread_create(&theThread_id, &pattr, &dataThread, NULL) == 0) {
+#else
+	if (osPthreadCreate(&theThread_id, &pattr, &dataThread, NULL, "data", 0) == 0) {
+#endif
         do {
             usleep(1000);
         } while (g_bThreadStatus != RUNNING);

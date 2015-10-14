@@ -62,10 +62,6 @@
  */
 #include "bacFun.h"
 
-/* Declarations MBRTU Library
- */
-#include "libMBRTU.h"
-
 /* Declarations Mect Library
  */
 #include "libMect.h"
@@ -109,87 +105,85 @@ EXECUTE_FUN g_pLibraryFun[] =
 	/* libIec.c - IEC library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funIec.h" 		/* Reserved Numbers:	0	-	79	*/
+	#include "funIec.h" 				/* Reserved Numbers:	0	-	79	*/
 
 	/* libUtil.c - Utility library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funUtil.h"		/* Reserved Numbers:	80	-	119 */
+	#include "funUtil.h"				/* Reserved Numbers:	80	-	119 */
 
 	/* libSys.c - System library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funSys.h" 		/* Reserved Numbers:	120 -	134 */
+	#include "funSys.h" 				/* Reserved Numbers:	120 -	134 */
 
 	/* libSys2.c - System library NT
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funSys2.h"		/* Reserved Numbers:	135 -	169 */
+	#include "funSys2.h"				/* Reserved Numbers:	135 -	169 */
 
 	/* libFile.c - File Access library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funFile.h"		/* Reserved Numbers:	160 -	179 */
+	#include "funFile.h"				/* Reserved Numbers:	160 -	179 */
 
 	/* libSys2.c - System library NT
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funSys22.h"		/* Reserved Numbers:	180 -	199 */
+	#include "funSys22.h"				/* Reserved Numbers:	180 -	199 */
+
 #if 0
 	/* funMBus2.c - M-Bus library NT
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funMBus2.h"		/* Reserved Numbers:	200 -	229 */
+	#include "funMBus2.h"				/* Reserved Numbers:	200 -	229 */
 
 	/* libBac.c - BACnet
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funBac.h" 		/* Reserved Numbers:	230 -	339 */
+	#include "funBac.h" 				/* Reserved Numbers:	230 -	239 */
 #endif
 	
-	/* funMBRTU.c - MODBUS RTU library 
+	/* funMBRTU.c - MODBUS RTU library - MTL: now removed (2015-07-28).
 	 * ------------------------------------------------------------------------
 	 */
 
-	#include "funMBRTU.h"		/* Reserved Numbers:	200 -	229 */
+										/* Reserved Numbers:	200 -	229 */
+
+	/* 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, */
+	   NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+	/* 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229 */
+	   NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funMect.c - Mect library 
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funMect.h"		/* Reserved Numbers:	230 -	239 */
+	#include "funMect.h"				/* Reserved Numbers:	230 -	239 */
 
 	/* funUSB.c - USB library 
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funUSB.h"		/* Reserved Numbers:	240 -	249 */
+	#include "funUSB.h"					/* Reserved Numbers:	240 -	249 */
 
 	/* funDatalog.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funDatalog.h"		/* Reserved Numbers:	250 -	259 */
+	#include "funDatalog.h"				/* Reserved Numbers:	250 -	259 */
 
 	/* funMectUserUtility.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-
 	#include "funMectUserUtility.h"		/* Reserved Numbers:	260 -	279 */
-	
+
 	/* funHW119.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funHW119.h"		/* Reserved Numbers:	280 -	299 */
+	#include "funHW119.h"				/* Reserved Numbers:	280 -	299 */
 
 	/* funModbus.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-
-	#include "funModbus.h"		/* Reserved Numbers:	300 -	359 */
-
+	#include "funModbus.h"				/* Reserved Numbers:	300 -	359 */
 };
 
 
@@ -201,32 +195,32 @@ EXECUTE_FB	g_pLibraryFB [] =
 	/* libIec.c - IEC library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbIec.h"			/* Reserved Numbers:	0	-	19	*/
+	#include "fbIec.h"					/* Reserved Numbers:	0	-	19	*/
 
 	/* libUtil.c - Utility library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbUtil.h" 		/* Reserved Numbers:	20	-	24	*/
+	#include "fbUtil.h" 				/* Reserved Numbers:	20	-	24	*/
 
 	/* libSys.c - System library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbSys.h"			/* Reserved Numbers:	25	-	29	*/
+	#include "fbSys.h"					/* Reserved Numbers:	25	-	29	*/
 
 	/* libMBus2.c - M-Bus library NT
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbMBus2.h"		/* Reserved Numbers:	30	-	39	*/
+	#include "fbMBus2.h"				/* Reserved Numbers:	30	-	39	*/
 
 	/* libSys2.c - System library NT
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbSys2.h" 		/* Reserved Numbers:		-		*/
+	#include "fbSys2.h" 				/* Reserved Numbers:		-		*/
 
 	/* libFile.c - File Access library
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbFile.h" 		/* Reserved Numbers:		-		*/
+	#include "fbFile.h" 				/* Reserved Numbers:		-		*/
 
 };
 

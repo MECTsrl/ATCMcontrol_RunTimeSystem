@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -40,53 +39,150 @@
 #include <sys/mman.h>
 #endif
 
+#ifdef __XENO__
+#include <sys/io.h> // ioperm()
+#include <syslog.h>
+#endif
+
 /* ----  Local Defines:   ----------------------------------------------------- */
 
-#define VM_MAGIC	0xA5A5u
+#define VM_MAGIC            0xA5A5u
+
+// PINCTRL register in "i.MX28 Applications Processor Reference Manual", # MCIMX28RM, rev. 1, 2010, page 125
+#define XX_GPIO_ADDR        0x80018000
+#define XX_GPIO_SIZE        0x00002000
+#define XX_GPIO_SET_OFFSET  0x0004
+#define XX_GPIO_CLR_OFFSET  0x0008
+#define XX_GPIO_DIN_OFFSET	0x0000
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
-#if defined (RTS_CFG_MEM_TRACE)
-  static IEC_DINT g_lMemAlloc  = 0;
-  static IEC_DINT g_lMemObject = 0;
+#if defined(_SOF_4CFC_SRC_)
+extern unsigned long *g_jiffies_ptr;
 #endif
 
-#if defined(_SOF_4CFC_SRC_)
-  extern unsigned long *g_jiffies_ptr;
+/* ----  Local Variables:	 -------------------------------------------------- */
+
+#if defined (RTS_CFG_MEM_TRACE)
+static IEC_DINT g_lMemAlloc  = 0;
+static IEC_DINT g_lMemObject = 0;
 #endif
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 
 #define XX_MAX_THR (1 + MAX_IO_LAYER + MAX_TASKS) // 1 timer + 5 iolayer + 25 task
-#define XX_MAX_BIT 6
 
-static unsigned long xx_addr = 0x80018000; // PINCTRL
-static unsigned long xx_size = 0x00002000; 
-static void * xx_base_ptr = NULL;
+/*
+ * GPIO INDEX LAYOUT
+ *
+ * OUTPUTS:  0               ->  (XX_MAX_OUT_BIT - 1)
+ * INPUTS:   XX_MAX_OUT_BIT  ->  (XX_MAX_OUT_BIT + XX_MAX_IN_BIT - 1)
+ */
+#define XX_MAX_OUT_BIT 5
+#define XX_MAX_IN_BIT 1
+
+static void *xx_base_ptr = NULL;
 static int xx_fd = -1;
 static pthread_mutex_t xx_mutex;
-static struct { pthread_t id; unsigned bits; } xx_gpio_bits[XX_MAX_THR];
-static unsigned xx_set = 0x0004;
-static unsigned xx_clr = 0x0008;
-static struct { unsigned offset, mask; } xx_gpio_pin[] = {
-	{ 0x0720, 0x01000000 }, // TASTO 1 SSP3SCK   BANK2 PIN24
-	{ 0x0720, 0x00004000 }, // TASTO 2           BANK2 PIN14
-	{ 0x0720, 0x08000000 }, // TASTO 3 SSP3_SS0  BANK2 PIN27
-	{ 0x0720, 0x00020000 }, // TASTO 4 SSP2_MOSI BANK2 PIN17
-	{ 0x0720, 0x00040000 }, // TASTO 5 SSP2_MISO BANK2 PIN18
-	{ 0x0720, 0x00010000 }, // TASTO 6 SSP_SCK   BANK2 PIN16
+static struct {
+	pthread_t id;
+	unsigned bits;
+} xx_gpio_bits[XX_MAX_THR];
+static struct {
+	unsigned offset;
+	unsigned value;
+} xx_gpio_enabler[] = {
+	// PINCTRL register in "i.MX28 Applications Processor Reference Manual", # MCIMX28RM, rev. 1, 2010, page 688
+
+	// [0] OUT: bank 2, pin 2 (pin 2, SSP0_DATA2)
+	// 5 4 G 3 V 2 1 X
+	{ 0x0144, 0x00000030 },		//MUXSELx SET(GPIO), page 699
+	{ 0x0384, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x03b8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000004 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000004 },		//DOUTx CLR, page 801
+	{ 0x0b24, 0x00000004 },		//DOEx SET(en.), page 810
+
+	// [1] OUT: bank 2, pin 3 (pin 274, SSP0_DATA3)
+	// 5 4 G 3 V 2 X 0
+	{ 0x0144, 0x000000c0 },		//MUXSELx SET(GPIO), page 699
+	{ 0x0384, 0x00004000 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x03a8, 0x00003000 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000008 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000008 },		//DOUTx CLR, page 801
+	{ 0x0b24, 0x00000008 },		//DOEx SET(en.), page 810
+
+	// [2] OUT: bank 2, pin 8 (pin 276, SSP0_CMD)
+	// 5 4 G 3 V X 1 0
+	{ 0x0144, 0x00030000 },		//MUXSELx SET(GPIO), page 699
+	{ 0x0394, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x03a8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000100 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000100 },		//DOUTx CLR, page 801
+	{ 0x0b24, 0x00000100 },		//DOEx SET(en.), page 810
+
+	// [3] OUT: bank 2, pin 10 (pin 268, SSP0_SCK)
+	// 5 4 G X V 2 1 0
+	{ 0x0144, 0x00300000 },		//MUXSELx SET(GPIO), page 699
+	{ 0x0394, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x03a8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000400 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000400 },		//DOUTx CLR, page 801
+	{ 0x0b24, 0x00000400 },		//DOEx SET(en.), page 810
+
+	// [4] OUT: bank 2, pin 0 (pin 270, SSP0_DATA0)
+	// 5 X G 3 V 2 1 0
+	{ 0x0144, 0x00000003 },		//MUXSELx SET(GPIO), page 699
+	{ 0x0384, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x03b8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000001 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000001 },		//DOUTx CLR, page 801
+	{ 0x0b24, 0x00000001 },		//DOEx SET(en.), page 810
+
+	// [5] IN : bank 2, pin 1 (pin 289, SSP0_DATA1)
+	// X 4 G 3 V 2 1 0
+	{ 0x0144, 0x0000000c },		//MUXSELx SET(GPIO), page 699
+	{ 0x0384, 0x00000040 },		//DRIVEx SET(3.3V), page 753, 756
+	{ 0x0398, 0x00000030 },		//DRIVEx CLR(4mA), page 753, 756
+	{ 0x0628, 0x00000002 },		//PULLx CLR(no), page 789
+	{ 0x0728, 0x00000002 },		//DOUTx CLR, page 801
+	{ 0x0b28, 0x00000002 },		//DOEx CLR(en.), page 810
+
+	// THE END
 	{ 0xffff, 0xffffffff }
 };
-static struct { unsigned offset, value; } xx_gpio_enabler[] = {
-// Pin Control / GPIO Interface / Output Operation Setup (HW_PINCTRL_... )
-// BANK2, MUXSELx SET(GPIO) , DRIVEx SET(3.3V)  , DRIVEx CLR(4mA)   , PULLx  CLR(no)    , DOUTx  CLR        , DOEx   SET(en.) 
-/*PIN24*/{0x0154,0x00030000},{0x03b4,0x00000004},{0x03b8,0x00000003},{0x0628,0x01000000},{0x0728,0x01000000},{0x0b24,0x01000000},
-/*PIN14*/{0x0144,0x30000000},{0x0394,0x04000000},{0x0398,0x03000000},{0x0628,0x00004000},{0x0728,0x00004000},{0x0b24,0x00004000},
-/*PIN27*/{0x0154,0x00c00000},{0x03b4,0x00004000},{0x03b8,0x00003000},{0x0628,0x08000000},{0x0728,0x08000000},{0x0b24,0x08000000},
-/*PIN17*/{0x0154,0x0000000c},{0x03a4,0x00000040},{0x03a8,0x00000030},{0x0628,0x00020000},{0x0728,0x00020000},{0x0b24,0x00020000},
-/*PIN18*/{0x0154,0x00000030},{0x03a4,0x00000400},{0x03a8,0x00000300},{0x0628,0x00040000},{0x0728,0x00040000},{0x0b24,0x00040000},
-/*PIN16*/{0x0154,0x00000003},{0x03a4,0x00000004},{0x03a8,0x00000003},{0x0628,0x00010000},{0x0728,0x00010000},{0x0b24,0x00010000},
-	 {0xffff,0xffffffff}
+static struct {
+	unsigned offset;
+	unsigned mask;
+} xx_gpio_pin[] = {
+	// PINCTRL register in "i.MX28 Applications Processor Reference Manual", # MCIMX28RM, rev. 1, 2010, page 688
+
+	// [0] OUT: bank 2, pin  2 (pin   2, SSP0_DATA2)
+	// 5 4 G 3 V 2 1 X
+	{ 0x0720, 0x00000004 },		//DOUTx, page 801
+
+	// [1] OUT: bank 2, pin  3 (pin 274, SSP0_DATA3)
+	// 5 4 G 3 V 2 X 0
+	{ 0x0720, 0x00000008 },		//DOUTx, page 801
+
+	// [2] OUT: bank 2, pin  8 (pin 276, SSP0_CMD)
+	// 5 4 G 3 V X 1 0
+	{ 0x0720, 0x00000100 },		//DOUTx, page 801
+
+	// [3] OUT: bank 2, pin 10 (pin 268, SSP0_SCK)
+	// 5 4 G X V 2 1 0
+	{ 0x0720, 0x00000400 },		//DOUTx, page 801
+
+	// [4] OUT: bank 2, pin  0 (pin 270, SSP0_DATA0)
+	// 5 X G 3 V 2 1 0
+	{ 0x0720, 0x00000001 },		//DOUTx, page 801
+
+	// [5] IN:  bank 2, pin  1 (pin 289, SSP0_DATA1)
+	// X 4 G 3 V 2 1 0
+	{ 0x0920, 0x00000002 },		//DINx, page 806
+
+	// THE END
+	{ 0xffff, 0xffffffff }
 };
 
 #endif
@@ -110,7 +206,11 @@ IEC_UINT osTrace(IEC_CHAR *szFormat, ...)
 {
 	va_list 	va;
 	va_start(va, szFormat);
+#ifdef __XENO__
+	vsyslog(LOG_INFO, szFormat, va);
+#else
 	vprintf(szFormat, va); 
+#endif
 	va_end(va);
 
   #if defined(RTS_CFG_DEBUG_FILE)
@@ -146,6 +246,63 @@ IEC_UINT osTrace(IEC_CHAR *szFormat, ...)
 }
 #endif /* RTS_CFG_DEBUG_OUTPUT */
 
+static unsigned threads_num = 0;
+
+int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
+                        void *(*start_routine)(void *), void *arg,
+                        const char *name, size_t stacksize)
+{
+	int retval;
+
+#ifdef __XENO__
+	pthread_attr_t attr_x;
+	pthread_attr_t *attr_p;
+
+	printf("osPthreadCreate: %02u %s", ++threads_num, name);
+
+	attr_p = attr;
+	if (attr_p == NULL) {
+		attr_p = &attr_x;
+
+		pthread_attr_init(attr_p);
+	}
+
+	if (stacksize < PTHREAD_STACK_MIN) {
+		stacksize = PTHREAD_STACK_MIN;
+	}
+
+    pthread_attr_setdetachstate(attr_p, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(attr_p, stacksize);
+	pthread_attr_setinheritsched(attr_p, PTHREAD_EXPLICIT_SCHED);
+	pthread_attr_setscope(attr_p, PTHREAD_SCOPE_PROCESS);
+
+	printf("\n");
+	fflush(stdout);
+
+	retval = pthread_create(thread, attr, start_routine, arg);
+	pthread_set_name_np(*thread, name);
+#else
+	retval = pthread_create(thread, attr, start_routine, arg);
+#endif
+
+	return retval;
+}
+
+int osPthreadSetSched(int policy, int sched_priority)
+{
+	struct sched_param sp;
+
+	if (policy != SCHED_OTHER) {
+		sp.sched_priority = sched_priority;
+	}
+
+	int iRes = pthread_setschedparam(pthread_self(), policy, &sp);
+	if (iRes != 0) {
+		TR_ERR("pthread_setschedparam() failed", iRes);
+	}
+
+	return iRes;
+}
 
 /* ---------------------------------------------------------------------------- */
 /**
@@ -160,8 +317,71 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 {
 	IEC_UINT uRes = OK;
 
+#ifdef __XENO__
+    struct timespec timer_next;
+    struct timespec timer_now;
+	ldiv_t x;
+	int retval; 
+
+	// get time
+	clock_gettime(CLOCK_REALTIME, &timer_now);
+	// add delay
+	x = ldiv(ulTime, 1000L);
+    timer_next.tv_sec = timer_now.tv_sec + x.quot;
+    timer_next.tv_nsec = timer_now.tv_nsec + (x.rem * 1E6);
+	// check tv_nsec overflow
+    if (timer_next.tv_nsec >= 1E9) {
+        x = ldiv(timer_next.tv_nsec, 1E9);
+        timer_next.tv_sec += x.quot;
+        timer_next.tv_nsec = x.rem;
+    }
+	// normalize to timer milliseconds base
+	x = ldiv(timer_next.tv_nsec, 1E6);
+	timer_next.tv_nsec = x.quot * 1E6;
+	// do wait
+	do {
+        retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
+	} while (retval == EINTR);
+#else
 	usleep(ulTime * 1000);
+#endif
 	
+	RETURN(uRes);
+}
+
+/* ---------------------------------------------------------------------------- */
+/**
+ * osSleepAbsolute			
+ *
+ * Suspend the task until the given absolute time (in ms).
+ *
+ * @param			ulTime		Suspend time in ms.
+ * @return			OK if successful else error number.
+ */
+IEC_UINT osSleepAbsolute(IEC_UDINT ulTime)
+{
+	IEC_UINT uRes = OK;
+
+#ifdef __XENO__
+        struct timespec timer_next;
+	ldiv_t x;
+	int retval; 
+
+	// compute time
+    x = ldiv(ulTime, 1000L);
+    timer_next.tv_sec = x.quot;
+    timer_next.tv_nsec = x.rem * 1E6;
+	// do wait
+	do {
+       	retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
+	} while (retval == EINTR);
+#else
+	IEC_UDINT now = osGetTime32();
+
+	if (ulTime > now) {
+		usleep((ulTime - now) * 1000);
+	}
+#endif
 	RETURN(uRes);
 }
 
@@ -234,9 +454,11 @@ IEC_ULINT osGetTimeUS(void)
 	return (IEC_ULINT)*g_jiffies_ptr * (IEC_ULINT)10000ull;
 	
 #else
-
+#if 0
 	return osGetTime32Ex();
-
+#else
+	return osGetTimeUSEx();
+#endif
 #endif
 }
 
@@ -248,14 +470,21 @@ IEC_ULINT osGetTimeUS(void)
  */
 IEC_UDINT osGetTime32Ex(void)
 {
+#ifdef __XENO__
+	struct timespec tv;
+
+	clock_gettime(CLOCK_REALTIME, &tv);
+
+	return (IEC_UDINT)((IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6);
+#else
 	static struct timeval tv;
 
 	if (gettimeofday(&tv, NULL) == -1)
 	{
 		return 0;
 	}
-
 	return (IEC_UDINT)((IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_usec + 500u) / 1000u);
+#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -266,14 +495,21 @@ IEC_UDINT osGetTime32Ex(void)
  */
 IEC_ULINT osGetTime64Ex(void)
 {
+#ifdef __XENO__
+        struct timespec tv;
+
+        clock_gettime(CLOCK_REALTIME, &tv);
+
+	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6;
+#else
 	static struct timeval tv;
 
 	if (gettimeofday(&tv, NULL) == -1)
 	{
 		return 0;
 	}
-
 	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_usec + 500u) / 1000u;
+#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -284,14 +520,21 @@ IEC_ULINT osGetTime64Ex(void)
  */
 IEC_ULINT osGetTimeUSEx(void)
 {
+#ifdef __XENO__
+    struct timespec tv;
+
+    clock_gettime(CLOCK_REALTIME, &tv);
+
+	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000000u + (tv.tv_nsec/1E3);
+#else
 	static struct timeval tv;
 
 	if (gettimeofday(&tv, NULL) == -1)
 	{
 		return 0;
 	}
-	
 	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000000u + tv.tv_usec;
+#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -306,23 +549,23 @@ IEC_DATA OS_LPTR *osMalloc(IEC_UDINT ulSize)
 {
 	IEC_DATA OS_LPTR *pRet	= NULL;
 
-  #if defined(RTS_CFG_MEMORY_CHECK)
+#if defined(RTS_CFG_MEMORY_CHECK)
 
 	IEC_UINT uMagic = VM_MAGIC;
 
-	#if defined(IP_CFG_INST32) || defined(IP_CFG_INST64)
+#if defined(IP_CFG_INST32) || defined(IP_CFG_INST64)
 	  IEC_UINT uAli = 2;
-	#else
+#else
 	  IEC_UINT uAli = 0;
-	#endif
+#endif
 
 	IEC_DATA OS_LPTR *pData = OS_MALLOC(sizeof(uMagic) + uAli + sizeof(ulSize) + ulSize + sizeof(uMagic));
 
 	if (pData == NULL)
 	{
-	  #if defined(RTS_CFG_DEBUG_OUTPUT)
+#if defined(RTS_CFG_DEBUG_OUTPUT)
 		osTrace("\r\n*** [M E M O R Y   E R R O R]: Memory allocation (%ld bytes) failed!\r\n", ulSize);
-	  #endif
+#endif
 		return NULL;
 	}
 
@@ -339,24 +582,24 @@ IEC_DATA OS_LPTR *osMalloc(IEC_UDINT ulSize)
 	IEC_UINT u = (IEC_UINT)(uMagic ^ ~(IEC_UINT)ulSize);
 	OS_MEMCPY(pData, &u, sizeof(IEC_UINT));
 
-  #if defined (RTS_CFG_MEM_TRACE)
+#if defined (RTS_CFG_MEM_TRACE)
 	g_lMemObject++;
 	g_lMemAlloc += sizeof(uMagic) + uAli + sizeof(ulSize) + ulSize + sizeof(uMagic);
-  #if defined(RTS_CFG_DEBUG_OUTPUT)
+#if defined(RTS_CFG_DEBUG_OUTPUT)
 	osTrace("--- Alloc    %7ld   Bytes at 0x%08lx (%02ld/%05ld)\r\n", ulSize, pRet, g_lMemObject, g_lMemAlloc / 1024);
-  #endif
-  #endif
+#endif
+#endif
 
 	return pRet;
 
-  #else
+#else
 
 	pRet = (IEC_DATA OS_LPTR *)OS_MALLOC(ulSize);
 	pRet = OS_NORMALIZEPTR(pRet);
 
 	return pRet;
 
-  #endif
+#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -443,156 +686,102 @@ IEC_UINT osFree(IEC_DATA OS_LPTR **ppData)
   #endif
 }
 
-/* ---------------------------------------------------------------------------- */
+/*
+ * ----------------------------------------------------------------------------
+ * GPIO section
+ * ----------------------------------------------------------------------------
+ */
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 
-void xx_gpio_init()
+void
+xx_gpio_init(void)
 {
 	xx_fd = open("/dev/mem", O_RDWR, 0);
-	if (xx_fd > 0) {
-		xx_base_ptr = mmap(NULL, xx_size, PROT_READ | PROT_WRITE, MAP_SHARED, xx_fd, xx_addr);
-	}
-	if (xx_fd > 0 && xx_base_ptr) {
-		unsigned i = 0;
-		unsigned * reg_ptr;
-		pthread_mutexattr_t attr;
+	if (xx_fd <= 0)
+		return;
 
-		while (xx_gpio_enabler[i].offset < 0xffff) {
-			reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_enabler[i].offset);
-			*reg_ptr = xx_gpio_enabler[i].value;
-			++i;
-		}
-		for (i = 0; i < XX_MAX_THR; ++i) {
-			xx_gpio_bits[i].id = 0;
-			xx_gpio_bits[i].bits = 0x00000000;
-		}
-		pthread_mutexattr_init(&attr);
-		pthread_mutexattr_setprotocol(&attr, PTHREAD_PRIO_INHERIT);
-		pthread_mutex_init(&xx_mutex, &attr);
+	xx_base_ptr = mmap(NULL, XX_GPIO_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, xx_fd, XX_GPIO_ADDR);
+	if ((xx_fd <= 0) && (xx_base_ptr == NULL))
+		return;
+
+	unsigned i = 0;
+	unsigned *reg_ptr = NULL;
+
+	// Set up all input and output pins.
+	for (i = 0; xx_gpio_enabler[i].offset < 0xffff; i++) {
+		reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_enabler[i].offset);
+		*reg_ptr = xx_gpio_enabler[i].value;
 	}
+
+	// Toggle all output pins.
+
+	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
+		xx_gpio_clr(i);
+
+	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
+		xx_gpio_set(i);
+
+	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
+		xx_gpio_clr(i);
 }
 
-void xx_gpio_enable_thread()
+void
+xx_gpio_set(unsigned n)
 {
-	if (xx_base_ptr) {
-		unsigned i;
-		int found = -1;
-		int first_free = -1;
-		pthread_t id = pthread_self();
+	if (xx_base_ptr && n < XX_MAX_OUT_BIT) {
+		register unsigned *reg_ptr;
 
-		pthread_mutex_lock(&xx_mutex);
-		first_free = -1;
-		found = -1;
-		for (i = 0; i < XX_MAX_THR; ++i) {
-			if (xx_gpio_bits[i].id == id) {
-				found = i;
-				break;
-			}
-			if (xx_gpio_bits[i].id == 0 && first_free == -1) {
-				first_free = i;
-			}
-		}
-		if (found == -1 && first_free != -1) {
-			xx_gpio_bits[first_free].id = id;
-			xx_gpio_bits[first_free].bits = 0x00000000;
-		}
-		pthread_mutex_unlock(&xx_mutex);
-	}
-}
-
-static void xx_gpio_update(unsigned n)
-{
-	register unsigned i, bits;
-	register unsigned * reg_ptr;
-
-	bits = 0x00000000;
-	for (i = 0; i < XX_MAX_THR; ++i) {
-		bits |= xx_gpio_bits[i].bits;
-	}
-	if (bits & (1 << n)) {
-		reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_pin[n].offset + xx_set);
-		*reg_ptr = xx_gpio_pin[n].mask;
-	} else {
-		reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_pin[n].offset + xx_clr);
+		reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_pin[n].offset + XX_GPIO_SET_OFFSET);
 		*reg_ptr = xx_gpio_pin[n].mask;
 	}
 }
 
-void xx_gpio_set(unsigned n)
+void
+xx_gpio_clr(unsigned n)
 {
-	if (xx_base_ptr && n < XX_MAX_BIT) {
-		unsigned i;
-		pthread_t id = pthread_self();
+	if (xx_base_ptr && n < XX_MAX_OUT_BIT) {
+		register unsigned *reg_ptr;
 
-		for (i = 0; i < XX_MAX_THR; ++i) {
-			if (xx_gpio_bits[i].id == id) {
-				xx_gpio_bits[i].bits |= (1 << n);
-				pthread_mutex_lock(&xx_mutex);
-				xx_gpio_update(n);
-				pthread_mutex_unlock(&xx_mutex);
-				break;
-			}
-		}
+		reg_ptr = (unsigned *)(xx_base_ptr + xx_gpio_pin[n].offset + XX_GPIO_CLR_OFFSET);
+		*reg_ptr = xx_gpio_pin[n].mask;
 	}
 }
 
-void xx_gpio_clr(unsigned n)
+/**
+ * Read the level of the given GPIO pin ID.
+ *
+ * @param n				pin ID to read.
+ *
+ * @return				pin level.
+ */
+unsigned char
+xx_gpio_get(unsigned n)
 {
-	if (xx_base_ptr && n < XX_MAX_BIT) {
-		unsigned i;
-		pthread_t id = pthread_self();
+	if ((xx_base_ptr == NULL) || (n < XX_MAX_OUT_BIT) || (n >= (XX_MAX_OUT_BIT + XX_MAX_IN_BIT)))
+		return 0;
 
-		for (i = 0; i < XX_MAX_THR; ++i) {
-			if (xx_gpio_bits[i].id == id) {
-				xx_gpio_bits[i].bits &= ~(1 << n);
-				pthread_mutex_lock(&xx_mutex);
-				xx_gpio_update(n);
-				pthread_mutex_unlock(&xx_mutex);
-				break;
-			}
-		}
-	}
+	return (*((unsigned *)(xx_base_ptr + xx_gpio_pin[n].offset + XX_GPIO_DIN_OFFSET)) & xx_gpio_pin[n].mask) ? 1 : 0;
 }
 
-void xx_gpio_disable_thread()
+void
+xx_gpio_close(void)
 {
 	if (xx_base_ptr) {
-		unsigned i;
-		pthread_t id = pthread_self();
-
-		pthread_mutex_lock(&xx_mutex);
-		for (i = 0; i < XX_MAX_THR; ++i) {
-			if (xx_gpio_bits[i].id == id) {
-				unsigned n;
-
-				xx_gpio_bits[i].id = 0;
-				for (n = 0; n < XX_MAX_BIT; ++n) {
-					if (xx_gpio_bits[i].bits & (1 << n)) {
-						xx_gpio_update(n);
-					}
-				}
-				xx_gpio_bits[i].bits = 0x00000000;
-				break;
-			}
-		}
-		pthread_mutex_unlock(&xx_mutex);
-	}
-}
-
-void xx_gpio_close()
-{
-	if (xx_base_ptr) {
-		pthread_mutex_destroy(&xx_mutex);
-		munmap(xx_base_ptr, xx_size);
+		munmap(xx_base_ptr, XX_GPIO_SIZE);
 		xx_base_ptr = NULL;
 	}
+
 	if (xx_fd > 0) {
-	    close(xx_fd);
+		close(xx_fd);
 		xx_fd = -1;
 	}
 }
 
 #endif
 
+void *osMemCpy(void *dest, const void *src, size_t n) // __attribute__ ((optimize("O0")))
+{
+	return memcpy(dest, src, n);
+}
 /* ---------------------------------------------------------------------------- */

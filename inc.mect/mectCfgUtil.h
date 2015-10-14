@@ -54,9 +54,6 @@ typedef struct mbrtu_cfg_s {      /* MODBUS stack settings */
 	int ascii;              /* Use ASCII protocol */
 	int rtu;                /* Use RTU protocol */
 } mbrtu_cfg_s;
-#ifdef RTS_CFG_MBRTU_LIB
-extern mbrtu_cfg_s mbrtu_cfg;
-#endif
 
 #ifdef RTS_CFG_MECT_LIB
 extern serial_cfg_s mect_cfg;

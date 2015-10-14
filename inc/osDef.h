@@ -329,7 +329,6 @@
 #define RTS_CFG_FILE_LIB
 #undef	RTS_CFG_MBUS2_LIB
 #ifdef USE_CROSSTABLE
-#undef	RTS_CFG_MBRTU_LIB 
 #undef	RTS_CFG_MECT_LIB  
 #undef RTS_CFG_MECT_UTY_LIB 
 #define RTS_CFG_USB_LIB
@@ -337,7 +336,6 @@
 #define RTS_CFG_HW119_LIB
 #define RTS_CFG_MODBUS_LIB
 #elif USE_NO_CROSSTABLE
-#define	RTS_CFG_MBRTU_LIB    /* define to enable mbrtu library */
 #define	RTS_CFG_MECT_LIB     /* define to enable Mect library */
 #define RTS_CFG_MECT_UTY_LIB /* define to enable mect utlis library */
 #define RTS_CFG_USB_LIB
@@ -357,7 +355,6 @@
 #define RTS_CFG_MECT_RETAIN
 
 #endif
-
 #define RTS_CFG_TASK_IMAGE
 #define RTS_CFG_WRITE_FLAGS
 #define RTS_CFG_WRITE_FLAGS_PI
@@ -422,9 +419,9 @@
  */
 #if defined(DEBUG)
 
-#define  RTS_CFG_DEBUG_OUTPUT
+#define RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
-#undef	RTS_CFG_DEBUG_GPIO
+#define	RTS_CFG_DEBUG_GPIO
 #warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 #warning "IF RTS_CFG_DEBUG_GPIO is enabled it conflicts with the DS1390 spi based RTC"
 #warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
@@ -451,7 +448,7 @@
 
 #undef 	RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
-#undef	RTS_CFG_DEBUG_GPIO
+#define	RTS_CFG_DEBUG_GPIO
 #warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 #warning "IF RTS_CFG_DEBUG_GPIO is enabled it conflicts with the DS1390 spi based RTC"
 #warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
@@ -692,7 +689,7 @@
 /* Operating system fixed suspend overhead (in ms)
  * (--> osSlee(x) lasts always (x + VMM_SLEEP_OFFSET) milliseconds)
  */
-#define VMM_SLEEP_OFFSET		10u
+#define VMM_SLEEP_OFFSET		0u // 10u
 
 
 /* VM First Execution Delay
@@ -759,10 +756,10 @@
  */
 #define OS_LPTR // __attribute__ ((align(8)))
 
-/* Common structur member declaration
+/* Common structure member declaration
  */
-#define DEC_VAR(type, var)		type   var __attribute__ ((packed))
-#define DEC_PTR(type, var)		type * var __attribute__ ((packed))
+#define DEC_VAR(type, var)		type   var __attribute__ ((packed)) // necessario
+#define DEC_PTR(type, var)		type * var __attribute__ ((packed)) // necessario
 
 /* Pointer arithmetic
  */
@@ -924,7 +921,7 @@ typedef struct
 #undef	IP_CFG_NCC
 #endif
 
-#define IP_CFG_NO_STACK_CHECK				/* Activate for develop...		*/
+#undef  IP_CFG_NO_STACK_CHECK				/* Activate for develop...		*/
 #undef	IP_CFG_NO_ARRAY_CHECK
 		
 #undef	IP_CFG_RANGE_CHECK
@@ -990,10 +987,17 @@ typedef struct
 #define OS_MALLOC				malloc
 #define OS_FREE 				free
 
-#define OS_MEMCPY				memcpy
+#if 0
+#define OS_MEMCPY(d, s, l)			memcpy((UNALIGNED void *)d, (UNALIGNED void *)s, l)
+#define OS_MEMMOVE(d, s, l)			memmove((UNALIGNED void *)d, (UNALIGNED void *)s, l)
+#define OS_MEMSET(d, b, l)			memset((UNALIGNED void *)d, b, l)
+#define OS_MEMCMP(d, s, l)			memcmp((UNALIGNED void *)d, (UNALIGNED void *)s, l)
+#else
+#define OS_MEMCPY				osMemCpy // memcpy
 #define OS_MEMMOVE				memmove
 #define OS_MEMSET				memset
 #define OS_MEMCMP				memcmp
+#endif
 
 #define OS_STRCPY				strcpy
 #define OS_STRNCPY				strncpy
@@ -1215,21 +1219,19 @@ typedef struct
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 
-	#define XX_GPIO_INIT()				xx_gpio_init()
-	#define XX_GPIO_ENABLE_THREAD()		xx_gpio_enable_thread()
-	#define XX_GPIO_SET(n)				xx_gpio_set(n)
-	#define XX_GPIO_CLR(n)				xx_gpio_clr(n)
-	#define XX_GPIO_DISABLE_THREAD()	xx_gpio_disable_thread()
-	#define XX_GPIO_CLOSE()				xx_gpio_close()
+#define XX_GPIO_INIT()				xx_gpio_init()
+#define XX_GPIO_SET(n)				xx_gpio_set(n)
+#define XX_GPIO_CLR(n)				xx_gpio_clr(n)
+#define XX_GPIO_GET(n)				xx_gpio_get(n)
+#define XX_GPIO_CLOSE()				xx_gpio_close()
 
 #else
 
-	#define XX_GPIO_INIT()
-	#define XX_GPIO_ENABLE_THREAD()
-	#define XX_GPIO_SET(n)
-	#define XX_GPIO_CLR(n)
-	#define XX_GPIO_DISABLE_THREAD()
-	#define XX_GPIO_CLOSE()
+#define XX_GPIO_INIT()
+#define XX_GPIO_SET(n)
+#define XX_GPIO_CLR(n)
+#define XX_GPIO_GET(n)
+#define XX_GPIO_CLOSE()
 
 #endif	/* RTS_CFG_DEBUG_GPIO */
 

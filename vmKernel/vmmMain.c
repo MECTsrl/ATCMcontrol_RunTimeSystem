@@ -27,6 +27,7 @@
 /* ----  Includes:	 ---------------------------------------------------------- */
 
 #include "stdInc.h"
+#include "fcDef.h"
 
 #if defined(RTS_CFG_ALI_TRACE)
 #include "libIec.h"
@@ -131,10 +132,10 @@ IEC_UINT vmmMainMT(void)
 IEC_UINT vmmMainIPC(void)
 {
 	STaskInfoVMM *pVMM = NULL; 
-
 	SMessage Message;
 	IEC_UINT uRespQueue;
 
+	osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM);
 	IEC_UINT uRes = vmmInitialize(&pVMM);
 	if (uRes != OK)
 	{

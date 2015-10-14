@@ -47,7 +47,6 @@
 #include <getopt.h>
 
 #include "libMect.h"
-#include "libMBRTU.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 #define MSR_EE			(1<<15) 		/* External Interrupt Enable		*/
@@ -129,14 +128,19 @@ static int application_options(int argc, char *argv[])
 
 /**
  * main
- *
  */
-int main (int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	IEC_UINT uRes;
+
 #ifdef RTS_CFG_MECT_RETAIN
 	int fd;
 	struct stat sb;
+#endif
+
+#ifdef __XENO__
+	printf("Xenomai enabled\n");
+    mlockall(MCL_CURRENT | MCL_FUTURE);
 #endif
 
 	if (application_options(argc, argv) != 0) {
@@ -171,7 +175,7 @@ int main (int argc, char *argv[])
 	struct sigaction old_action;
 
 	new_action.sa_flags = 0;
-	if (sigemptyset (&new_action.sa_mask) == -1)
+	if (sigemptyset(&new_action.sa_mask) == -1)
 	{
 		fprintf(stdout, "sigemptyset failed (reason:%d (%s))\r\n", os_errno, OS_STRERROR);
 	}
@@ -311,7 +315,7 @@ int main (int argc, char *argv[])
 	}	
 	fprintf(stderr,"[%s], called ioctl\n", __func__);
 #endif
-	
+
 
 #endif
 	/* Set Scheduling Parameters
@@ -320,7 +324,8 @@ int main (int argc, char *argv[])
   #if ! defined(_POSIX_PRIORITY_SCHEDULING)
 	#error Posix scheduling not defined in actual Linux kernel
   #endif
-	
+	// osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM) in vmKernel/vmmMain.c
+
 	struct sched_param sp;
 	sp.sched_priority = FC_PRIO_VMM;
 
@@ -510,7 +515,7 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
   #endif
 
 	char buf[128];
-	int fd,len;
+	int fd,len,dummy;
 	
 	struct timeval	tv;
 	struct tm		tm;
@@ -529,7 +534,7 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
 					   tm.tm_hour,tm.tm_min,tm.tm_sec,(int)(tv.tv_usec/1000));
 
 	len += sprintf(buf+len, "User Mode Exception - Signal: %s\n", get_signal(signum));
-	write(fd,buf,len);
+	dummy = write(fd,buf,len);
 
   #if defined (RTS_CFG_SYSLOAD)
 
@@ -557,10 +562,10 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
 	len = sprintf(buf, "APP: %s, TASK: %d, ERRNO: %d, CODE: %08X\n",
 					   app_name, getpid(), siginfo->si_errno, siginfo->si_code);
   #endif
-	write(fd,buf,len);
+	dummy = write(fd,buf,len);
 
 	len = sprintf(buf, "--------------------------------------------------------------------------\n");
-	write(fd,buf,len);
+	dummy = write(fd,buf,len);
 
   #if defined(_SOF_4CFC_SRC_)
 	len = sprintf(buf, "NIP: %08lX CTR: %08lX LR: %08lX SP: %08lX REGS: %08lX TRAP: %04lX\n",
@@ -640,7 +645,7 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
   #endif	/* _SOF_4CFC_SRC_ */
 
 	len += sprintf(buf+len, "\n\n");
-	write(fd,buf,len);
+	dummy = write(fd,buf,len);
 
 	close(fd);
 	sync();
@@ -700,7 +705,7 @@ void dump_ret_handler(int signum, siginfo_t *siginfo, void *context)
 	ioctl(configfd, RETENTIVE_GPIOCTRL);	
 	fprintf(stderr,"[%s], called ioctl\n", __func__);
 #endif
-	
+
 #endif
 
 #ifdef DBG_MAIN
@@ -718,7 +723,7 @@ IEC_UINT writepid(void)
 	char buf[10];
 
 	configfd = open(PID_PATH, O_CREAT | O_WRONLY);
-	if(configfd < 0) {
+	if (configfd < 0) {
 		fprintf(stderr, "open '%s' failed (reason:%d (%s))\r\n", PID_FILE, os_errno, OS_STRERROR);
 		RETURN(ERR_ERROR);
 	}
@@ -769,9 +774,6 @@ void ReleaseResources(void)
 
 #if defined(RTS_CFG_IOCANOPEN)
 #endif
-#if defined(RTS_CFG_MBRTU_LIB)
-	app_mbrtu_done();
-#endif			
 #if defined(RTS_CFG_MECT_LIB)
 	app_mect_done();
 #endif

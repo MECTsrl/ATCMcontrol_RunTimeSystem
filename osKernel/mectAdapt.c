@@ -41,7 +41,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-// #include "canopen_wrapper.h"
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
@@ -51,7 +50,7 @@
 /* step in ms of the canopen stack manager */
 #define STACK_RATE_MS   10
 /* step in ms of the canopen message manager */
-#define MASSAGE_RATE_MS 1
+#define MESSAGE_RATE_MS 1
 /*
    kind of clock (could be CLOCK_MONOTONIC or REAL_TIME)
 CLOCK_MONOTONIC: the timer return time in seconds and milliseconds since the timer creation
@@ -90,32 +89,22 @@ mbrtu_cfg_s modbus1_cfg;
 
 void *IO_Layer_CANopen(void *lpParam)
 {
-	struct sched_param sp;
-
 	if (app_config_load(APP_CONF_CAN0))
 	{
-		fprintf(stderr, "[%s]: Error Can0 module configuration file is wrong: abort initialization.\n", __func__);
+		//fprintf(stderr, "[%s]: Error Can0 module configuration file is wrong: abort initialization.\n", __func__);
 	}
 
 	if (app_config_load(APP_CONF_CAN1))
 	{
-		fprintf(stderr, "[%s]: Error Can1 module configuration file is wrong: abort initialization.\n", __func__);
+		//fprintf(stderr, "[%s]: Error Can1 module configuration file is wrong: abort initialization.\n", __func__);
 	}
 
 	if (can0_cfg.enabled == 0 && can1_cfg.enabled == 0)
 	{
-		fprintf(stderr, "[%s]: Warning Can module is build but is not used: abort initialization.\n", __func__);
+		//fprintf(stderr, "[%s]: Warning Can module is build but is not used: abort initialization.\n", __func__);
 	}
 
-	sp.sched_priority = FC_PRIO_IO_CANOPEN; // see fcDef.h (general Linux priorities)
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_CANOPEN, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_CANOPEN, FC_PRIO_IO_CANOPEN);
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_CAN, getpid());
@@ -132,40 +121,6 @@ void *IO_Layer_CANopen(void *lpParam)
 	return NULL;
 }
 
-#if 0
-void *mectInitialize(void *lpParam)
-{
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_CANOPEN; // see fcDef.h (general Linux priorities)
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_CANOPEN, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
-
-#if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_MECT_INIT, getpid());
-#endif
-
-	/* inizializzazione canopen */
-	/* creazione thread dei messaggi canopen */
-	/* creazione thread dello stack canopen */
-	canConfig();
-
-#if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_MECT_INIT, getpid());
-#endif
-
-	pthread_detach(pthread_self());
-
-	return NULL;
-}
-#endif
-
-
 #endif /* RTS_CFG_IOCANOPEN */
 
 
@@ -178,16 +133,7 @@ void *mectInitialize(void *lpParam)
 
 void *IO_Layer_UDP(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_UDP; // see fcDef.h (general Linux priorities)
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_UDP, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_UDP, FC_PRIO_IO_UDP);
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_UDP, getpid());
@@ -214,6 +160,7 @@ void *IO_Layer_UDP(void *lpParam)
 
 void *IO_Layer_DAT(void *lpParam)
 {
+#ifndef __XENO__
 	struct sched_param sp;
 	sp.sched_priority = FC_PRIO_IO_DAT; // see fcDef.h (general Linux priorities)
 
@@ -224,6 +171,11 @@ void *IO_Layer_DAT(void *lpParam)
 
 		return NULL;
 	}
+#else
+	int iRes = osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT);
+	if (iRes != 0)
+		return NULL;
+#endif
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_DAT, getpid());
@@ -251,6 +203,7 @@ void *IO_Layer_DAT(void *lpParam)
 
 void *IO_Layer_SYN(void *lpParam)
 {
+#ifndef __XENO__
 	struct sched_param sp;
 	sp.sched_priority = FC_PRIO_IO_SYN; // see fcDef.h (general Linux priorities)
 
@@ -261,6 +214,11 @@ void *IO_Layer_SYN(void *lpParam)
 
 		return NULL;
 	}
+#else
+	int iRes = osPthreadSetSched(FC_SCHED_IO_SYN, FC_PRIO_IO_SYN);
+	if (iRes != 0)
+		return NULL;
+#endif
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_SYN, getpid());
@@ -288,16 +246,7 @@ void *IO_Layer_SYN(void *lpParam)
 
 void *IO_Layer_Keypad(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_KEYPAD; // see fcDef.h (general Linux priorities)
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_KEYPAD, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_KEYPAD, FC_PRIO_IO_KEYPAD);
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_KPD, getpid());
@@ -314,6 +263,7 @@ void *IO_Layer_Keypad(void *lpParam)
 	return NULL;
 }
 #endif /* RTS_CFG_IOKEYPAD */
+
 /* ---------------------------------------------------------------------------- */
 /**
  * IO_Layer_ModbusTCPS
@@ -323,6 +273,7 @@ void *IO_Layer_Keypad(void *lpParam)
 
 void *IO_Layer_ModbusTCPS(void *lpParam)
 {
+#ifndef __XENO__
 	struct sched_param sp;
 	sp.sched_priority = FC_PRIO_IO_MBTCPS; // see fcDef.h (general Linux priorities)
 
@@ -333,6 +284,11 @@ void *IO_Layer_ModbusTCPS(void *lpParam)
 
 		return NULL;
 	}
+#else
+	int iRes = osPthreadSetSched(FC_SCHED_IO_MBTCPS, FC_PRIO_IO_MBTCPS);
+	if (iRes != 0)
+		return NULL;
+#endif
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_MBTCPS, getpid());
@@ -359,6 +315,7 @@ void *IO_Layer_ModbusTCPS(void *lpParam)
 
 void *IO_Layer_ModbusRTUC(void *lpParam)
 {
+#ifndef __XENO__
 	struct sched_param sp;
 	sp.sched_priority = FC_PRIO_IO_MBRTUC; // see fcDef.h (general Linux priorities)
 
@@ -369,6 +326,11 @@ void *IO_Layer_ModbusRTUC(void *lpParam)
 
 		return NULL;
 	}
+#else
+	int iRes = osPthreadSetSched(FC_SCHED_IO_MBRTUC, FC_PRIO_IO_MBRTUC);
+	if (iRes != 0)
+		return NULL;
+#endif
 
 #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_MBRTUC, getpid());

@@ -274,7 +274,11 @@ IEC_UINT mbtcpsNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // start the thread
     pthread_attr_t pattr;
     pthread_attr_init(&pattr);
+#ifndef __XENO__
     if (pthread_create(&theThread_id, &pattr, &mbtcpsThread, NULL) == 0) {
+#else
+	if (osPthreadCreate(&theThread_id, &pattr, &mbtcpsThread, NULL, "mbtcps", 0) == 0) {
+#endif
         do {
             usleep(1000);
         } while (g_bThreadStatus != RUNNING);

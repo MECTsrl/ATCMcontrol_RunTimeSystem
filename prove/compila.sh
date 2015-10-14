@@ -5,8 +5,8 @@ QUALE2=/opt/freescale/usr/local/gcc-4.3.3-glibc-2.8-cs2009q1-203/arm-none-linux-
 QUALE3=/opt/freescale/usr/local/gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi/bin/arm-linux-gcc
 
 echo $QUALE1
-cd ~/Sources/base/prove/1 && $QUALE1 -march=armv5te -S -Wcast-align -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c
+cd ~/sources/imx28_rt/svn_realtime/base/prove/1 && $QUALE1 -march=armv5te -S -Wcast-align -D_GNU_SOURCE -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c
 echo $QUALE2
-cd ~/Sources/base/prove/2 && $QUALE2 -march=armv5te -S -Wcast-align -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c
+cd ~/sources/imx28_rt/svn_realtime/base/prove/2 && $QUALE2 -march=armv5te -S -Wcast-align -D_GNU_SOURCE -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c
 echo $QUALE3
-cd ~/Sources/base/prove/3 && $QUALE3 -march=armv5te -S -Wcast-align -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c
+cd ~/sources/imx28_rt/svn_realtime/base/prove/3 && $QUALE3 -march=armv5te -S -Wcast-align -D_GNU_SOURCE -c ../aligned.c ../attribute.c ../prova.c ../unaligned.c

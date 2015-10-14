@@ -49,6 +49,8 @@
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
+static STaskInfoVMM *the_pVMM = NULL;
+
 /* Task Informations
  * ----------------------------------------------------------------------------
  */
@@ -103,6 +105,10 @@ extern IEC_BOOL g_bSilentMode;
 
 /* ----  Implementations:	--------------------------------------------------- */
 
+STaskInfoVMM *get_pVMM(void)
+{
+    return the_pVMM;
+}
 
 /* ---------------------------------------------------------------------------- */
 /**
@@ -160,13 +166,19 @@ IEC_UINT osInitializeVMM(STaskInfoVMM *pVMM)
 {
 	IEC_UINT uRes = OK;
 
-  #if defined(_SOF_4CFC_SRC_)
+    the_pVMM = pVMM;
+
+#if defined(_SOF_4CFC_SRC_)
 	pthread_t thr;
 
 	fcSetLed(FC_LED_RUN,   FC_LED_ON_TOGGLE);
 	fcSetLed(FC_LED_ERROR, FC_LED_ON_TOGGLE);
 
+#ifndef __XENO__
 	int iRes = pthread_create(&thr, NULL, LED_Thread, pVMM);
+#else
+	int iRes = osPthreadCreate(&thr, NULL, LED_Thread, pVMM, "LED", 0);
+#endif
 	if (iRes != 0)
 	{
 		TR_ERR("pthread_create() failed", iRes);
@@ -175,7 +187,7 @@ IEC_UINT osInitializeVMM(STaskInfoVMM *pVMM)
 	}
 
 	osSleep(50);
-  #endif
+#endif
 #if defined(RTS_CFG_IOCANOPEN)
 
 	if (app_config_load(APP_CONF_CAN0))
@@ -416,8 +428,10 @@ IEC_UINT osCreateVMTask (STaskInfoVM *pVM)
 	IEC_UINT uRes = OK;
 
 	pthread_t hThread = 0;
+	char name[3+VMM_MAX_IEC_IDENT];
+	snprintf(name, sizeof(name), "%02u:%s", pVM->usTask, pVM->Task.szName);
 
-	int iRes = pthread_create(&hThread, NULL, VM_Proc, pVM);
+	int iRes = osPthreadCreate(&hThread, NULL, VM_Proc, pVM, name, 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -504,7 +518,7 @@ IEC_UINT osCreateListenTask(SComTCP *pTCP)
 	
 	if (g_bSilentMode == FALSE)
 	{
-		int iRes = pthread_create(&hThread, NULL, SOCKET_ListenThread, pTCP);
+		int iRes = osPthreadCreate(&hThread, NULL, SOCKET_ListenThread, pTCP, "SOCKET_Listen", 0);
 		if (iRes != 0)
 		{
 			RETURN_e(ERR_CREATE_TASK);
@@ -530,7 +544,7 @@ IEC_UINT osCreateCommTask(SComTCP *pTCP)
 
 	pthread_t hThread = 0;
 	
-	int iRes = pthread_create(&hThread, NULL, SOCKET_CommThread, pTCP);
+	int iRes = osPthreadCreate(&hThread, NULL, SOCKET_CommThread, pTCP, "SOCKET_Comm", 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -557,7 +571,7 @@ IEC_UINT osCreateOnlineChangeTask(STaskInfoVMM *pVMM)
 
 	pthread_t hThread = 0;
 	
-	int iRes = pthread_create(&hThread, NULL, VMM_OnlineChangeThread, pVMM);
+	int iRes = osPthreadCreate(&hThread, NULL, VMM_OnlineChangeThread, pVMM, "VMM_OnlineChange", 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -582,7 +596,7 @@ IEC_UINT osCreateVMTimerTask(STaskInfoVMM *pVMM)
 
 	pthread_t hThread = 0;
 	
-	int iRes = pthread_create(&hThread, NULL, VM_TimerThread, pVMM);
+	int iRes = osPthreadCreate(&hThread, NULL, VM_TimerThread, pVMM, "VM_Timer", 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -607,7 +621,7 @@ IEC_UINT osCreateRetainTask(STaskInfoVMM *pVMM)
 
 	pthread_t hThread = 0;
 	
-	int iRes = pthread_create(&hThread, NULL, VMM_RetainThread, pVMM);
+	int iRes = osPthreadCreate(&hThread, NULL, VMM_RetainThread, pVMM, "VMM_Retain", 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -625,14 +639,17 @@ IEC_UINT osCreateRetainTask(STaskInfoVMM *pVMM)
  * @return			OK if successful else ERR_ERROR
  */
 #if defined(RTS_CFG_BACNET)
-
 IEC_UINT osCreateDeviceTask(void)
 {
 	IEC_UINT uRes = OK;
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, BAC_DeviceThread, NULL);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, BAC_DeviceThread, NULL, "BAC_Device", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -650,14 +667,17 @@ IEC_UINT osCreateDeviceTask(void)
  * @return			OK if successful else ERR_ERROR
  */
 #if defined(RTS_CFG_BACNET)
-
 IEC_UINT osCreateCOVTask(void)
 {
 	IEC_UINT uRes = OK;
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, BAC_COVThread, NULL);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, BAC_COVThread, NULL, "BAC_COV", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -675,14 +695,17 @@ IEC_UINT osCreateCOVTask(void)
  * @return			OK if successful else ERR_ERROR
  */
 #if defined(RTS_CFG_BACNET)
-
 IEC_UINT osCreateScanTask(void)
 {
 	IEC_UINT uRes = OK;
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, BAC_ScanThread, NULL);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, BAC_ScanThread, NULL, "BAC_Scan", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -707,7 +730,11 @@ IEC_UINT osCreateFlashTask(void)
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, BAC_FlashThread, NULL);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, BAC_FlashThread, NULL, "BAC_Flash", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -731,7 +758,11 @@ IEC_UINT osCreateConfigTask(SIOLayerIniVal *pIni)
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, BAC_ConfigThread, pIni);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, BAC_ConfigThread, pIni, "BAC_Config", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -757,7 +788,11 @@ IEC_UINT osCreatePBManagementTask(IEC_UINT uIOLayer)
 
 	pthread_t hThread = 0;
 	
+#ifndef __XENO__
 	int iRes = pthread_create(&hThread, NULL, PDP_ManagementThread, (IEC_UDINT *)ulIOLayer);
+#else
+	int iRes = osPthreadCreate(&hThread, NULL, PDP_ManagementThread, (IEC_UDINT *)ulIOLayer, "PDP_Management", 0);
+#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);

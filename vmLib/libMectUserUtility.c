@@ -552,6 +552,7 @@ int app_date_time_read(int * DateTime)
  *              1 - error getting system time/date
  *              2 - error converting time/date
  *              3 - error setting time/date
+ *              4 - error updating real time clock
  */
 int app_date_time_write(int * DateTime)
 {
@@ -594,7 +595,14 @@ int app_date_time_write(int * DateTime)
 		return 3;
 	}
 
-	system("/sbin/hwclock -wu");        /* Update RTC from system */
+	rc = system("/sbin/hwclock -wu");        /* Update RTC from system */
+	if (rc < 0) {
+		fputs(__func__, stderr);
+		perror(": while updating real time clock");
+		fflush(stderr);
+
+		return 4;
+	}
 
 #ifdef DBGMECTUTIL
 	printf("[%s] - RTC from system updated\n", __func__);
@@ -614,6 +622,7 @@ int app_date_time_write(int * DateTime)
 int app_lcd_get_backlight(int * brightness)
 {
 	FILE * bklghtfp;
+	int dummy;
 
 	bklghtfp = fopen(LCD_ACTUAL_BRIGHTNESS, "r");
 	if (bklghtfp == NULL)
@@ -622,7 +631,7 @@ int app_lcd_get_backlight(int * brightness)
 				__func__, LCD_ACTUAL_BRIGHTNESS, strerror(errno));
 		return 1;
 	}
-	fscanf(bklghtfp, "%d", &brightness);
+	dummy = fscanf(bklghtfp, "%d", &brightness);
 	fclose(bklghtfp);
 
 	return 0;
@@ -632,6 +641,7 @@ int app_lcd_set_backlight(int brightness)
 {
 	FILE * bklghtfp;
 	static int max_brightness = -1;
+	int dummy;
 
 	if (max_brightness < 0)
 	{
@@ -642,7 +652,7 @@ int app_lcd_set_backlight(int brightness)
 					__func__, LCD_ACTUAL_BRIGHTNESS, strerror(errno));
 			return 1;
 		}
-		fscanf(bklghtfp, "%d", &max_brightness);
+		dummy = fscanf(bklghtfp, "%d", &max_brightness);
 		fclose(bklghtfp);
 #ifdef DBGMECTUTIL
 		printf("[%s] - max_brightness: %d\n", __func__, max_brightness);
@@ -675,11 +685,13 @@ int app_lcd_set_backlight(int brightness)
 
 void Buzzer(STDLIBFUNCALL)
 {
+#ifdef RTS_CFG_IOKEYPAD
 	BUZZER_PARAM OS_SPTR *pPara = (BUZZER_PARAM OS_SPTR *)pIN;
 #ifdef DBGMECTUTIL
 	printf("[%s] - duration %d\n", __func__, pPara->duration);
 #endif
 	pPara->ret_value = ioctl(Buzzerfd, BUZZER_BEEP, pPara->duration);
+#endif
 }
 
 void Date_add(STDLIBFUNCALL)

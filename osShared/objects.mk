@@ -24,6 +24,6 @@
 OBJS = \
   $(OBJ_PATH)/osLoad.o    \
   $(OBJ_PATH)/osMsg.o     \
-  $(OBJ_PATH)/osUtil.o
+  $(OBJ_PATH)/osUtil.o    \
     
 # -------------------------------------------------------------------------------

@@ -29,7 +29,6 @@ OBJS = \
   $(OBJ_PATH)/libSys.o      \
   $(OBJ_PATH)/libSys2.o     \
   $(OBJ_PATH)/libUtil.o     \
-  $(OBJ_PATH)/libMBRTU.o    \
   $(OBJ_PATH)/privUtyMect.o    \
   $(OBJ_PATH)/libMect.o    \
   $(OBJ_PATH)/libUSB.o    \

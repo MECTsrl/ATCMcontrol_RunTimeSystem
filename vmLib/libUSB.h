@@ -119,7 +119,7 @@ typedef struct
 typedef struct
 {
 	DEC_VAR(IEC_UINT, uLen);
-	DEC_VAR(IEC_STRING, pElem[2]);
+	DEC_VAR(IEC_INT, pElem[2]);
 	
 }USB_GET_FEEDBACK_ARRAY_PARAM;
 

@@ -29,7 +29,7 @@
 /* ----  Includes:	 ---------------------------------------------------------- */
 
 #include "stdInc.h"
-#include "fcDef.h" // per FC_PRIO_IO_TEST
+#include "fcDef.h"
 
 //#include <sys/io.h> // ioperm()
 
@@ -73,14 +73,27 @@ extern int CanTimer;
 /* ----  Implementations:	--------------------------------------------------- */
 
 /* ---------------------------------------------------------------------------- */
+
+void expand_bit_from_byte_to_dword(char byte, IEC_DWORD * wordArray)
+{
+	int i;
+	for (i = 0; i < 8; i++)
+	{
+		//		printf("bit[%d] %d\n",i, (byte >> i) & 1);
+		wordArray[i] = (byte >> i) & 1;
+	}
+	return;
+}
+
+/* ---------------------------------------------------------------------------- */
 /**
  * canInitialize
  *
  */
 IEC_UINT canInitialize(IEC_UINT uIOLayer)
 {
-	
 	IEC_UINT uRes = OK;
+	static int init = 0;
 
 #if defined(RTS_CFG_IO_TRACE)
 	osTrace("[LAYER %d - CAN] - running canInitialize.\n", uIOLayer );
@@ -92,19 +105,30 @@ IEC_UINT canInitialize(IEC_UINT uIOLayer)
 #endif
 
 	// initialize mutexes
-	if (pthread_mutex_init(&mReadMutex, NULL) != 0) {
+	if(!init) 
+	{
+		if(pthread_mutex_init(&mReadMutex, NULL) == 0)
+		{
+			init = 1; //if called again while initializing the second CAN instance, pthread_mutex_init returns EBUSY (16)!!!!
+		}
+		else
+		{	
 #if defined(RTS_CFG_IO_TRACE)
-		osTrace("[LAYER %d - CAN] - ERROR pthread_mutex_init (mReadMutex): %s.\n", uIOLayer, strerror(errno));
+			osTrace("[LAYER %d - CAN] - ERROR pthread_mutex_init (mReadMutex): %s.\n", uIOLayer, strerror(errno));
 #endif
-		uRes = ERR_FB_INIT;
-		goto exit_function;
-	}
-	if (pthread_mutex_init(&mWriteMutex, NULL) != 0) {
+			fprintf(stderr,"%s: fallito init Readmutex: uIOLayer %d init %d\n",__func__, uIOLayer, init);
+			uRes = ERR_FB_INIT;
+			goto exit_function;
+		}
+		if(pthread_mutex_init(&mWriteMutex, NULL) != 0)
+		{
 #if defined(RTS_CFG_IO_TRACE)
-		osTrace("[LAYER %d - CAN] - ERROR pthread_mutex_init (mWriteMutex): %s.\n", uIOLayer,  strerror(errno));
-#endif
-		uRes = ERR_FB_INIT;
-		goto exit_function;
+			osTrace("[LAYER %d - CAN] - ERROR pthread_mutex_init (mWriteMutex): %s.\n", uIOLayer, strerror(errno));
+#endif	
+			fprintf(stderr,"%s: fallito init Writemutex: uIOLayer %d\n",__func__, uIOLayer);
+			uRes = ERR_FB_INIT;
+			goto exit_function;
+		}
 	}
 
 exit_function:
@@ -205,6 +229,7 @@ IEC_UINT canNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
 
+
 	if (FB_STATE_OPERATING != FB_STATE_OPERATING)
 	{
 		/* PB is not operating
@@ -217,7 +242,7 @@ IEC_UINT canNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 #if defined(RTS_CFG_IO_TRACE)
 		printf("[%s] Not yet configured.\n", __func__);
 #endif
-		return uRes;
+		RETURN(ERR_FB_NOT_OPERATING);
 	}
 #if 0
 	if (pNotify->uTask != 0xffffu)
@@ -240,10 +265,10 @@ IEC_UINT canNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
 	pthread_mutex_lock(&mWriteMutex);
 
-    if((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel==2)) { // KAD_CAN_CHANNEL_0
-    }
-    if((can1_cfg.enabled) && Can1InitDone && (pIO->usChannel==3)) { // KAD_CAN_CHANNEL_1
-    }
+	if((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel == 2) { // KAD_CAN_CHANNEL_0
+	}
+	if((can1_cfg.enabled) && Can1InitDone && (pIO->usChannel == 3) { // KAD_CAN_CHANNEL_1
+	}
 
 	pthread_mutex_unlock(&mWriteMutex);
 
@@ -259,6 +284,7 @@ IEC_UINT canNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
 
+
 	if (FB_STATE_OPERATING != FB_STATE_OPERATING)
 	{
 		/* PB is not operating
@@ -271,7 +297,7 @@ IEC_UINT canNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 #if defined(RTS_CFG_IO_TRACE)
 		printf("[%s] Not yet configured.\n", __func__);
 #endif
-		return uRes;
+		RETURN(ERR_FB_NOT_OPERATING);
 	}
 #if 0
 	if (pNotify->uTask != 0xffffu)
@@ -293,10 +319,10 @@ IEC_UINT canNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 #endif
 
 	pthread_mutex_lock(&mReadMutex);
-    if((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel==2)) { // KAD_CAN_CHANNEL_0
-    }
-    if((can1_cfg.enabled) && Can1InitDone&& (pIO->usChannel==3)) { // KAD_CAN_CHANNEL_1
-    }
+	if((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel == 2) { // KAD_CAN_CHANNEL_0
+	}
+	if((can1_cfg.enabled) && Can1InitDone && (pIO->usChannel == 3) { // KAD_CAN_CHANNEL_1
+	}
 
 	pthread_mutex_unlock(&mReadMutex);
 

@@ -116,7 +116,6 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
  * process communication.
  */
 #if defined(RTS_CFG_VM_IPC)
-
 IEC_UINT vmMain(STaskInfoVM *pVM)
 {
 	SMessage Message;
@@ -135,29 +134,29 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
 		RETURN(uRes);
 	}		 
 
-	XX_GPIO_ENABLE_THREAD();
-	XX_GPIO_SET(3);
-	if (pVM->usTask < 2) {
-		XX_GPIO_SET(pVM->usTask + 1);
+	if (pVM->usTask == 0) {
+		XX_GPIO_SET(1);
 	}
+
 	for ( ; ; )
 	{
-	 	XX_GPIO_CLR(3);
-		if (pVM->usTask < 2) {
-			XX_GPIO_CLR(pVM->usTask + 1);
+		if (pVM->usTask == 0) {
+			XX_GPIO_CLR(1);
 		}
+
 		if (msgRecv(&Message, pVM->usTask, VMM_WAIT_FOREVER) != OK)
 		{
 			osSleep(50);
-	 		XX_GPIO_SET(3);
-			if (pVM->usTask < 2) {
-				XX_GPIO_SET(pVM->usTask + 1);
+
+			if (pVM->usTask == 0) {
+				XX_GPIO_SET(1);
 			}
+
 			continue;
 		}
-	 	XX_GPIO_SET(3);
-		if (pVM->usTask < 2) {
-			XX_GPIO_SET(pVM->usTask + 1);
+
+		if (pVM->usTask == 0) {
+			XX_GPIO_SET(1);
 		}
 
 		uRespQueue			= Message.uRespQueue;
@@ -370,7 +369,6 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
 	}	/* for (; ;) */
 
 return_ok:
-	XX_GPIO_DISABLE_THREAD();
 	RETURN(OK);
 }
 #endif /* RTS_CFG_VM_IPC */

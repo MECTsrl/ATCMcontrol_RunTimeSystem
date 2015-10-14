@@ -20,7 +20,7 @@
  * Filename: libDatalog.c
  */
 
-#define _GNU_SOURCE
+//#define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

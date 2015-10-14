@@ -312,7 +312,6 @@ app_usb_dir_create( char *dirname, unsigned short index )
 static unsigned short
 app_usb_file_copy(char *srcfile, char *dstfile, unsigned short src_index, unsigned short dst_index )
 {
-	
 	if (!USBfeedback[0]) {
 		USBfeedback[0] = app_usb_feedback[0] = 1; /*Set to one flag about operation on usb running -- usb locked*/
 		USBfeedback[1] = app_usb_feedback[1] = 0; /*Reset error code for current running operation on usb*/
@@ -322,12 +321,11 @@ app_usb_file_copy(char *srcfile, char *dstfile, unsigned short src_index, unsign
 		app_usb_copy_file_params.src_index = src_index;
 		app_usb_copy_file_params.dst_index = dst_index;
 
-		pthread_create(&app_usb_copy_file_thread_id, NULL, &app_usb_file_copy_manager, &app_usb_copy_file_params);
-		
+		osPthreadCreate(&app_usb_copy_file_thread_id, NULL, &app_usb_file_copy_manager, &app_usb_copy_file_params, "app_usb_file_copy_manager", 0);
+
 		return 0;
 	} else
 		return 1;
-	
 }
 
 
@@ -509,7 +507,7 @@ app_usb_file_diskcopy(char *srcfile, char *dstfile, unsigned short src_index )
 		app_usb_copy_file_params.src_index = src_index;
 		app_usb_copy_file_params.dst_index = 0;
 
-		pthread_create(&app_usb_diskcopy_file_thread_id, NULL, &app_usb_file_diskcopy_manager, &app_usb_copy_file_params);
+		osPthreadCreate(&app_usb_diskcopy_file_thread_id, NULL, &app_usb_file_diskcopy_manager, &app_usb_copy_file_params, "app_usb_file_diskcopy_manager", 0);
 		
 		return 0;
 	} else
@@ -688,7 +686,7 @@ app_usb_file_delete( char *filename, unsigned short index )
 		app_usb_delete_file_params.filename = filename;
 		app_usb_delete_file_params.index = index;
 
-		pthread_create(&app_usb_delete_file_thread_id, NULL, &app_usb_file_delete_manager, &app_usb_delete_file_params);
+		osPthreadCreate(&app_usb_delete_file_thread_id, NULL, &app_usb_file_delete_manager, &app_usb_delete_file_params, "app_usb_file_delete_manager", 0);
 		
 		return 0;
 	} else
@@ -821,9 +819,9 @@ app_usb_init( void )
 * @return	USBstatus[port] = <mount letter> (eg. port 2 on /dev/sda -> USBstatus[2]='a')
 * @return	USBstatus[0] = <number of mounted usb storage>
 *
-* @error	USBstatus[APP_USB_MAX+1] = 10 - Detected another multiport hub, only one supported
-* @error	USBstatus[APP_USB_MAX+1] = 20 - Parsing error
-* @error	USBstatus[APP_USB_MAX+1] = 30 - Cannot get device info for usb subsystem
+* @error	USBstatus[APP_USB_MAX] = 10 - Detected another multiport hub, only one supported
+* @error	USBstatus[APP_USB_MAX] = 20 - Parsing error
+* @error	USBstatus[APP_USB_MAX] = 30 - Cannot get device info for usb subsystem
 *
 * @ingroup usb
 */
@@ -845,7 +843,7 @@ app_usb_status_read(void)
 	char mountpoint[LINE_SIZE];
 
 	mountpoint[0] = '\0';
-	memset(app_usb_status, 0, APP_USB_MAX);
+	memset(app_usb_status, 0, sizeof(app_usb_status));
 
 	/* 
 	   looking for each scsi ID of the actual attached USB parse the dmesg
@@ -884,7 +882,7 @@ app_usb_status_read(void)
 			{
 				printf("cannot find %s\n", temp);
 				pclose(pipe);
-				app_usb_status[APP_USB_MAX+1] = 30;
+				app_usb_status[APP_USB_MAX] = 30;
 				return -2;
 			}
 #if DBGPOLL
@@ -903,7 +901,7 @@ app_usb_status_read(void)
 			{
 				printf("cannot find usb address\n");
 				pclose(pipe);
-				app_usb_status[APP_USB_MAX+1] = 20;
+				app_usb_status[APP_USB_MAX] = 20;
 				return -3;
 			}
 #if DBGPOLL
@@ -926,15 +924,15 @@ app_usb_status_read(void)
 						else
 						{
 							pclose(pipe);
-							app_usb_status[APP_USB_MAX+1] = 20;
+							app_usb_status[APP_USB_MAX] = 20;
 							return -4;
 						}
 					}
 					else
 					{
 						pclose(pipe);
-						app_usb_status[APP_USB_MAX+1] = 20;
-						app_usb_status[APP_USB_MAX+1] = 20;
+						app_usb_status[APP_USB_MAX] = 20;
+						app_usb_status[APP_USB_MAX] = 20;
 						return -5;
 					}
 				}
@@ -943,7 +941,7 @@ app_usb_status_read(void)
 			{
 				printf("cannot found mountpoint\n");
 				pclose(pipe);
-				app_usb_status[APP_USB_MAX+1] = 20;
+				app_usb_status[APP_USB_MAX] = 20;
 				return -6;
 			}
 
@@ -951,7 +949,7 @@ app_usb_status_read(void)
 			{
 				printf("cannot found mountpoint\n");
 				pclose(pipe);
-				app_usb_status[APP_USB_MAX+1] = 20;
+				app_usb_status[APP_USB_MAX] = 20;
 				return -7;
 			}
 
@@ -988,7 +986,7 @@ app_usb_status_read(void)
 					printf("malformed line %s\n",line);
 					printf("cannot found port\n");
 					pclose(pipe);
-					app_usb_status[APP_USB_MAX+1] = 20;
+					app_usb_status[APP_USB_MAX] = 20;
 					return -8;
 				}
 			}
@@ -996,7 +994,7 @@ app_usb_status_read(void)
 			{
 				printf("cannot found port\n");
 				pclose(pipe);
-				app_usb_status[APP_USB_MAX+1] = 20;
+				app_usb_status[APP_USB_MAX] = 20;
 				return -9;
 			}
 			pclose(pipe);
@@ -1007,8 +1005,8 @@ app_usb_status_read(void)
 			{
 				printf("the hub have too many port (%d). only %d port are managed\n", port, APP_USB_MAX);
 				
-				app_usb_status[APP_USB_MAX+1] = 20;
-				app_usb_status[APP_USB_MAX+1] = 30;
+				app_usb_status[APP_USB_MAX] = 20;
+				app_usb_status[APP_USB_MAX] = 30;
 				continue;
 			}
 			item++;
@@ -1101,8 +1099,8 @@ void Usb_status(STDLIBFUNCALL)
 	USB_GET_STATUS_ARRAY_PARAM OS_DPTR *pStatus = (USB_GET_STATUS_ARRAY_PARAM OS_DPTR* )pPara->status;
 	
 	app_usb_status_read();
-	OS_MEMCPY(USBstatus, app_usb_status, APP_USB_MAX);
-	OS_MEMCPY(pStatus->pElem, USBstatus, APP_USB_MAX);
+	OS_MEMCPY(USBstatus, app_usb_status, sizeof(USBstatus));
+	OS_MEMCPY(pStatus->pElem, USBstatus, sizeof(pStatus->pElem));
 	pPara->ret_value = 1;
 }
 

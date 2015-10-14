@@ -47,18 +47,18 @@ clobber: visLibCO osSharedCO vistestCO
 
 .PHONY : visLib
 visLib:
-	@echo Building $@...
-	@$(MAKE) -C $@ -f $@$(DEBREL).mak DEBUG=$(DEBUG) -s
+	@#echo Building $@...
+	$(MAKE) -C $@ -f $@$(DEBREL).mak DEBUG=$(DEBUG)
   
 .PHONY : osShared
 osShared:
-	@echo Building $@...
-	@$(MAKE) -C $@ -f $@$(DEBREL).mak DEBUG=$(DEBUG) -s
+	@#echo Building $@...
+	$(MAKE) -C $@ -f $@$(DEBREL).mak DEBUG=$(DEBUG)
   
 .PHONY : vistest
 vistest:
-	@echo Building $@...
-	@$(MAKE) -C $@ -f $@$(DEBREL).mak -s
+	@#echo Building $@...
+	$(MAKE) -C $@ -f $@$(DEBREL).mak
 
 
 
@@ -67,18 +67,18 @@ vistest:
 
 .PHONY : visLibML
 visLibML:
-	@echo Cleaning $(subst ML,,$@)...
-	@$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean -s
+	@#echo Cleaning $(subst ML,,$@)...
+	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : osSharedML
 osSharedML:
-	@echo Cleaning $(subst ML,,$@)...
-	@$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean -s
+	@#echo Cleaning $(subst ML,,$@)...
+	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : vistestML
 vistestML:
-	@echo Cleaning $(subst ML,,$@)...
-	@$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean -s
+	@#echo Cleaning $(subst ML,,$@)...
+	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 
 # Clean
@@ -86,18 +86,18 @@ vistestML:
 
 .PHONY : visLibCL
 visLibCL:
-	@echo Cleaning $(subst CL,,$@)...
-	@$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean -s
+	@#echo Cleaning $(subst CL,,$@)...
+	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : osSharedCL
 osSharedCL:
-	@echo Cleaning $(subst CL,,$@)...
-	@$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean -s
+	@#echo Cleaning $(subst CL,,$@)...
+	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : vistestCL
 vistestCL:
-	@echo Cleaning $(subst CL,,$@)...
-	@$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean -s
+	@#echo Cleaning $(subst CL,,$@)...
+	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 
 
@@ -106,18 +106,18 @@ vistestCL:
 
 .PHONY : visLibCO
 visLibCO:
-	@echo Cleaning $(subst CO,,$@)...
-	@$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber -s
+	@#echo Cleaning $(subst CO,,$@)...
+	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : osSharedCO
 osSharedCO:
-	@echo Cleaning $(subst CO,,$@)...
-	@$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber -s
+	@#echo Cleaning $(subst CO,,$@)...
+	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : vistestCO
 vistestCO:
 	@echo Cleaning $(subst CO,,$@)...
-	@$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber -s
+	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 
 

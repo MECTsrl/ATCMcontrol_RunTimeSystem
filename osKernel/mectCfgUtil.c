@@ -132,10 +132,6 @@ int app_config_load(enum app_conf_section_e section)
 #endif
 			break;
 		case APP_CONF_MB:
-#ifdef RTS_CFG_MBRTU_LIB
-			memset (&mbrtu_cfg, 0xFF, sizeof(mbrtu_cfg));
-            mbrtu_cfg.serial_cfg.enabled = 0;
-#endif
 			break;
     case APP_CONF_MB0:
 #ifdef RTS_CFG_IOMBRTUC
@@ -333,104 +329,11 @@ int app_config_load(enum app_conf_section_e section)
 					}
 #endif
 					break;
-				case APP_CONF_MB:
-#ifdef RTS_CFG_MBRTU_LIB
-					if (section == APP_CONF_MB)
-					{
-						if ((tl = app_property_name_check(l, "enabled"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-							{
-                                mbrtu_cfg.serial_cfg.enabled = atoi(l);
-#ifdef DBG_MECT_UTIL
-								fprintf(stderr, "%s: Modbus protocol status '%d'\n", __func__, mbrtu_cfg.enabled);
-#endif
-							}
-							else
-							{
-								fclose(cf);
-								return 43;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "ascii"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-								mbrtu_cfg.ascii = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 44;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "rtu"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-								mbrtu_cfg.rtu = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 65;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "baud"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-                                mbrtu_cfg.serial_cfg.baud = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 66;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "databits"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-                                mbrtu_cfg.serial_cfg.databits = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 67;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "parity"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-                                mbrtu_cfg.serial_cfg.parity = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 68;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "stopbits"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-                                mbrtu_cfg.serial_cfg.stopbits = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 69;
-							}
-						}
-						else if ((tl = app_property_name_check(l, "ignore_echo"))) {
-							l = app_expect_equal(__func__, tl, ln, APP_CONFIG_FILE);
-							if (l != NULL)
-                                mbrtu_cfg.serial_cfg.ignore_echo = atoi(l);
-							else
-							{
-								fclose(cf);
-								return 70;
-							}
-						}
-						else if (tl != NULL) {
-							fprintf(stderr, "%s: unknown property %s for MB\n", __func__, tl);
 
-							fclose(cf);
-							return 45;
-						}
-					}
-#endif
+				case APP_CONF_MB:
+
 					break;
+
             case APP_CONF_MB0:
 #ifdef RTS_CFG_IOMBRTUC
                 if (section == APP_CONF_MB0)
@@ -526,6 +429,7 @@ int app_config_load(enum app_conf_section_e section)
                 }
 #endif
                 break;
+
             case APP_CONF_MB1:
 #ifdef RTS_CFG_IOMBRTUC
                 if (section == APP_CONF_MB1)

@@ -141,7 +141,7 @@ static void app_mect_msg_print(void);
  *
  * @ingroup mect
  */
-	int
+int
 app_mect_init(void)
 {
 #if MECT_DEBUG
@@ -177,7 +177,8 @@ app_mect_init(void)
 	return 0;
 }
 
-int app_mect_done(void)
+int
+app_mect_done(void)
 {
 	if (fdsio)
 	{
@@ -200,7 +201,7 @@ int app_mect_done(void)
  *
  * @ingroup mect
  */
-	static short
+static short
 app_mect_msg_read(void)
 {
 	struct timespec start;
@@ -303,7 +304,7 @@ app_mect_msg_read(void)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_msg_write(void)
 {
 	//int i = 0;
@@ -375,7 +376,7 @@ app_mect_msg_write(void)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_tx_bcc_compute(void)
 {
 	int bcc = 0;
@@ -396,7 +397,7 @@ app_mect_tx_bcc_compute(void)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_rx_bcc_check(void)
 {
 	int bcc = 0;
@@ -418,7 +419,7 @@ app_mect_rx_bcc_check(void)
 		bcc ^= msg.m[i];
 
 #if MECT_DEBUG
-	printf(stderr,"%s:\n",__func__);
+	fprintf(stderr,"%s:\n",__func__);
 	app_mect_msg_print();
 	fprintf(stderr,"bcc_check %02x, bcc_recv %02x \n",bcc, msg.m[msg.n - 1]);
 #endif	
@@ -438,7 +439,7 @@ app_mect_rx_bcc_check(void)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_rx_msg_check(int dd)
 {
 	if ((dd <= 0) || (dd >= 10))
@@ -460,7 +461,7 @@ app_mect_rx_msg_check(int dd)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_rx_nack_is(void)
 {
 	return !((msg.n == 1) && (msg.m[0] == NACK));
@@ -474,7 +475,7 @@ app_mect_rx_nack_is(void)
  *
  * @ingroup mect
  */
-	static int
+static int
 app_mect_rx_ack_is(void)
 {
 	return !((msg.n == 1) && (msg.m[0] == ACK));
@@ -510,7 +511,7 @@ app_mect_rx_ack_is(void)
  *
  * @ingroup mect
  */
-	static short
+static short
 app_mect_message_build(short id, char *command, data_t *data, int dd)
 {
 	char buffer[9];
@@ -606,11 +607,9 @@ app_mect_message_build(short id, char *command, data_t *data, int dd)
  *
  * @ingroup mect
  */
-
-	static void 
+static void 
 app_mect_thread_attr_setup(void)
 {
-
 	pthread_attr_init(&app_mect_attr);
 	pthread_attr_setdetachstate(&app_mect_attr, PTHREAD_CREATE_DETACHED);
 #if 0
@@ -623,7 +622,6 @@ app_mect_thread_attr_setup(void)
 	pthread_attr_setschedparam(&app_mect_attr, &app_mect_sched_param);
 	pthread_attr_setscope(&app_mect_attr, PTHREAD_SCOPE_SYSTEM);
 }
-
 
 /**
  * Perform a value enquire using the given slave id, command
@@ -655,8 +653,7 @@ app_mect_thread_attr_setup(void)
  *
  * @ingroup mect
  */
-
-	short
+short
 app_mect_enq(short id, char *command, int dd)
 {
 	if (!app_mect_flag){
@@ -682,7 +679,7 @@ app_mect_enq(short id, char *command, int dd)
 #if MECT_DEBUG
 		printf ("[%s] - create thread\n", __func__);
 #endif
-		pthread_create(&app_mect_thread_id, &app_mect_attr, &app_mect_enq_manager, &app_mect_params);
+		osPthreadCreate(&app_mect_thread_id, &app_mect_attr, &app_mect_enq_manager, &app_mect_params, "app_mect_enq_manager", 0);
 		pthread_attr_destroy(&app_mect_attr);
 #if MECT_DEBUG
 		printf ("[%s] - thread done\n", __func__);
@@ -691,12 +688,9 @@ app_mect_enq(short id, char *command, int dd)
 	}	
 
 	return 1;
-
-
 }
 
-
-	static void *
+static void *
 app_mect_enq_manager( void *param )
 {
 	short rv = 0;
@@ -788,9 +782,6 @@ app_mect_enq_manager( void *param )
 	return NULL;           /* All checks out */
 }
 
-
-
-
 /**
  * Perform an STX query using the given slave id, command code,
  * data, and data size (in bytes)
@@ -819,8 +810,7 @@ app_mect_enq_manager( void *param )
  *
  * @ingroup mect
  */
-
-	short
+short
 app_mect_stx(short id, char *command, float value, int dd, int hex)
 {
 	if (!app_mect_flag){
@@ -838,7 +828,7 @@ app_mect_stx(short id, char *command, float value, int dd, int hex)
 		/* Set thread parameters */
 		app_mect_thread_attr_setup();
 
-		pthread_create(&app_mect_thread_id, &app_mect_attr, &app_mect_stx_manager, &app_mect_params);
+		osPthreadCreate(&app_mect_thread_id, &app_mect_attr, &app_mect_stx_manager, &app_mect_params, "app_mect_stx_manager", 0);
 		return 0;
 	}	
 
@@ -846,7 +836,7 @@ app_mect_stx(short id, char *command, float value, int dd, int hex)
 
 }
 
-	static void *
+static void *
 app_mect_stx_manager( void *param )
 {
 
@@ -947,7 +937,7 @@ app_mect_stx_manager( void *param )
  * 
  * @ingroup mect
  */
-	short
+short
 app_mect_float_stx(short id, char *command, float value, int dd)
 {
 #if MECT_DEBUG
@@ -963,7 +953,7 @@ app_mect_float_stx(short id, char *command, float value, int dd)
  * 
  * @ingroup mect
  */
-	short
+short
 app_mect_hex_stx(short id, char *command, unsigned short value, int dd)
 {
 #if MECT_DEBUG
@@ -978,7 +968,7 @@ app_mect_hex_stx(short id, char *command, unsigned short value, int dd)
 /**
  * Print to stdout the current message, for debug purposes
  */
-	static void
+static void
 app_mect_msg_print(void)
 {
 	int i = 0;
@@ -1003,7 +993,8 @@ static	char dummy[8];
 /*		MECT functions		    */	
 /****************************************************/
 /****************************************************/
-void MECT_sread(STDLIBFUNCALL)
+void
+MECT_sread(STDLIBFUNCALL)
 {
 	MECT_ENQUIRY_PARAM OS_SPTR *pPara = (MECT_ENQUIRY_PARAM OS_SPTR *)pIN;
 	MECT_COMMAND_ARRAY_PARAM OS_DPTR *pData = (MECT_COMMAND_ARRAY_PARAM OS_DPTR* )pPara->command;
@@ -1020,7 +1011,8 @@ void MECT_sread(STDLIBFUNCALL)
 #endif
 }
 
-void MECT_H_sread(STDLIBFUNCALL)
+void
+MECT_H_sread(STDLIBFUNCALL)
 {
 	MECT_ENQUIRY_PARAM OS_SPTR *pPara = (MECT_ENQUIRY_PARAM OS_SPTR *)pIN;
 	MECT_COMMAND_ARRAY_PARAM OS_DPTR *pData = (MECT_COMMAND_ARRAY_PARAM OS_DPTR* )pPara->command;
@@ -1035,7 +1027,8 @@ void MECT_H_sread(STDLIBFUNCALL)
 #endif
 }
 
-void MECT_swrite(STDLIBFUNCALL)
+void
+MECT_swrite(STDLIBFUNCALL)
 {
 	MECT_FLOAT_STX_PARAM OS_SPTR *pPara = (MECT_FLOAT_STX_PARAM OS_SPTR *)pIN;
 	MECT_COMMAND_ARRAY_PARAM OS_DPTR *pData = (MECT_COMMAND_ARRAY_PARAM OS_DPTR* )pPara->command;
@@ -1047,7 +1040,8 @@ void MECT_swrite(STDLIBFUNCALL)
 	pPara->ret_value = app_mect_float_stx((short)pPara->id, (char*)pData->pElem, (float)pPara->value, (int)pPara->data);
 }
 
-void MECT_H_swrite(STDLIBFUNCALL)
+void
+MECT_H_swrite(STDLIBFUNCALL)
 {
 	MECT_HEX_STX_PARAM OS_SPTR *pPara = (MECT_HEX_STX_PARAM OS_SPTR *)pIN;
 	MECT_COMMAND_ARRAY_PARAM OS_DPTR *pData = (MECT_COMMAND_ARRAY_PARAM OS_DPTR* )pPara->command;
@@ -1068,7 +1062,8 @@ void MECT_H_swrite(STDLIBFUNCALL)
 	pPara->ret_value = app_mect_hex_stx(id, (char*)dummy, value, data);
 }
 
-void MECT_get_enquiry(STDLIBFUNCALL)
+void
+MECT_get_enquiry(STDLIBFUNCALL)
 {
 
 	MECT_GET_ENQ_PARAM OS_SPTR *pPara = (MECT_GET_ENQ_PARAM OS_SPTR *)pIN;
@@ -1084,7 +1079,8 @@ void MECT_get_enquiry(STDLIBFUNCALL)
 #endif
 }
 
-void MECT_get_status(STDLIBFUNCALL)
+void
+MECT_get_status(STDLIBFUNCALL)
 {
 	MECT_GET_STATUS OS_SPTR *pPara = (MECT_GET_STATUS OS_SPTR *)pIN;
 #if MECT_DEBUG
@@ -1093,7 +1089,8 @@ void MECT_get_status(STDLIBFUNCALL)
 	pPara->status = app_mect_status;
 }
 
-void MECT_get_flag(STDLIBFUNCALL)
+void
+MECT_get_flag(STDLIBFUNCALL)
 {
 	MECT_GET_FLAG OS_SPTR *pPara = (MECT_GET_FLAG OS_SPTR *)pIN;
 #if MECT_DEBUG
@@ -1101,4 +1098,3 @@ void MECT_get_flag(STDLIBFUNCALL)
 #endif
 	pPara->flag = app_mect_flag;
 }
-

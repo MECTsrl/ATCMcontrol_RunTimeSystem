@@ -264,6 +264,7 @@ IEC_UINT udpNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	printf("running udpNotifyConfig() ...\n");
 #endif
+
 	g_bConfigured	= (IEC_BOOL)(uRes == OK);
 	g_bRunning		= FALSE;
 
@@ -300,6 +301,7 @@ IEC_UINT udpNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	printf("running udpNotifyStop() ...\n");
 #endif
+
 	g_bRunning = FALSE;
 
 	RETURN(uRes);
@@ -384,7 +386,6 @@ IEC_UINT udpNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 		/* A IEC task is going to read from the input and/or output segment.
 		 * --------------------------------------------------------------------
 		 */
-
 	} /* if (pNotify->uTask != 0xffffu) */
 
 	else

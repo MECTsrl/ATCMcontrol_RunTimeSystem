@@ -89,9 +89,12 @@ typedef struct
  */
 typedef struct
 {
-  #if defined(RTS_CFG_LINUX)
-	DEC_VAR(long,		mtype);					/* Linux specific					*/
-  #endif
+#if defined(RTS_CFG_LINUX)
+#define USE_POSIX_MQUEUE
+#ifndef USE_POSIX_MQUEUE
+    	DEC_VAR(long,		mtype);					/* Linux specific					*/
+#endif
+#endif
 
 	DEC_VAR(IEC_UINT,	uRespQueue); 			/* Response Queue					*/
 
@@ -1227,6 +1230,7 @@ typedef struct
 #define IOID_PROFIDP		3
 /* see also inc/osTarget.h */
 
+
 /* Command state machine states
  * ----------------------------------------------------------------------------
  */
@@ -1661,12 +1665,12 @@ typedef struct
 #define EVT_BACNET_EVENT		23u /* BACnet event received				*/
 #define EVT_BACNET_DEVSTATE 	24u /* BACnet device changed state			*/
 #define EVT_BACNET_CONFIG		25u /* BACnet configuration result event	*/
-#define EVT_RESERVED_13 		26u /* --- Reserved 						*/
-#define EVT_RESERVED_14 		27u /* --- Reserved 						*/
-#define EVT_RESERVED_15 		28u /* --- Reserved 						*/
-#define EVT_RESERVED_16 		29u /* --- Reserved 						*/
-#define EVT_RESERVED_17 		30u /* --- Reserved 						*/
-#define EVT_RESERVED_18 		31u /* --- Reserved 						*/
+#define EVT_RESERVED_10 		26u /* --- Reserved 						*/
+#define EVT_RESERVED_11 		27u /* --- Reserved 						*/
+#define EVT_RESERVED_12 		28u /* --- Reserved 						*/
+#define EVT_RESERVED_13 		29u /* --- Reserved 						*/
+#define EVT_RESERVED_14 		30u /* --- Reserved 						*/
+#define EVT_RESERVED_15 		31u /* --- Reserved 						*/
 
 /* User events (target dependent interpretation)
  */

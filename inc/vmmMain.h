@@ -569,6 +569,7 @@ IEC_UINT osCheckIO(STaskInfoVMM *pVMM);
 /* osTask.c - Task Handling
  * ----------------------------------------------------------------------------
  */
+STaskInfoVMM *get_pVMM(void); // FIXME
 IEC_UINT	 osInitialize(void);
 IEC_UINT	 osInitializeVMM(STaskInfoVMM *pVMM);
 
@@ -713,7 +714,12 @@ IEC_UINT osExist(IEC_CHAR *szFile, IEC_BOOL *bpExist);
 /* osUtil.c - Utility Functions
  * ----------------------------------------------------------------------------
  */
+int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
+			void *(*start_routine) (void *), void *arg,
+			const char *name, size_t stacksize);
+int osPthreadSetSched(int policy, int sched_priority);
 IEC_UINT osSleep(IEC_UDINT ulTime);
+IEC_UINT osSleepAbsolute(IEC_UDINT ulTime);
 
 IEC_UDINT osGetTime32(void);
 IEC_ULINT osGetTime64(void);
@@ -732,12 +738,13 @@ IEC_UINT osFree(IEC_DATA OS_LPTR **pData);
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 void xx_gpio_init();
-void xx_gpio_enable_thread();
 void xx_gpio_set(unsigned n);
 void xx_gpio_clr(unsigned n);
-void xx_gpio_disable_thread();
+unsigned char xx_gpio_get(unsigned n);
 void xx_gpio_close();
 #endif
+
+void *osMemCpy(void *dest, const void *src, size_t n) __attribute__ ((optimize("O0")));
 
 /* osMsg.c - Messages and Queues
  * ----------------------------------------------------------------------------

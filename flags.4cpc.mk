@@ -1,4 +1,3 @@
-
  # Copyright 2011 Mect s.r.l
  #
  # This file is part of FarosPLC.
@@ -28,19 +27,35 @@ else
 $(error "SPECIFY PRODUCT (USE_CROSSTABLE|USE_NO_CROSSTABLE)")
 endif
 
+ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
+# XENOCONFIG = $(ROOTFS)/usr/xenomai/bin/xeno-config
+# XENO_CC = $(shell $(XENOCONFIG) --cc)
+# XENO_CFLAGS = $(shell $(XENOCONFIG) --skin=posix --cflags)
+# XENO_LDFLAGS = $(shell $(XENOCONFIG) --skin=posix --ldflags) sul target
+# This includes the library path of given Xenomai into the binary to make live
+# easier for beginners if Xenomai's libs are not in any default search path.
+# XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(shell $(XENOCONFIG) --libdir)
+
+XENO_CC = gcc
+XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
+XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
 
 ifeq ($(FREESCALE_GCC), 1)
 CC_VERSION       = gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi
 #CC_VERSION       = gcc-4.3.3-glibc-2.8-cs2009q1-203
 #CC_VERSION       = gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi
 CC_DIRECTORY     = /opt/freescale/usr/local/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi-
 ARCH_INCLUDE     = \
-	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
-	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
-	-I/opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/usr/include/
+  -I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
+  -I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
+  -I/opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/usr/include/
+  #-I/opt/freescale/usr/local/gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi/arm-fsl-linux-gnueabi/multi-libs/usr/include/
 else ifeq ($(SOURCERY_GCC), 1)
 CC_VERSION       = Sourcery_G++_Lite
 CC_DIRECTORY     = /home/imx28/CodeSourcery/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi-
 ARCH_INCLUDE     = \
 	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
 	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
@@ -49,8 +64,13 @@ else
 $(error "SPECIFICARE FREESCALE_GCC=1 OPPURE SOURCERY_GCC=1")
 endif
 
-CC_RADIX         = arm-none-linux-gnueabi-
-ARCH_DFLAGS      = -D__arm
+# /opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/usr/include/pthread.h
+# /opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/vfp/usr/include/pthread.h
+# /opt/freescale/usr/local/gcc-4.3.3-glibc-2.8-cs2009q1-203/arm-none-linux-gnueabi/arm-none-linux-gnueabi/libc/usr/include/pthread.h
+# /opt/freescale/usr/local/gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi/arm-fsl-linux-gnueabi/multi-libs/usr/include/pthread.h
+
+#ARCH_DFLAGS      = "-D__arm -march=armv5te -mcpu=arm926ej-s -mtune=arm926ej-s -mthumb -mthumb-interwork -mword-relocations"
+ARCH_DFLAGS      = -march=armv5te -mtune=arm926ej-s
 
 #CC_DIRECTORY     = /home/imx28/tpac020_01-eva/br/build_arm/staging_dir/usr/bin/
 #CC_RADIX         = arm-linux-uclibc-
@@ -65,8 +85,8 @@ ARCH_DFLAGS      = -D__arm
 
 AR               = $(CC_DIRECTORY)$(CC_RADIX)ar
 AS               = $(CC_DIRECTORY)$(CC_RADIX)gcc
-CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc -g -Wcast-align
-##CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc -g
+##CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc -Wcast-align
+CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc
 LD               = $(CC_DIRECTORY)$(CC_RADIX)gcc
 RM               = rm
 MD               = mkdir
@@ -79,13 +99,17 @@ TFLAGS           =
 IFLAGS           = -I. -I../inc -I../inc.fc -I../inc.dp -I../inc.vis -I../vmLib -I../inc.can -I../inc.mect -I../inc.udp -I../inc.kpd -I../inc.data -I../inc.syncro -I../inc.mbtcps -I../inc.mbrtuc $(ARCH_INCLUDE) -D$(PRODUCT)
 SFLAGS           =
 DFLAGS           = -D_SOF_4CPC_SRC_ $(ARCH_DFLAGS)
+ifeq ($(DEBUG), 1)
+  DFLAGS += -DDEBUG
+  OFLAGS = -O0
+else
+  OFLAGS = -O0
+endif
 
-CFLAGS           = $(TFLAGS) -Wall -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -fno-builtin -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)
+CFLAGS           = $(XENO_CFLAGS) $(TFLAGS) -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -fno-builtin -Wall -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)
 CFLAGS_AS        = $(CFLAGS)
-OFLAGS			 = -O0
 
-LD_FLAGS         = -lm -lpthread $(CFLAGS) -lrt -L/imx_mect/trunk/imx28/ltib/rootfs/usr/lib -lts -lsocketcan
-#LD_FLAGS         = -lm -lpthread $(CFLAGS) -lrt -L/imx_mect/trunk/imx28/ltib/rootfs/usr/lib -lts
+LD_FLAGS         = $(XENO_LDFLAGS) -lm -lpthread $(CFLAGS) -lrt -L/imx_mect/trunk/imx28/ltib/rootfs/usr/lib -lts -lsocketcan
 AR_FLAGS         = -rc
 
 BIN_PATH         = ../bin

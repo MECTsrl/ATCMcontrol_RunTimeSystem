@@ -63,10 +63,6 @@
  */
 #include "bacFun.h"
 
-/* Declarations MBRTU Library
- */
-#include "libMBRTU.h"
-
 /* Declarations Mect Library
  */
 #include "libMect.h"
@@ -141,11 +137,41 @@ EXECUTE_FUN g_pLibraryFun[] =
 	#include "funBac.h" 		/* Reserved Numbers:	230 -	339 */
 #endif
 	
-	/* funMBRTU.c - MODBUS RTU library 
+	/* MODBUS RTU library - MTL: now removed (2015-07-28).
 	 * ------------------------------------------------------------------------
 	 */
 
-	#include "funMBRTU.h"		/* Reserved Numbers:	200 -	229 */
+								/* Reserved Numbers:	200 -	229 */
+	NULL,  /*  200  */
+	NULL,  /*  201  */
+	NULL,  /*  202  */
+	NULL,  /*  203  */
+	NULL,  /*  204  */
+	NULL,  /*  205  */
+	NULL,  /*  206  */
+	NULL,  /*  207  */
+	NULL,  /*  208  */
+	NULL,  /*  209  */
+	NULL,  /*  210  */
+	NULL,  /*  211  */
+	NULL,  /*  212  */
+	NULL,  /*  213  */
+	NULL,  /*  214  */
+	NULL,  /*  215  */
+	NULL,  /*  216  */
+	NULL,  /*  217  */
+	NULL,  /*  218  */
+	NULL,  /*  219  */
+	NULL,  /*  220  */
+	NULL,  /*  221  */
+	NULL,  /*  222  */
+	NULL,  /*  223  */
+	NULL,  /*  224  */
+	NULL,  /*  225  */
+	NULL,  /*  226  */
+	NULL,  /*  227  */
+	NULL,  /*  228  */
+	NULL,  /*  229  */
 
 	/* funMect.c - Mect library 
 	 * ------------------------------------------------------------------------

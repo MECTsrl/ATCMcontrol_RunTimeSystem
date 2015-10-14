@@ -39,9 +39,6 @@
 #include <fcntl.h>
 #include <sys/timeb.h>
 #include <sys/reboot.h>
-#if defined(RTS_CFG_MBRTU_LIB)
-#include <libMBRTU.h>
-#endif
 #if defined(RTS_CFG_IOCANOPEN)
 #include <libCanOpen.h>
 #endif
@@ -203,10 +200,6 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			g_bDownloadInProgress = TRUE;
 			g_bDownloadFailed	  = FALSE;
 			if(pVMM->bProjLoaded){
-			/*clean libraries*/
-#if defined(RTS_CFG_MBRTU_LIB)
-				app_mbrtu_done();
-#endif			
 #if defined(RTS_CFG_MECT_LIB)
 				app_mect_done();
 #endif
@@ -221,11 +214,10 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 #if defined (RTS_CFG_MODBUS_LIB)
 #endif
 			}
-
-		  #if defined(RTS_CFG_IO_LAYER)
+#if defined(RTS_CFG_IO_LAYER)
 			g_bIOConfigFailed 	  = FALSE;
 			g_bIOConfInProgress	  = FALSE;
-		  #endif
+#endif
 			break;
 
 		case CMD_DOWNLOAD_CONFIG:
@@ -249,19 +241,14 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			break;
 			
 		case CMD_DOWNLOAD_END:
-
-#warning added code to start libraries			
 			if(pVMM->bProjLoaded){
-#if defined(RTS_CFG_MBRTU_LIB)
-				app_mbrtu_init();
-#endif
 #if defined(RTS_CFG_MECT_LIB)
 				app_mect_init();
 #endif
 #if defined(RTS_CFG_IOCANOPEN)
 #endif
 			}		
-		
+
 		case CMD_OC_END:
 			g_bDownloadInProgress = FALSE;
 			g_bDownloadFailed	  = FALSE;

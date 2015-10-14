@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -54,12 +53,21 @@ static IEC_UDINT g_ulSystemWatchDog = 0xfffffffful;
 
 static void timInit(STaskInfoVMM *pVMM, SVMAction *pACT);
 
-/* ----  Implementations:	--------------------------------------------------- */
+#define tim_osSleep(delay_ms) 	\
+do {				\
+	XX_GPIO_CLR(0);		\
+	osSleep(delay_ms);	\
+	XX_GPIO_SET(0);		\
+} while (0)
 
-#define tim_osSleep(d) \
-    XX_GPIO_CLR(0);    \
-    osSleep(d);        \
-    XX_GPIO_SET(0)
+#define tim_osSleepAbsolute(time_ms) 	\
+do {					\
+	XX_GPIO_CLR(0);			\
+	osSleepAbsolute(time_ms);	\
+	XX_GPIO_SET(0);			\
+} while (0)
+
+/* ----  Implementations:	--------------------------------------------------- */
 
 /* ---------------------------------------------------------------------------- */
 /**
@@ -133,11 +141,7 @@ IEC_UINT timMain(void *pPara)
 	TR_RET(uRes);
   #endif
 	
-	XX_GPIO_ENABLE_THREAD();
-	XX_GPIO_SET(0); /* imx28 +/- 2.5us (plus possible scheduling ) */
-	XX_GPIO_CLR(0);
-	XX_GPIO_SET(0);
-	XX_GPIO_CLR(0);
+	//XX_GPIO_ENABLE_THREAD();
 	XX_GPIO_SET(0); /* vedi tim_osSleep() */
 
 	for ( ; ; )
@@ -333,7 +337,7 @@ IEC_UINT timMain(void *pPara)
 
 		if (tSuspend != 0)
 		{
-			tim_osSleep(tSuspend);
+			tim_osSleepAbsolute(tCurrent + tSuspend);
 		/*
 		Questa modifica e' stata fatta da PE perche' a volte lo 
 		scheduler fermava per 1ms l'esecuzione dei vari task.
@@ -373,7 +377,7 @@ IEC_UINT timMain(void *pPara)
 		
 	} /* for ( ; ; ) */
 	
-	XX_GPIO_DISABLE_THREAD();
+	//XX_GPIO_DISABLE_THREAD();
 	RETURN(OK);
 }
 

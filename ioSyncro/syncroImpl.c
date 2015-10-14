@@ -303,15 +303,13 @@ IEC_UINT syncroNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
         hardware_type |= (modbus1_cfg.serial_cfg.enabled & 0xFF) << 24;	// 0xFF000000
     }
 #endif
-#ifdef RTS_CFG_MBRTU_LIB // now undefined
-#endif
 #ifdef RTS_CFG_MECT_LIB // now undefined
 #endif
     // maintain hardware type for the plc application
     // hardware type is a 32 bit register and the offset is in bytes
     uint32_t *data = (uint32_t *)the_Iregisters;
     data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t)] = hardware_type;
-
+    g_bIregistersOK = TRUE; // FIXME
     g_bConfigured	= TRUE;
 	g_bRunning	= FALSE;
 	RETURN(uRes);
@@ -333,7 +331,11 @@ IEC_UINT syncroNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // start the thread
     pthread_attr_t pattr;
     pthread_attr_init(&pattr);
+#ifndef __XENO__
     if (pthread_create(&theThread_id, &pattr, &syncroThread, NULL) == 0) {
+#else
+	if (osPthreadCreate(&theThread_id, &pattr, &syncroThread, NULL, "syncro", 0) == 0) {
+#endif
         do {
             usleep(1000);
         } while (g_bThreadStatus != RUNNING);
@@ -401,7 +403,21 @@ IEC_UINT syncroNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                    void *pvQsegment = pIO->Q.pAdr + pIO->Q.ulOffs;
                    OS_MEMCPY(the_Qregisters, pvMsegment, MIN_CHANNEL_SIZE);
                    OS_MEMCPY(pvQsegment, pvMsegment, MIN_CHANNEL_SIZE);
-                }
+#if 0
+                   uint32_t *data = (uint32_t *)pvMsegment;
+                   uint32_t fastoutput = data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t) + 1];
+                   if (fastoutput & 4) {
+                       XX_GPIO_SET(2);
+                   } else {
+                       XX_GPIO_CLR(2);
+                   }
+                   if (fastoutput & 8) {
+                       XX_GPIO_SET(3);
+                   } else {
+                       XX_GPIO_CLR(3);
+                   }
+#endif
+                                   }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
                 uRes = ERR_WRITE_TO_INPUT;
             } else if (pNotify->usBit != 0) {
@@ -467,6 +483,15 @@ IEC_UINT syncroNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             source = the_Iregisters;
                             source += ulStart - pIO->I.ulOffs;
                             dest = pIO->I.pAdr + ulStart;
+#if 0
+                            uint32_t *data = (uint32_t *)the_Iregisters;
+                            // fastinput
+                            if (XX_GPIO_GET(5)) {
+                                data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t) + 1] |= 32;
+                            } else {
+                                data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t) + 1] &= ~32;
+                            }
+#endif
                         } else { // pIR->pRegionRd[r].usSegment == SEG_OUTPUT
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->Q.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->Q.ulOffs + pIO->Q.ulSize);

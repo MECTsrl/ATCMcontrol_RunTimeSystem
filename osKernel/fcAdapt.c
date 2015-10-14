@@ -54,16 +54,7 @@ void *VM_Proc(void *lpParam)
 {
 	STaskInfoVM *pVM = (STaskInfoVM *)lpParam;
 
-	struct sched_param sp;
-	sp.sched_priority = pVM->Task.usPriority;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_VM, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_VM, pVM->Task.usPriority);
 
 	pthread_cleanup_push(VM_CleanUp_Common , lpParam);
 
@@ -94,16 +85,7 @@ void *VM_Proc(void *lpParam)
 
 void *SOCKET_ListenThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_LIST;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_LIST, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_LIST, FC_PRIO_LIST);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_COM_LIS, getpid());
@@ -132,16 +114,7 @@ void *SOCKET_ListenThread(void *lpParam)
 
 void *SOCKET_CommThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_COM;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_COM, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_COM, FC_PRIO_COM);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '" TASK_NAME_COM_WRK "' created with pid %d.\r\n", ((SComTCP *)lpParam)->uTask, getpid());
@@ -170,16 +143,7 @@ void *SOCKET_CommThread(void *lpParam)
 
 void *VMM_OnlineChangeThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_OC;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_OC, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_OC, FC_PRIO_OC);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d\r\n", TASK_NAME_SYS_OCH, getpid());
@@ -208,16 +172,7 @@ void *VMM_OnlineChangeThread(void *lpParam)
 
 void *VM_TimerThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_VMTIMER;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_VMTIMER, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_VMTIMER, FC_PRIO_VMTIMER);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_SYS_TIM, getpid());
@@ -246,16 +201,7 @@ void *VM_TimerThread(void *lpParam)
 
 void *VMM_RetainThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_RET;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_RET, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_RET, FC_PRIO_RET);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_SYS_RET, getpid());
@@ -284,16 +230,7 @@ void *VMM_RetainThread(void *lpParam)
 
 void *BAC_DeviceThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_BAC_DEV;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_BAC_DEV, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_BAC_DEV, FC_PRIO_BAC_DEV);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_DEV, getpid());
@@ -322,16 +259,7 @@ void *BAC_DeviceThread(void *lpParam)
 
 void *BAC_COVThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_BAC_COV;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_BAC_COV, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_BAC_COV, FC_PRIO_BAC_COV);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_COV, getpid());
@@ -360,16 +288,7 @@ void *BAC_COVThread(void *lpParam)
 
 void *BAC_ScanThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_BAC_SCN;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_BAC_SCN, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_BAC_SCN, FC_PRIO_BAC_SCN);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_SCN, getpid());
@@ -398,16 +317,7 @@ void *BAC_ScanThread(void *lpParam)
 
 void *BAC_FlashThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_BAC_FLH;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_BAC_FLH, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_BAC_FLH, FC_PRIO_BAC_FLH);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_FLH, getpid());
@@ -436,16 +346,7 @@ void *BAC_FlashThread(void *lpParam)
 
 void *BAC_ConfigThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_BAC_CFG;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_BAC_CFG, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_BAC_CFG, FC_PRIO_BAC_CFG);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_CFG, getpid());
@@ -474,16 +375,7 @@ void *BAC_ConfigThread(void *lpParam)
 
 void *PDP_ManagementThread(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_PDP_MGT;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_PDP_MGT, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_PDP_MGT, FC_PRIO_PDP_MGT);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_PDP_MGT, getpid());
@@ -512,16 +404,7 @@ void *PDP_ManagementThread(void *lpParam)
 
 void *IO_Layer_BACnet(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_BACNET;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_BACNET, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_BACNET, FC_PRIO_IO_BACNET);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_BAC, getpid());
@@ -550,16 +433,7 @@ void *IO_Layer_BACnet(void *lpParam)
 
 void *IO_Layer_Test(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_TEST;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_TEST, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_TEST, FC_PRIO_IO_TEST);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_TST, getpid());
@@ -588,16 +462,7 @@ void *IO_Layer_Test(void *lpParam)
 
 void *IO_Layer_ProfiDP(void *lpParam)
 {
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_IO_PROFI_DP;
-
-	int iRes = pthread_setschedparam(pthread_self(), FC_SCHED_IO_PROFI_DP, &sp);
-	if (iRes != 0)
-	{
-		TR_ERR("pthread_setschedparam() failed", iRes);
-
-		return NULL;
-	}
+	osPthreadSetSched(FC_SCHED_IO_PROFI_DP, FC_PRIO_IO_PROFI_DP);
 
   #if defined(RTS_CFG_TASK_TRACE)
 	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_PDP, getpid());

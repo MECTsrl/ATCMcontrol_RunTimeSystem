@@ -731,11 +731,7 @@ IEC_UINT ioNotifyLayer(STaskInfoVMM *pXXX, STaskInfoVM *pVM, IEC_BOOL bSet, IEC_
 		{
 	  #endif
 
-#ifdef DEBUG
-            uRes = msgTXMessage(&Message, (IEC_UINT)(i + Q_OFFS_IO), VMM_WAIT_FOREVER, TRUE);
-#else
-            uRes = msgTXMessage(&Message, (IEC_UINT)(i + Q_OFFS_IO), VMM_TO_IPC_MSG, TRUE);
-#endif
+		uRes = msgTXMessage(&Message, (IEC_UINT)(i + Q_OFFS_IO), VMM_TO_IPC_MSG, TRUE);
 		if (uRes != OK)
 		{
 			RETURN(uRes);

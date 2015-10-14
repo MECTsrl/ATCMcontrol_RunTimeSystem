@@ -93,7 +93,6 @@ IEC_UINT retMain(void *pPara)
 	uRes = ldWriteTaskInfo(TASK_OFFS_SYS_RET, osGetTaskID());
 	TR_RET(uRes);
   #endif
-
 	for ( ; ; )
 	{
 		IEC_UDINT ulWait = bUpdate == TRUE ? VMM_RET_UPD_FIRST : VMM_WAIT_FOREVER;
@@ -296,8 +295,7 @@ IEC_UINT retMain(void *pPara)
 
 				if (uRes == OK)
 				{
-					// WARNING!!!!!! for Alignment problem I need to fore the copy with OS_MEMCPY	
-					//uRes = retSetSize(pRF, *(IEC_UDINT *)Message.pData);
+					//uRes = retSetSize(pRF, *(UNALIGNED IEC_UDINT *)Message.pData);
 					IEC_UDINT ulUsed;
 					OS_MEMCPY(&ulUsed, Message.pData, sizeof(IEC_UDINT));
 					uRes = retSetSize(pRF, ulUsed);

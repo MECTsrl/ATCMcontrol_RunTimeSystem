@@ -228,7 +228,6 @@ IEC_UINT osEnableIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 
 		pIOL->uIOLType = IOID_SYN;
 	}
-
 	/* IO Layer: KEYPAD
 	 * ------------------------------------------------------------------------
 	 */
@@ -429,7 +428,7 @@ IEC_UINT osCreateIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 
 	/* Create IO layer thread
 	 */
-	int iRes = pthread_create(&g_hIO[uIOLayer], NULL, lpStartAddress, pIOIV);
+	int iRes = osPthreadCreate(&g_hIO[uIOLayer], NULL, lpStartAddress, pIOIV, szName, 0);
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);

@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -28,6 +29,8 @@
 /* ----  Includes:	 ---------------------------------------------------------- */
 
 #include "stdInc.h"
+
+
 
 #if defined(RTS_CFG_IOUDP)
 
@@ -544,6 +547,7 @@ IEC_UINT udpMain(void *pPara)
 }
 
 #else
+
 
 #endif /* RTS_CFG_IOUDP */
 

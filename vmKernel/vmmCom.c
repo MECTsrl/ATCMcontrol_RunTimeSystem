@@ -895,12 +895,20 @@ IEC_UINT sockListen(void *pPara)
 		Addr.sin_port		 = htons(uPort);
 		Addr.sin_addr.s_addr = htonl(VMS_INADDR_ANY);
 		
+#ifdef __XENO__
+		if (osBind(hListen, (struct sockaddr *)(&Addr), sizeof(Addr)) != VMS_RET_OK)
+		{
+			TR_ERROR("[TCP] ERROR(%d): Bind failed.\r\n", VMS_ERRNO);
+			RETURN(ERR_ERROR);
+		}
+#else
 		while (osBind(hListen, (struct sockaddr *)(&Addr), sizeof(Addr)) != VMS_RET_OK)
 		{
 			TR_ERROR("[TCP] ERROR(%d): Bind failed. Retries in 5 sec ...\r\n", VMS_ERRNO);
 			//RETURN(ERR_ERROR);
 			sleep(5);
 		}
+#endif
 		TR_STATE("[TCP] bind done.\r\n");
 		
 		/* Set the port into passive (listening) mode
