@@ -265,9 +265,9 @@ IEC_UINT canNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
 	pthread_mutex_lock(&mWriteMutex);
 
-	if((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel == 2) { // KAD_CAN_CHANNEL_0
+    if ((can0_cfg.enabled) && Can0InitDone && (pIO->usChannel == 2)) { // KAD_CAN_CHANNEL_0
 	}
-	if((can1_cfg.enabled) && Can1InitDone && (pIO->usChannel == 3) { // KAD_CAN_CHANNEL_1
+    if ((can1_cfg.enabled) && Can1InitDone && (pIO->usChannel == 3)) { // KAD_CAN_CHANNEL_1
 	}
 
 	pthread_mutex_unlock(&mWriteMutex);
