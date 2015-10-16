@@ -79,20 +79,35 @@ static IEC_BOOL g_bRunning	= FALSE;
 static IEC_BOOL g_bExiting	= FALSE;
 
 static pthread_mutex_t theMutex = PTHREAD_MUTEX_INITIALIZER;
+enum threadStatus { NOT_STARTED, RUNNING, EXITING };
 
+static pthread_t theEngineThread_id = -1;
 static pthread_t theDataThread_id = -1;
 static pthread_t theSyncThread_id = -1;
-static enum { NOT_STARTED, RUNNING, EXITING } theDataThreadStatus = NOT_STARTED, theSyncThreadStatus = NOT_STARTED;
+static pthread_t theModbusRTU0Thread_id = -1;
+static pthread_t theModbusRTU1Thread_id = -1;
+static pthread_t theModbusTCPThread_id = -1;
+static pthread_t theModbusTCPRTUThread_id = -1;
+static enum threadStatus theEngineThreadStatus = NOT_STARTED;
+static enum threadStatus theDataThreadStatus = NOT_STARTED;
+static enum threadStatus theSyncThreadStatus = NOT_STARTED;
+static enum threadStatus theModbusRTU0ThreadStatus = NOT_STARTED;
+static enum threadStatus theModbusRTU1ThreadStatus = NOT_STARTED;
+static enum threadStatus theModbusTCPThreadStatus = NOT_STARTED;
+static enum threadStatus theModbusTCPRTUThreadStatus = NOT_STARTED;
 
 static uint32_t the_IdataRegisters[REG_DATA_NUMBER];
 static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
-static IEC_BOOL the_IdataRegistersOK = FALSE;
 
 static uint16_t the_IsyncRegisters[REG_SYNC_NUMBER];
 static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
-static IEC_BOOL the_IsyncRegistersOK = FALSE;
 
 /* ----  Local Functions:	--------------------------------------------------- */
+
+static void *engineThread(void *statusAdr);
+static void *modbusThread(void *statusAdr);
+static void *dataThread(void *statusAdr);
+static void *syncroThread(void *statusAdr);
 
 static int do_recv(int s, void *buffer, ssize_t len)
 {
@@ -142,13 +157,338 @@ static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *addre
     return retval;
 }
 
-void *dataThread(void *dontcare)
+static void InitXtable(uint16_t TIPO)
+{
+    uint16_t k;
+    int32_t i;
+
+    if (TIPO == 0) {
+        for (i = 0; i <= DimCrossTable-1; ++i) {
+            // TRIGGER01  =  0;
+            CrossTable[i].Enable = 0;
+            CrossTable[i].Plc = FALSE;
+            CrossTable[i].Tag[0] = 0;
+            CrossTable[i].Types = 0;
+            CrossTable[i].Decimal = 0;
+            CrossTable[i].Protocol = 0;
+            CrossTable[i].IPAddress[0] = 0;
+            CrossTable[i].Port = 0;
+            CrossTable[i].NodeId = 0;
+            CrossTable[i].Address = 0;
+            CrossTable[i].Block = 0;
+            CrossTable[i].NReg = 0;
+            CrossTable[i].Handle = 0;
+            CrossTable[i].OldVal = 0;
+            CrossTable[i].Error = 1;
+            k = ARRAY_QUEUE(i + 1);
+            ARRAY_QUEUE_OUTPUT(i + 1) = 0;
+            ARRAY_STATES(i + 1) = 0;
+        }
+        CrossTableState = TRUE;
+        CommEnabled = FALSE;
+        RTUProtocol_ON = FALSE;
+        TCPProtocol_ON = FALSE;
+        TCPRTUProtocol_ON = FALSE;
+    } else if (TIPO == 1) {
+        for (i = 0; i <= 159; ++i) {
+            ALCrossTable[i].ALType = FALSE;
+            ALCrossTable[i].ALTag[0] = 0;
+            ALCrossTable[i].ALSource[0] = 0;
+            ALCrossTable[i].ALCompareVar[0] = 0;
+            ALCrossTable[i].ALCompareVal = 0;
+            ALCrossTable[i].ALOperator = 0;
+            ALCrossTable[i].ALFilterTime = 0;
+        }
+        ALCrossTableState = TRUE;
+    }
+}
+
+static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
+{
+    // InitXtable: fb_HW119_Init;
+    // ReadFields:fb_HW119_ReadVarFields;
+    // ReadAlarmsFields:fb_HW119_ReadAlarmsFields;
+    // ReadCommFields:fb_HW119_ReadCommFields;
+    uint16_t FBState = 0;
+    uint16_t FunctRes;
+    int32_t index;
+    int32_t STEPS = 50;
+    int32_t LowEdge = 0;
+    int32_t HiEdge = 0;
+
+    for (;;) {
+        switch (FBState) {
+        case 0:
+            InitXtable(CTType); //Inizializzazione delle variabili CT
+            FBState = 10;
+            ErrorsState = ErrorsState & 0xF0; // reset flag di errore
+            LowEdge = 1;
+            HiEdge = STEPS;
+            if (HiEdge > CTDimension) {
+                HiEdge = CTDimension;
+            }
+            break;
+        case 10:
+            // FunctRes = HW119_OpenCrossTable(CTFile);
+             if (FunctRes == 0)  {	// Operazione andata a buon fine
+                FBState = 20;
+                HW119_ERR[2] = 2;
+            } else {
+                FBState = 1000;	// Errore -> termina
+                ErrorsState = ErrorsState | 0x01;
+                HW119_ERR[2] = 3;
+             }
+            break;
+        case 20:
+            break;
+        case 30:
+            break;
+        case 40:
+            break;
+        case 100:
+            break;
+        case 1000:
+            break;
+        }
+    }
+}
+
+static void AlarmMngr(void)
+{
+}
+
+static void PLCsync(void)
+{
+}
+
+static void ErrorMNG(void)
+{
+}
+
+void *engineThread(void *statusAdr)
+{
+    int threadInitOK = FALSE;
+
+    // InitComm:fb_HW119_InitComm;
+    // AlarmMngr:fb_HW119_AlarmsMngr;
+    // LoadXTable:fb_HW119_LoadCrossTab;
+    // ErrorMNG:fb_HW119_ErrorMng;
+    // PLCsync:fb_HW119_PLCsync;
+    // Reconnect:fb_HW119_Check;
+    // TPAC1006_LIOsync:fb_TPAC1006_LIOsync;
+    // TPAC1007_LIOsync:fb_TPAC1007_LIOsync;
+    // TICtimer:fb_TPAC_tic;
+    uint16_t FunctRes = 0;
+    uint32_t CommState = 0;
+    uint32_t COUNTER = 0;
+    // timer_sync:TON;
+
+    // thread init
+    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
+
+    // run
+    *threadStatusPtr = RUNNING;
+    for (;;) {
+        if (g_bRunning && threadInitOK) {
+            // ready data: receive and immediately reply
+            pthread_mutex_lock(&theMutex);
+            {
+                switch (CommState) {
+                case 0:
+                    // FunctRes = HW119_CloseCrossTable();
+                    // LoadXTable(ENABLE:=FALSE);
+                    // InitComm(ENABLE:=FALSE);
+                    ErrorsState = 0;
+                    CommState = 10;
+                    COUNTER = 0;
+                    RTU_RUN = FALSE;
+                    TCP_RUN = FALSE;
+                    TCPRTU_RUN = FALSE;
+                    ERROR_FLAG = 0;
+                    break;
+                case 10: // Lettura crosstable allarmi
+                    if (LoadXTable(ALcrossTableFile, DimAlarmsCT, 1)) {
+                        CommState = 20;	// Fallita lettura crosstable allrmi -> prosegue con lettura cross table variabili
+                        ALCrossTableState = FALSE;
+                        // LoadXTable(ENABLE:=FALSE);
+                        ERROR_FLAG = ERROR_FLAG | 0x10; //SEGNALO L'ERRORE SUL BIT 4
+                    } else {
+                        CommState = 20;				//lettura crosstable  Allarmi  OK  -> prosegue
+                        // FunctRes:=HW119_CloseCrossTable();
+                        // LoadXTable(ENABLE:=FALSE);
+                    }
+                    break;
+                case 20: // Lettura crosstable variabili
+                    if (LoadXTable(VARcrossTableFile, DimCrossTable, 0)) {
+                        CommState = 1000;	// Fallita lettura crosstable  variabili: FINE
+                        CrossTableState = FALSE;
+                        // LoadXTable(ENABLE:=FALSE);
+                        ERROR_FLAG = ERROR_FLAG | 0x20; //SEGNALO L'ERRORE SUL BIT 5
+                    } else {
+                        CommState = 30;				// lettura crosstable  variabili  OK ->  prosegue
+                        // LoadXTable(ENABLE:=FALSE);
+                    }
+                    break;
+                case 30: // Lettura crosstable parametri di comunicazione
+                    if (LoadXTable(CommParFile, 5, 2)) {
+                        CommState = 1000;	// Fallita lettura crosstable  parametri di comunicazione: FINE
+                        // LoadXTable(ENABLE:=FALSE);
+                        ERROR_FLAG = ERROR_FLAG | 0x08; //SEGNALO L'ERRORE SUL BIT 3
+                    } else {
+                        CommState = 40;				// lettura crosstable  parametri di comunicazione  OK ->  prosegue
+                        // LoadXTable(ENABLE:=FALSE);
+                    }
+                    break;
+                case 40:
+                    if (osPthreadCreate(&theModbusRTU1Thread_id, &theModbusRTU1ThreadStatus, &modbusThread, NULL, "modbusRTU1", 0) == 0) {
+                        do {
+                            usleep(1000);
+                        } while (theModbusRTU1ThreadStatus != RUNNING);
+                        ERROR_FLAG = ERROR_FLAG | 0x80; // SEGNALO CHE IL TASK RTU è PARTITO
+                        RTU_RUN = TRUE;
+                    } else {
+                #if defined(RTS_CFG_IO_TRACE)
+                        osTrace("[%s] ERROR creating modbus RTU1 thread: %s.\n", __func__, strerror(errno));
+                #endif
+                        RTU_RUN = FALSE;
+                    }
+                    CommState = 50;
+                    break;
+                case 50:
+                    if (osPthreadCreate(&theModbusTCPThread_id, &theModbusTCPThreadStatus, &modbusThread, NULL, "modbusTCP", 0) == 0) {
+                        do {
+                            usleep(1000);
+                        } while (theModbusTCPThreadStatus != RUNNING);
+                        ERROR_FLAG = ERROR_FLAG | 0x100; // SEGNALO CHE IL TASK TCP è PARTITO
+                        TCP_RUN = TRUE;
+                    } else {
+                #if defined(RTS_CFG_IO_TRACE)
+                        osTrace("[%s] ERROR creating modbus TCP thread: %s.\n", __func__, strerror(errno));
+                #endif
+                        TCP_RUN = FALSE;
+                    }
+                    CommState = 60;
+                    break;
+                case 60:
+                    if (osPthreadCreate(&theModbusTCPRTUThread_id, &theModbusTCPRTUThreadStatus, &modbusThread, NULL, "modbusTCPRTU", 0) == 0) {
+                        do {
+                            usleep(1000);
+                        } while (theModbusTCPRTUThreadStatus != RUNNING);
+                        ERROR_FLAG = ERROR_FLAG | 0x200; // SEGNALO CHE IL TASK TCPRTU è PARTITO
+                        TCPRTU_RUN = TRUE;
+                    } else {
+                #if defined(RTS_CFG_IO_TRACE)
+                        osTrace("[%s] ERROR creating modbus TCPRU thread: %s.\n", __func__, strerror(errno));
+                #endif
+                        TCPRTU_RUN = FALSE;
+                    }
+                    CommState = 70;
+                    break;
+                case 70:
+                    ERROR_FLAG = ERROR_FLAG | 0x40;	// SEGNALA SUL BIT 6 CHE HA TERMINATO L'INIZIALIZZAZIONE DELLE CT
+                    // TRIGGER02:=TRIGGER02;
+                    // TRIGGER01:=TRIGGER01;
+                    if  (ALCrossTableState) {
+                        CommEnabled = TRUE;
+                    }
+                    // FunctRes:=WORD_TO_UINT(TSK_Start('TASK0_Control'));		(* partenza task PLC*)
+                    CommState = 80;
+                    break;
+                case 80:
+                    // TRIGGER02 = TRIGGER02;
+                    // TRIGGER01 = TRIGGER01;
+                    if (CommEnabled)  {
+                        AlarmMngr();					// Gestione allarmi*)
+                    }
+                    // Reconnect();						// Riconnessione per protocolli TCP e TCPRTU	*)
+                    PLCsync();							// sincronizzazione tra variabili PLC e HMI	*)
+//                    timer_sync(IN = TRUE,PT = T#50ms);
+//                    if timer_sync.Q  {
+//                        timer_sync(IN = FALSE);
+//                        TICtimer(tic = T#50ms);
+//                         if (HardwareType AND 16#000000FF) >= 16#01  {
+//                            TPAC1006_LIOsync();
+//                         }
+//                         if (HardwareType AND 16#00FF0000) >= 16#01  {
+//                            TPAC1007_LIOsync();
+//                         }
+//                    }
+                    break;
+                case 1000:
+                    // TRIGGER02:=TRIGGER02;
+                    ERROR_FLAG = ERROR_FLAG | 0x40; // SEGNALA SUL BIT 6 CHE HA TERMINATO L'INIZIALIZZAZIONE DELLE CT*)
+                    ErrorMNG();
+                    break;
+                default:
+                    ;
+                }
+            }
+            pthread_mutex_unlock(&theMutex);
+            usleep(1000);
+        } else if (g_bExiting) {
+            break;
+        } else {
+            usleep(THE_DELAY_ms * 1000);
+        }
+    }
+
+    // thread clean
+
+    // exit
+    *threadStatusPtr = EXITING;
+    return NULL;
+}
+
+void *modbusThread(void *statusAdr)
+{
+    int threadInitOK = FALSE;
+
+    // thread init
+    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
+    int status = 0;
+
+    // run
+    *threadStatusPtr = RUNNING;
+    for (;;) {
+        if (g_bRunning && threadInitOK) {
+            // ready data: receive and immediately reply
+            switch (status) {
+            case 0:
+                break;
+            case 1:
+                pthread_mutex_lock(&theMutex);
+                {
+                }
+                pthread_mutex_unlock(&theMutex);
+                break;
+            case 2:
+                break;
+            default:
+                ;
+            }
+            usleep(1000);
+        } else if (g_bExiting) {
+            break;
+        } else {
+            usleep(THE_DELAY_ms * 1000);
+        }
+    }
+
+    // thread clean
+
+    // exit
+    *threadStatusPtr = EXITING;
+    return NULL;
+}
+
+void *dataThread(void *statusAdr)
 {
     int udp_recv_socket = -1;
     int udp_send_socket = -1;
     struct  sockaddr_in DestinationAddress;
     struct  sockaddr_in ServerAddress;
     int threadInitOK = FALSE;
+    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
 
     // thread init
     udp_recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -176,8 +516,8 @@ void *dataThread(void *dontcare)
     }
 
     // run
-    theDataThreadStatus = RUNNING;
-	for (;;) {
+    *threadStatusPtr = RUNNING;
+    for (;;) {
         if (g_bRunning && threadInitOK) {
             // wait on server socket, only until timeout
             fd_set recv_set;
@@ -197,7 +537,6 @@ void *dataThread(void *dontcare)
                 if (rc != THE_DATA_UDP_SIZE) {
                     // ?
                 }
-                the_IdataRegistersOK = TRUE;
                 int sn = do_sendto(udp_send_socket, the_QdataRegisters, THE_DATA_UDP_SIZE,
                                    &DestinationAddress);
                 if (sn != THE_DATA_UDP_SIZE) {
@@ -205,12 +544,12 @@ void *dataThread(void *dontcare)
                 }
             }
             pthread_mutex_unlock(&theMutex);
-		} else if (g_bExiting) {
-			break;	
+        } else if (g_bExiting) {
+            break;
         } else {
             usleep(THE_DELAY_ms * 1000);
         }
-	}
+    }
 
     // thread clean
     if (udp_recv_socket != -1) {
@@ -223,18 +562,19 @@ void *dataThread(void *dontcare)
         close(udp_send_socket);
         udp_send_socket = -1;
      }
-	// exit
-    theDataThreadStatus = EXITING;
-    return dontcare;
+    // exit
+    *threadStatusPtr = EXITING;
+    return NULL;
 }
 
-void *syncroThread(void *dontcare)
+void *syncroThread(void *statusAdr)
 {
     int udp_recv_socket = -1;
     int udp_send_socket = -1;
     struct  sockaddr_in DestinationAddress;
     struct  sockaddr_in ServerAddress;
     int threadInitOK = FALSE;
+    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
 
     // thread init
     udp_recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -262,7 +602,7 @@ void *syncroThread(void *dontcare)
     }
 
     // run
-    theSyncThreadStatus = RUNNING;
+    *threadStatusPtr = RUNNING;
     for (;;) {
         if (g_bRunning && threadInitOK) {
             // wait on server socket, only until timeout
@@ -283,7 +623,6 @@ void *syncroThread(void *dontcare)
                 if (rc != THE_SYNC_UDP_SIZE) {
                     // ?
                 }
-                the_IsyncRegistersOK = TRUE;
                 // maintain hardware type for the plc application (see syncroInitialize())
                 // hardware type is a 32 bit register and the offset is in bytes
                 uint32_t *data = (uint32_t *)the_IsyncRegisters;
@@ -314,8 +653,8 @@ void *syncroThread(void *dontcare)
         udp_send_socket = -1;
      }
     // exit
-    theSyncThreadStatus = EXITING;
-    return dontcare;
+    *threadStatusPtr = EXITING;
+    return NULL;
 }
 
 /* ----  Implementations:	--------------------------------------------------- */
@@ -413,7 +752,6 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
     // maintain hardware type for the plc application
     // hardware type is a 32 bit register and the offset is in bytes
     HardwareType = hardware_type;
-    the_IsyncRegistersOK = TRUE; // FIXME
     g_bConfigured	= TRUE;
 	g_bRunning	= FALSE;
 	RETURN(uRes);
@@ -436,43 +774,46 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // load retentive area in %I %M %Q
 #if defined(RTS_CFG_MECT_RETAIN)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
-	OS_MEMCPY(pvIsegment, ptRetentive, lenRetentive);
-	
-#ifdef RTS_CFG_MEMORY_AREA_EXPORT
-	void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
+    void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
+    void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
+    OS_MEMCPY(pvIsegment, ptRetentive, lenRetentive);
 	OS_MEMCPY(pvMsegment, ptRetentive, lenRetentive);
-#else
-	void * pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 	OS_MEMCPY(pvQsegment, ptRetentive, lenRetentive);
-#endif
 #endif
 
     // initialize array
     PLCRevision01 = rev01;
     PLCRevision02 = rev02;
 
-    // start the data and sync threads
-    pthread_attr_t pattr;
-    pthread_attr_init(&pattr);
-    if (osPthreadCreate(&theDataThread_id, &pattr, &dataThread, NULL, "data", 0) == 0) {
+    // start the engine, data and sync threads
+    if (osPthreadCreate(&theEngineThread_id, &theEngineThreadStatus, &engineThread, NULL, "engine", 0) == 0) {
+        do {
+            usleep(1000);
+        } while (theEngineThreadStatus != RUNNING);
+    } else {
+#if defined(RTS_CFG_IO_TRACE)
+        osTrace("[%s] ERROR creating engine thread: %s.\n", __func__, strerror(errno));
+#endif
+        uRes = ERR_FB_INIT;
+    }
+    if (osPthreadCreate(&theDataThread_id, &theDataThreadStatus, &dataThread, NULL, "data", 0) == 0) {
         do {
             usleep(1000);
         } while (theDataThreadStatus != RUNNING);
     } else {
 #if defined(RTS_CFG_IO_TRACE)
-        osTrace("[%s] ERROR message_th: %s.\n", __func__, strerror(errno));
+        osTrace("[%s] ERROR creating data thread: %s.\n", __func__, strerror(errno));
 #endif
         uRes = ERR_FB_INIT;
     }
-    pthread_attr_init(&pattr);
-    if (osPthreadCreate(&theSyncThread_id, &pattr, &syncroThread, NULL, "syncro", 0) == 0) {
+    if (osPthreadCreate(&theSyncThread_id, &theSyncThreadStatus, &syncroThread, NULL, "syncro", 0) == 0) {
         do {
             usleep(1000);
         } while (theSyncThreadStatus != RUNNING);
     } else {
 #if defined(RTS_CFG_IO_TRACE)
-        osTrace("[%s] ERROR message_th: %s.\n", __func__, strerror(errno));
+        osTrace("[%s] ERROR creating syncro thread: %s.\n", __func__, strerror(errno));
 #endif
         uRes = ERR_FB_INIT;
     }
@@ -496,7 +837,12 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
 	g_bRunning = FALSE;
     // stop the threads
     g_bExiting	= TRUE;
-    while (theDataThreadStatus == RUNNING || theSyncThreadStatus == RUNNING) {
+    while (theEngineThreadStatus == RUNNING
+        || theModbusRTU1ThreadStatus == RUNNING
+        || theModbusTCPThreadStatus == RUNNING
+        || theModbusTCPRTUThreadStatus == RUNNING
+        || theDataThreadStatus == RUNNING
+        || theSyncThreadStatus == RUNNING) {
         usleep(1000);
     }
     RETURN(uRes);
@@ -566,7 +912,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
 
-    if (g_bRunning && the_IdataRegistersOK) {
+    if (g_bRunning) {
         pthread_mutex_lock(&theMutex);
         {
             if (pNotify->uTask != 0xffffu) {
@@ -584,12 +930,10 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     IEC_UINT	r;
 
                     for (r = 0; uRes == OK && r < pIR->uRegionsRd; ++r) {
-                        if (pIR->pRegionRd[r].pGetQ[uIOLayer] == FALSE && pIR->pRegionRd[r].pGetI[uIOLayer] == FALSE) {
-                            continue;
-                        }
-                        if (pIR->pRegionRd[r].usSegment != SEG_INPUT && pIR->pRegionRd[r].usSegment != SEG_OUTPUT) {
-                            continue;
-                        }
+                        // commented out for enabling %M forced update
+                        // if (pIR->pRegionRd[r].pGetQ[uIOLayer] == FALSE && pIR->pRegionRd[r].pGetI[uIOLayer] == FALSE) {
+                        //     continue;
+                        // }
                         IEC_UDINT	ulStart;
                         IEC_UDINT	ulStop;
                         void * source;

@@ -4,7 +4,7 @@
 #define ARRAY_CROSSTABLE_INPUT(i) 	the_QdataRegisters[i] // %M -> %Q
 #define ARRAY_CROSSTABLE_OUTPUT(i)  the_IdataRegisters[i] // %I
 
-#define ARRAY_STATES(i) ((uint8_t *)(the_QdataRegisters)[22000 + i])
+#define ARRAY_STATES(i) (((uint8_t *)(the_QdataRegisters))[22000 + i])
 
 #define ARRAY_QUEUE(i)              the_IsyncRegisters[i]   // Array delle CODE in lettura
 #define ARRAY_QUEUE_OUTPUT(i)       the_QsyncRegisters[i]   // Array delle CODE in scrittura
