@@ -28,6 +28,7 @@ $(error "SPECIFY PRODUCT (USE_CROSSTABLE|USE_NO_CROSSTABLE)")
 endif
 
 ifeq ($(FREESCALE_GCC), 1)
+
 ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi
 #CC_VERSION       = gcc-4.3.3-glibc-2.8-cs2009q1-203
@@ -45,6 +46,7 @@ XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xen
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
 
 else ifeq ($(SOURCERY_GCC), 1)
+
 ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = Sourcery_G++_Lite
 CC_DIRECTORY     = /home/imx28/CodeSourcery/$(CC_VERSION)/bin/
@@ -59,19 +61,27 @@ XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xen
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
 
 else
-#$(error "SPECIFICARE FREESCALE_GCC=1 OPPURE SOURCERY_GCC=1")
-ROOTFS = /
+
+ROOTFS = /home/imx_mect/ltib/rootfs
 CC_VERSION       =
-CC_DIRECTORY     = /usr/bin/
-CC_RADIX         = arm-linux-gnueabi-
-ARCH_INCLUDE     =
-XENOCONFIG = /usr/bin/xeno-config
-XENO_CC = $(shell $(XENOCONFIG) --cc)
-XENO_CFLAGS = $(shell $(XENOCONFIG) --skin=posix --cflags)
-XENO_LDFLAGS = $(shell $(XENOCONFIG) --skin=posix --ldflags)
-# This includes the library path of given Xenomai into the binary to make live
-# easier for beginners if Xenomai's libs are not in any default search path.
-XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(shell $(XENOCONFIG) --libdir)
+CC_DIRECTORY     = /opt/CodeSourcery/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi-
+ARCH_INCLUDE     = \
+        -I$(ROOTFS)/usr/include \
+        -I$(ROOTFS)/usr/src/linux/include \
+        -I$(CC_DIRECTORY)/arm-none-linux-gnueabi
+XENO_CC = gcc
+XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
+XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
+
+## XENOCONFIG = /usr/bin/xeno-config
+## XENO_CC = $(shell $(XENOCONFIG) --cc)
+## XENO_CFLAGS = $(shell $(XENOCONFIG) --skin=posix --cflags)
+## XENO_LDFLAGS = $(shell $(XENOCONFIG) --skin=posix --ldflags)
+## # This includes the library path of given Xenomai into the binary to make live
+## # easier for beginners if Xenomai's libs are not in any default search path.
+## XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(shell $(XENOCONFIG) --libdir)
 
 endif
 
@@ -120,7 +130,7 @@ endif
 CFLAGS           = $(XENO_CFLAGS) $(TFLAGS) -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -fno-builtin -Wall -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)
 CFLAGS_AS        = $(CFLAGS)
 
-LD_FLAGS         = $(XENO_LDFLAGS) -lm -lpthread $(CFLAGS) -lrt -L/imx_mect/trunk/imx28/ltib/rootfs/usr/lib -lts -lsocketcan
+LD_FLAGS         = $(XENO_LDFLAGS) -lm -lpthread $(CFLAGS) -lrt -L$(ROOTFS)/usr/lib -lts -lsocketcan -ldl
 AR_FLAGS         = -rc
 
 BIN_PATH         = ../bin
