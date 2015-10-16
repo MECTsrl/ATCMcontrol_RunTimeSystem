@@ -27,21 +27,8 @@ else
 $(error "SPECIFY PRODUCT (USE_CROSSTABLE|USE_NO_CROSSTABLE)")
 endif
 
-ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
-# XENOCONFIG = $(ROOTFS)/usr/xenomai/bin/xeno-config
-# XENO_CC = $(shell $(XENOCONFIG) --cc)
-# XENO_CFLAGS = $(shell $(XENOCONFIG) --skin=posix --cflags)
-# XENO_LDFLAGS = $(shell $(XENOCONFIG) --skin=posix --ldflags) sul target
-# This includes the library path of given Xenomai into the binary to make live
-# easier for beginners if Xenomai's libs are not in any default search path.
-# XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(shell $(XENOCONFIG) --libdir)
-
-XENO_CC = gcc
-XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
-XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
-XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
-
 ifeq ($(FREESCALE_GCC), 1)
+ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi
 #CC_VERSION       = gcc-4.3.3-glibc-2.8-cs2009q1-203
 #CC_VERSION       = gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi
@@ -52,7 +39,13 @@ ARCH_INCLUDE     = \
   -I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
   -I/opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/usr/include/
   #-I/opt/freescale/usr/local/gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi/arm-fsl-linux-gnueabi/multi-libs/usr/include/
+XENO_CC = gcc
+XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
+XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
+
 else ifeq ($(SOURCERY_GCC), 1)
+ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = Sourcery_G++_Lite
 CC_DIRECTORY     = /home/imx28/CodeSourcery/$(CC_VERSION)/bin/
 CC_RADIX         = arm-none-linux-gnueabi-
@@ -60,8 +53,26 @@ ARCH_INCLUDE     = \
 	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
 	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
 	-I/home/imx28/CodeSourcery/Sourcery_G++_Lite/arm-none-linux-gnueabi
+XENO_CC = gcc
+XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
+XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
+
 else
-$(error "SPECIFICARE FREESCALE_GCC=1 OPPURE SOURCERY_GCC=1")
+#$(error "SPECIFICARE FREESCALE_GCC=1 OPPURE SOURCERY_GCC=1")
+ROOTFS = /
+CC_VERSION       =
+CC_DIRECTORY     = /usr/bin/
+CC_RADIX         = arm-linux-gnueabi-
+ARCH_INCLUDE     =
+XENOCONFIG = /usr/bin/xeno-config
+XENO_CC = $(shell $(XENOCONFIG) --cc)
+XENO_CFLAGS = $(shell $(XENOCONFIG) --skin=posix --cflags)
+XENO_LDFLAGS = $(shell $(XENOCONFIG) --skin=posix --ldflags)
+# This includes the library path of given Xenomai into the binary to make live
+# easier for beginners if Xenomai's libs are not in any default search path.
+XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(shell $(XENOCONFIG) --libdir)
+
 endif
 
 # /opt/freescale/usr/local/gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi/arm-none-linux-gnueabi/sysroot/usr/include/pthread.h

@@ -26,7 +26,6 @@
 #define _KPDMAIN_H_
 
 #include <sys/ioctl.h>
-#include <linux/mxs-buzzer.h>
 
 #if defined(INC_4C)
 #error "Must not be included in 4C!"

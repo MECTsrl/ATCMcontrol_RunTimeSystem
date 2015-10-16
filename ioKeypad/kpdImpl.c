@@ -22,7 +22,7 @@
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 
-#define __4CFILE__	"canImpl.c"
+#define __4CFILE__	"kpdImpl.c"
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
@@ -44,6 +44,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <linux/mxs-buzzer.h>
 
 #include "mectMain.h"
 
