@@ -486,7 +486,7 @@ void log_ignore_crash_handler(int signum, siginfo_t *siginfo, void *context)
 		struct pt_regs *regs = uc->uc_mcontext.regs;
 		regs->nip += 4;
 	  #else
-		/* TODO für PC & DC
+        /* TODO fuer PC & DC
 		 */
 
 	  #endif
