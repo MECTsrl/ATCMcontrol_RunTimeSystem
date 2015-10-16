@@ -44,6 +44,9 @@
 #include "mectRetentive.h"
 #endif
 
+#include "Resource1_cst.h"
+#include "crosstable_gvl.h"
+
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 /* ----  Local Defines:   ----------------------------------------------------- */
@@ -250,7 +253,7 @@ void *syncroThread(void *dontcare)
                         DestinationAddress.sin_family = h->h_addrtype;
                         memcpy((char *) &DestinationAddress.sin_addr.s_addr,
                                 h->h_addr_list[0], h->h_length);
-                        DestinationAddress.sin_port = htons(THE_UDP_SEND_PORT);
+                        DestinationAddress.sin_port = htons(THE_SYNC_SEND_PORT);
                         threadInitOK = TRUE;
                     }
                 }
@@ -280,7 +283,7 @@ void *syncroThread(void *dontcare)
                 if (rc != THE_SYNC_UDP_SIZE) {
                     // ?
                 }
-                g_bIregistersOK = TRUE;
+                the_IsyncRegistersOK = TRUE;
                 // maintain hardware type for the plc application (see syncroInitialize())
                 // hardware type is a 32 bit register and the offset is in bytes
                 uint32_t *data = (uint32_t *)the_IsyncRegisters;
@@ -409,8 +412,7 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
     // maintain hardware type for the plc application
     // hardware type is a 32 bit register and the offset is in bytes
-    uint32_t *data = (uint32_t *)the_IsyncRegisters;
-    data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t)] = hardware_type;
+    HardwareType = hardware_type;
     the_IsyncRegistersOK = TRUE; // FIXME
     g_bConfigured	= TRUE;
 	g_bRunning	= FALSE;
@@ -446,6 +448,10 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
 #endif
 
+    // initialize array
+    PLCRevision01 = rev01;
+    PLCRevision02 = rev02;
+
     // start the data and sync threads
     pthread_attr_t pattr;
     pthread_attr_init(&pattr);
@@ -460,7 +466,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
         uRes = ERR_FB_INIT;
     }
     pthread_attr_init(&pattr);
-    if (osPthreadCreate(&theSyncThread_id, &pattr, &syncThread, NULL, "syncro", 0) == 0) {
+    if (osPthreadCreate(&theSyncThread_id, &pattr, &syncroThread, NULL, "syncro", 0) == 0) {
         do {
             usleep(1000);
         } while (theSyncThreadStatus != RUNNING);
@@ -522,12 +528,12 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                    // copy the whole __%M__ segment to the Q registers (completely ignoring the %Q write copy regions)
                     void *pvMsegment = pIO->M.pAdr + pIO->M.ulOffs;
                     void *pvQsegment = pIO->Q.pAdr + pIO->Q.ulOffs;
-                    OS_MEMCPY(the_QdataRegisters, pvMsegment, THE_DATA_SIZE);
-                    OS_MEMCPY(pvQsegment, pvMsegment, THE_DATA_SIZE);
+                    // OS_MEMCPY(the_QdataRegisters, pvMsegment, THE_DATA_SIZE);
+                    // OS_MEMCPY(pvQsegment, pvMsegment, THE_DATA_SIZE);
 #if defined(RTS_CFG_MECT_RETAIN)
                     // retentive memory update
-                    void *pvSendDataToRetentive = pvMsegment + 4;
-                    OS_MEMCPY(ptRetentive, pvSendDataToRetentive, lenRetentive);
+                    // void *pvSendDataToRetentive = pvMsegment + 4;
+                    // OS_MEMCPY(ptRetentive, pvSendDataToRetentive, lenRetentive);
 #endif
                 }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
@@ -589,18 +595,27 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                         void * source;
                         void * dest;
 
-                        if (pIR->pRegionRd[r].usSegment == SEG_INPUT) {
-                            ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->I.ulOffs);
-                            ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->I.ulOffs + pIO->I.ulSize);
-                            source = the_IdataRegisters;
-                            source += ulStart - pIO->I.ulOffs;
-                            dest = pIO->I.pAdr + ulStart;
-                        } else { // pIR->pRegionRd[r].usSegment == SEG_OUTPUT
+                        if (pIR->pRegionRd[r].usSegment == SEG_GLOBAL) {
+                            ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->M.ulOffs);
+                            ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->M.ulOffs + pIO->M.ulSize);
+                            source = the_QdataRegisters; // i.e. forcing %M from %Q for retro compatibility
+                            source += ulStart - pIO->Q.ulOffs;
+                            dest = pIO->M.pAdr + ulStart;
+                        } else if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->Q.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->Q.ulOffs + pIO->Q.ulSize);
                             source = the_QdataRegisters;
                             source += ulStart - pIO->Q.ulOffs;
                             dest = pIO->Q.pAdr + ulStart;
+                        } else if (pIR->pRegionRd[r].usSegment == SEG_INPUT) {
+                            ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->I.ulOffs);
+                            ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->I.ulOffs + pIO->I.ulSize);
+                            source = the_IdataRegisters;
+                            source += ulStart - pIO->I.ulOffs;
+                            dest = pIO->I.pAdr + ulStart;
+                        } else {
+                            // wrong data
+                            continue;
                         }
                         if (ulStart < ulStop) {
                             OS_MEMCPY(dest, source, ulStop - ulStart);
