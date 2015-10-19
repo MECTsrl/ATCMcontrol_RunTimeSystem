@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2011 Mect s.r.l
  *
  * This file is part of FarosPLC.
@@ -46,12 +46,17 @@
 
 #include "Resource1_cst.h"
 #include "crosstable_gvl.h"
+#include "libHW119.h"
+#include "libModbus.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 
-#define THE_DELAY_ms		100
+#define THE_CONFIG_DELAY_ms	1
+#define THE_ENGINE_DELAY_ms	25
+#define THE_MODBUS_DELAY_ms 10
+#define THE_UDP_TIMEOUT_ms	500
 #define THE_UDP_SEND_ADDR   "127.0.0.1"
 
 #define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
@@ -109,26 +114,28 @@ static void *modbusThread(void *statusAdr);
 static void *dataThread(void *statusAdr);
 static void *syncroThread(void *statusAdr);
 
+static int do_recv(int s, void *buffer, ssize_t len);
+static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *address);
+static void InitXtable(uint16_t TIPO);
+static int ReadFields(int16_t Index);
+static int ReadAlarmsFields(int16_t Index);
+static int ReadCommFields(int16_t Index);
+static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType);
+static void AlarmMngr(void);
+static void PLCsync(void);
+static void ErrorMNG(void);
+
+/* ----  Implementations:	--------------------------------------------------- */
+
 static int do_recv(int s, void *buffer, ssize_t len)
 {
     int retval = 0;
     ssize_t sent = 0;
 
-#if 0
-    while (sent < len && retval >= 0) {
-        retval = recv(s, buffer + sent, len - sent, 0);
-        if (retval == 0) {
-            retval = -1;
-        } else if (retval > 0) {
-            sent += retval;
-        }
-    }
-#else
     retval = recv(s, buffer + sent, len - sent, 0);
     if (retval < len) {
         retval = -1;
     }
-#endif
     return retval;
 }
 
@@ -137,26 +144,15 @@ static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *addre
     int retval = 0;
     ssize_t sent = 0;
 
-#if 0
-    while (sent < len && retval >= 0) {
-        retval = sendto(s, buffer + sent, len - sent, 0,
-                (struct sockaddr *) address, sizeof(struct sockaddr_in));
-        if (retval == 0) {
-            retval = -1;
-        } else if (retval > 0) {
-            sent += retval;
-        }
-    }
-#else
     retval = sendto(s, buffer + sent, len - sent, 0,
                     (struct sockaddr *) address, sizeof(struct sockaddr_in));
     if (retval < len) {
         retval = -1;
     }
-#endif
     return retval;
 }
 
+// fb_HW119_Init.st
 static void InitXtable(uint16_t TIPO)
 {
     uint16_t k;
@@ -180,8 +176,8 @@ static void InitXtable(uint16_t TIPO)
             CrossTable[i].Handle = 0;
             CrossTable[i].OldVal = 0;
             CrossTable[i].Error = 1;
-            k = ARRAY_QUEUE(i + 1);
-            ARRAY_QUEUE_OUTPUT(i + 1) = 0;
+            k = ARRAY_QUEUE[i + 1];
+            ARRAY_QUEUE_OUTPUT[i + 1] = 0;
             ARRAY_STATES(i + 1) = 0;
         }
         CrossTableState = TRUE;
@@ -203,6 +199,377 @@ static void InitXtable(uint16_t TIPO)
     }
 }
 
+// fb_HW119_ReadVarFields.st
+static int ReadFields(int16_t Index)
+{
+    int ERR = 0;
+    IEC_STRMAX Field;
+    HW119_GET_CROSS_TABLE_FIELD param;
+    param.field = &Field;
+
+    // Enable {0,1,2,3}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].Enable = atoi(Field.Contents);
+        HW119_ERR[3] = 2;
+    } else {
+        HW119_ERR[3] = 3;
+        ERR = TRUE;
+    }
+
+    // Plc {H,P,S,F}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        switch (Field.Contents[0]) {
+        case 'P':
+            CrossTable[Index].Plc = TRUE;
+            break;
+        case 'H':
+            CrossTable[Index].Plc = FALSE;
+            break;
+        case 'S':
+        case 'F':
+        default:
+            // nothing
+            ;
+        }
+    } else {
+        ERR = TRUE;
+    }
+
+    // Tag {identifier}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        strncpy(CrossTable[Index].Tag, param.field->Contents, VMM_MAX_IEC_STRLEN);
+    } else {
+        ERR = TRUE;
+    }
+
+    // Types {UINT, UDINT, DINT, FDCBA, ...}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        if (strncmp(Field.Contents, "UINT", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UINT16;
+        } else if (strncmp(Field.Contents, "INT", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = INT16;
+        } else if (strncmp(Field.Contents, "UDINT", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UDINT32;
+        } else if (strncmp(Field.Contents, "DINT", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = DINT32;
+        } else if (strncmp(Field.Contents, "FDCBA", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = FLOATDCBA;
+        } else if (strncmp(Field.Contents, "FCDAB", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = FLOATCDAB;
+        } else if (strncmp(Field.Contents, "FABCD", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = FLOATABCD;
+        } else if (strncmp(Field.Contents, "FBADC", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = FLOATBADC;
+        } else if (strncmp(Field.Contents, "BIT", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = BIT;
+        } else if (strncmp(Field.Contents, "UDINTDCBA", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UDINTDCBA;
+        } else if (strncmp(Field.Contents, "UDINTCDAB", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UDINTCDAB;
+        } else if (strncmp(Field.Contents, "UDINTABCD", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UDINTABCD;
+        } else if (strncmp(Field.Contents, "UDINTBADC", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = UDINTBADC;
+        } else if (strncmp(Field.Contents, "DINTDCBA", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = DINTDCBA;
+        } else if (strncmp(Field.Contents, "DINTCDAB", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = DINTCDAB;
+        } else if (strncmp(Field.Contents, "DINTABCD", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = DINTABCD;
+        } else if (strncmp(Field.Contents, "DINTBADC", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Types = DINTBADC;
+        } else {
+            if (CrossTable[Index].Enable > 0) {
+                CrossTable[Index].Types = 100; // tipo non riconosciuto
+                ERROR_FLAG |= 0x20;
+            }
+        }
+    } else {
+        ERR = TRUE;
+    }
+
+    // Decimal {0, 1, 2, 3, 4, ...}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].Decimal = atoi(param.field->Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // Protocol {"", RTU, TCP, TCPRTU}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        if (strncmp(Field.Contents, "RTU", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = 0;
+            RTUProtocol_ON = TRUE;
+        } else if (strncmp(Field.Contents, "TCP", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = 1;
+            TCPProtocol_ON = TRUE;
+        } else if (strncmp(Field.Contents, "TCPRTU", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = 2;
+            TCPRTUProtocol_ON = TRUE;
+        } else {
+            CrossTable[Index].Protocol = 100; // PROTOCOLLO NON RICONOSCIUTO
+            // FIXME: ERR ?
+        }
+    } else {
+        ERR = TRUE;
+    }
+
+    // IPAddress {identifier}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        strncpy(CrossTable[Index].IPAddress, param.field->Contents, VMM_MAX_IEC_STRLEN);
+    } else {
+        ERR = TRUE;
+    }
+
+    // Port {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].Port = atoi(param.field->Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // NodeId {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        if (strncmp(CrossTable[Index].Protocol, "TCP", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].NodeId = 1;
+        } else {
+            CrossTable[Index].NodeId = atoi(param.field->Contents);
+        }
+    } else {
+        ERR = TRUE;
+    }
+
+    // Address {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].Address = atoi(param.field->Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // Block {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].Block = atoi(param.field->Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // NReg {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        CrossTable[Index].NReg = atoi(param.field->Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // Handle {text}
+    // ignored
+
+    return ERR;
+}
+
+// fb_HW119_ReadAlarmsFields.st
+static int ReadAlarmsFields(int16_t Index)
+{
+    int ERR = FALSE;
+    IEC_STRMAX Field;
+    HW119_GET_CROSS_TABLE_FIELD param;
+    param.field = &Field;
+
+    // ALType {0,1}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        ALCrossTable[Index].ALType = atoi(Field.Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALTag {identifier}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        strncpy(ALCrossTable[Index].ALTag, param.field->Contents, VMM_MAX_IEC_STRLEN);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALSource {identifier}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        strncpy(ALCrossTable[Index].ALSource, param.field->Contents, VMM_MAX_IEC_STRLEN);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALCompareVar {identifier}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        strncpy(ALCrossTable[Index].ALCompareVar, param.field->Contents, VMM_MAX_IEC_STRLEN);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALCompareVal {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        ALCrossTable[Index].ALCompareVal = atoi(Field.Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALOperator {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        ALCrossTable[Index].ALOperator = atoi(Field.Contents);
+    } else {
+        ERR = TRUE;
+    }
+
+    // ALFilterTime {number}
+    hw119_get_cross_table_field(NULL, NULL, &param);
+    if (param.ret_value == 0) {
+        ALCrossTable[Index].ALFilterTime = atoi(Field.Contents);
+        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+    } else {
+        ERR = TRUE;
+    }
+
+    return ERR;
+}
+
+// fb_HW119_ReadCommFields.st
+static int ReadCommFields(int16_t Index)
+{
+    int ERR = FALSE;
+    IEC_STRMAX Field;
+    HW119_GET_CROSS_TABLE_FIELD param;
+    param.field = &Field;
+
+    switch (Index) {
+    case 1: // retries
+        // NumberOfFails {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            NumberOfFails = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // FailDivisor {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            FailDivisor = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        break;
+    case 2: // priorities
+        // Talta {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            Talta = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // Tmedia {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            Tmedia = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // Tbassa {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            Tbassa = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        break;
+    case 3: // rtu
+    case 4: // tcp
+    case 5: // tcprtu
+        // Device {text}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            strncpy(CommParameters[Index - 2].Device, param.field->Contents, VMM_MAX_IEC_STRLEN);
+        } else {
+            ERR = TRUE;
+        }
+        // IPaddr {text}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            strncpy(CommParameters[Index - 2].IPaddr, param.field->Contents, VMM_MAX_IEC_STRLEN);
+        } else {
+            ERR = TRUE;
+        }
+        // Port {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].Port = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // BaudRate {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].BaudRate = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // Parity {text}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            strncpy(CommParameters[Index - 2].Parity, param.field->Contents, VMM_MAX_IEC_STRLEN);
+        } else {
+            ERR = TRUE;
+        }
+        // DataBit {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].DataBit = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // StopBit {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].StopBit = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // Tmin {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].Tmin = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        // TimeOut {number}
+        hw119_get_cross_table_field(NULL, NULL, &param);
+        if (param.ret_value == 0) {
+            CommParameters[Index - 2].TimeOut = atoi(Field.Contents);
+        } else {
+            ERR = TRUE;
+        }
+        break;
+
+    default:
+        ;
+    }
+
+    return ERR;
+}
+
+// fb_HW119_LoadCrossTab.st
 static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
 {
     // InitXtable: fb_HW119_Init;
@@ -210,13 +577,16 @@ static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
     // ReadAlarmsFields:fb_HW119_ReadAlarmsFields;
     // ReadCommFields:fb_HW119_ReadCommFields;
     uint16_t FBState = 0;
-    uint16_t FunctRes;
+    // uint16_t FunctRes;
     int32_t index;
     int32_t STEPS = 50;
     int32_t LowEdge = 0;
     int32_t HiEdge = 0;
+    STaskInfoVMM *pVMM = get_pVMM();
+    int END = FALSE;
+    int ERR = FALSE;
 
-    for (;;) {
+    while (!END) {
         switch (FBState) {
         case 0:
             InitXtable(CTType); //Inizializzazione delle variabili CT
@@ -228,47 +598,199 @@ static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
                 HiEdge = CTDimension;
             }
             break;
-        case 10:
-            // FunctRes = HW119_OpenCrossTable(CTFile);
-             if (FunctRes == 0)  {	// Operazione andata a buon fine
+        case 10: {
+            IEC_STRMAX filename;
+            filename.MaxLen = VMM_MAX_IEC_STRLEN;
+            filename.CurLen = strnlen(CTFile, filename.MaxLen);
+            strncpy(filename.Contents, CTFile, filename.CurLen);
+            HW119_OPEN_CROSS_TABLE_PARAM param = { &filename, 0 };
+            hw119_open_cross_table(NULL, NULL, &param);
+             if (param.ret_value == 0)  {	// Operazione andata a buon fine
                 FBState = 20;
                 HW119_ERR[2] = 2;
             } else {
                 FBState = 1000;	// Errore -> termina
                 ErrorsState = ErrorsState | 0x01;
                 HW119_ERR[2] = 3;
-             }
-            break;
-        case 20:
-            break;
+            }
+        }   break;
+        case 20: {
+            HW119_READ_CROSS_TABLE_RECORD_PARAM param;
+            for (index = LowEdge; index <= HiEdge; ++ index) {
+                if (CTType > 0) {
+                    param.error = TRUE;
+                } else {
+                    param.error = FALSE;
+                }
+                hw119_read_cross_table_record(NULL, NULL, &param);
+                if (param.ret_value == 0) {
+                    HW119_ERR[1] = 2;
+                    switch (CTType) {
+                    case 0:
+                        if (ReadFields(index)) {
+                            CrossTable[index].Error = 100;
+                            ErrorsState |= 0x04;
+                        }
+                        break;
+                    case 1:
+                        if (ReadAlarmsFields(index)) {
+                            ALCrossTable[index].ALError = 100;
+                            ErrorsState |= 0x04;
+                        }
+                        break;
+                    default:
+                        if (ReadCommFields(index) && (index > 1)) {
+                            CommParameters[index - 1].State = FALSE;
+                        } else {
+                            CommParameters[index - 1].State = TRUE;
+                        }                    }
+                } else {
+                    HW119_ERR[1] = 3;
+                    if (CTType == 0) {
+                        CrossTable[index].Error = 100;
+                        // marca la entry della crosstable come non ancora aggiornata
+                        ErrorsState |= 0x02;
+                    } else if (CTType == 1) {
+                        ALCrossTable[index].ALError = 100;
+                        // marca la entry della crosstable ALLARMI come non ancora aggiornata
+                        ErrorsState |= 0x04;
+                    }
+                }
+            }
+            FBState = 30;
+        }   break;
         case 30:
+            LowEdge = HiEdge + 1;
+            HiEdge = HiEdge + STEPS;
+            if (LowEdge < CTDimension) {
+                if (HiEdge < CTDimension) {
+                    FBState = 20;
+                } else if (HiEdge >= CTDimension) {
+                    HiEdge = CTDimension;
+                    FBState = 20;
+                }
+            } else {
+                FBState = 40;
+            }
             break;
-        case 40:
-            break;
+        case 40: {
+            HW119_CLOSE_CROSS_TABLE_PARAM param;
+            hw119_close_cross_table(NULL, NULL, &param);
+            if (param.ret_value == 0) {
+                HW119_ERR[0] = 2;
+                FBState = 100;
+            } else {
+                FBState = 1000;
+                HW119_ERR[0] = 3;
+                ErrorsState |= 0x80;
+            }
+        }   break;
         case 100:
+            END = TRUE;
             break;
-        case 1000:
+        case 1000: {
+            HW119_CLOSE_CROSS_TABLE_PARAM param;
+            hw119_close_cross_table(NULL, NULL, &param);
+            FBState = 1010;
+            ERR = TRUE;
+        }   break;
+        case 1010:
+            END = TRUE;
             break;
+        default:
+            END = TRUE;
+            ERR = TRUE;
         }
     }
+    return ERR;
 }
 
+// fb_HW119_AlarmsMngr.st
 static void AlarmMngr(void)
 {
 }
 
+// fb_HW119_PLCsync.st (NB: NOW IT'S CALLED BY SYNCRO)
 static void PLCsync(void)
 {
+    uint16_t IndexPLC;
+    uint16_t RW;
+    int16_t addr;
+
+    for (IndexPLC = 1; IndexPLC <= DimCrossTable; ++IndexPLC) {
+        RW = ARRAY_QUEUE[IndexPLC] & QueueRWMask;
+        addr = ARRAY_QUEUE[IndexPLC] & QueueAddressMask;
+        if (addr < DimCrossTable) {
+            if (RW == 0 && addr == 0) {
+                ARRAY_QUEUE_OUTPUT[IndexPLC] = 0;
+                break;
+            }
+            if (CrossTable[addr].Protocol == 100) {
+                if (RW == 0 && ARRAY_QUEUE_OUTPUT[IndexPLC] == STATO_BUSY_WRITE) {
+                    ARRAY_QUEUE_OUTPUT[IndexPLC] = 0;
+                } else if ((RW == WRITE || RW == WRITE_RIC_SINGLE || RW == WRITE_MULTIPLE) && ARRAY_QUEUE_OUTPUT[IndexPLC] != STATO_BUSY_WRITE) {
+                    ARRAY_QUEUE_OUTPUT[IndexPLC] = STATO_BUSY_WRITE;
+                    if (RW == WRITE || RW == WRITE_RIC_SINGLE) {
+                        ARRAY_CROSSTABLE_INPUT[addr] = ARRAY_CROSSTABLE_OUTPUT[addr];
+                    } else {
+                        uint16_t I;
+
+                        for (I = 0; I <= (CrossTable[addr].NReg - 1); ++I) {
+                            ARRAY_CROSSTABLE_INPUT[addr + I] = ARRAY_CROSSTABLE_OUTPUT[addr + I];
+                            CrossTable[addr + I].Error = 0; // FIXME: remove line
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
+// fb_TPAC_tic.st
+// fb_TPAC1006_LIOsync.st
+// fb_TPAC1007_LIOsync.st
+static void LocalIO(void)
+{
+    // TICtimer
+    float PLC_time, PLC_timeMin, PLC_timeMax;
+    uint32_t tic_ms;
+
+    tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
+    PLC_time = tic_ms / 1000.0;
+    if (PLC_time <= 10.0) {
+        PLC_timeMin = 0;
+        PLC_timeMax = 10.0;
+    } else {
+        PLC_timeMin = PLC_time - 10.0;
+        PLC_timeMax = PLC_time;
+    }
+    // PLC_time    AT %MD0.21560:REAL; 5390
+    // PLC_timeMin AT %MD0.21564:REAL; 5391
+    // PLC_timeMax AT %MD0.21568:REAL; 5392
+    memcpy(&ARRAY_CROSSTABLE_INPUT[5390], &PLC_time, sizeof(uint32_t));
+    memcpy(&ARRAY_CROSSTABLE_INPUT[5391], &PLC_timeMin, sizeof(uint32_t));
+    memcpy(&ARRAY_CROSSTABLE_INPUT[5392], &PLC_timeMax, sizeof(uint32_t));
+
+    // TPAC1006, TPAC1008
+    if (HardwareType & 0x000000FF) {
+        // TPAC1006_LIOsync();
+    }
+    // TPAC1007
+    if (HardwareType & 0x00FF0000) {
+        // TPAC1007_LIOsync();
+    }
+
+}
+
+// fb_HW119_ErrorMng.st
 static void ErrorMNG(void)
 {
+    // empty
 }
 
+// Program1.st
 void *engineThread(void *statusAdr)
 {
-    int threadInitOK = FALSE;
-
     // InitComm:fb_HW119_InitComm;
     // AlarmMngr:fb_HW119_AlarmsMngr;
     // LoadXTable:fb_HW119_LoadCrossTab;
@@ -278,19 +800,16 @@ void *engineThread(void *statusAdr)
     // TPAC1006_LIOsync:fb_TPAC1006_LIOsync;
     // TPAC1007_LIOsync:fb_TPAC1007_LIOsync;
     // TICtimer:fb_TPAC_tic;
-    uint16_t FunctRes = 0;
+    // uint16_t FunctRes = 0;
     uint32_t CommState = 0;
-    uint32_t COUNTER = 0;
+    // uint32_t COUNTER = 0;
     // timer_sync:TON;
 
     // thread init
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
-
-    // run
-    *threadStatusPtr = RUNNING;
-    for (;;) {
-        if (g_bRunning && threadInitOK) {
-            // ready data: receive and immediately reply
+    while (!g_bExiting && CommState < 80) {
+        usleep(THE_CONFIG_DELAY_ms * 1000);
+        if (g_bRunning) {
             pthread_mutex_lock(&theMutex);
             {
                 switch (CommState) {
@@ -300,10 +819,10 @@ void *engineThread(void *statusAdr)
                     // InitComm(ENABLE:=FALSE);
                     ErrorsState = 0;
                     CommState = 10;
-                    COUNTER = 0;
-                    RTU_RUN = FALSE;
-                    TCP_RUN = FALSE;
-                    TCPRTU_RUN = FALSE;
+                    // COUNTER = 0;
+                    // RTU_RUN = FALSE;
+                    // TCP_RUN = FALSE;
+                    // TCPRTU_RUN = FALSE;
                     ERROR_FLAG = 0;
                     break;
                 case 10: // Lettura crosstable allarmi
@@ -345,12 +864,12 @@ void *engineThread(void *statusAdr)
                             usleep(1000);
                         } while (theModbusRTU1ThreadStatus != RUNNING);
                         ERROR_FLAG = ERROR_FLAG | 0x80; // SEGNALO CHE IL TASK RTU è PARTITO
-                        RTU_RUN = TRUE;
+                        // RTU_RUN = TRUE;
                     } else {
                 #if defined(RTS_CFG_IO_TRACE)
                         osTrace("[%s] ERROR creating modbus RTU1 thread: %s.\n", __func__, strerror(errno));
                 #endif
-                        RTU_RUN = FALSE;
+                        // RTU_RUN = FALSE;
                     }
                     CommState = 50;
                     break;
@@ -360,12 +879,12 @@ void *engineThread(void *statusAdr)
                             usleep(1000);
                         } while (theModbusTCPThreadStatus != RUNNING);
                         ERROR_FLAG = ERROR_FLAG | 0x100; // SEGNALO CHE IL TASK TCP è PARTITO
-                        TCP_RUN = TRUE;
+                        // TCP_RUN = TRUE;
                     } else {
                 #if defined(RTS_CFG_IO_TRACE)
                         osTrace("[%s] ERROR creating modbus TCP thread: %s.\n", __func__, strerror(errno));
                 #endif
-                        TCP_RUN = FALSE;
+                        // TCP_RUN = FALSE;
                     }
                     CommState = 60;
                     break;
@@ -375,12 +894,12 @@ void *engineThread(void *statusAdr)
                             usleep(1000);
                         } while (theModbusTCPRTUThreadStatus != RUNNING);
                         ERROR_FLAG = ERROR_FLAG | 0x200; // SEGNALO CHE IL TASK TCPRTU è PARTITO
-                        TCPRTU_RUN = TRUE;
+                        // TCPRTU_RUN = TRUE;
                     } else {
                 #if defined(RTS_CFG_IO_TRACE)
                         osTrace("[%s] ERROR creating modbus TCPRU thread: %s.\n", __func__, strerror(errno));
                 #endif
-                        TCPRTU_RUN = FALSE;
+                        // TCPRTU_RUN = FALSE;
                     }
                     CommState = 70;
                     break;
@@ -394,14 +913,31 @@ void *engineThread(void *statusAdr)
                     // FunctRes:=WORD_TO_UINT(TSK_Start('TASK0_Control'));		(* partenza task PLC*)
                     CommState = 80;
                     break;
+                default:
+                    ;
+                }
+            }
+            pthread_mutex_unlock(&theMutex);
+        }
+    }
+
+    // run
+    *threadStatusPtr = RUNNING;
+    while (!g_bExiting) {
+        usleep(THE_ENGINE_DELAY_ms * 1000);
+        if (g_bRunning) {
+            pthread_mutex_lock(&theMutex);
+            {
+                switch (CommState) {
                 case 80:
                     // TRIGGER02 = TRIGGER02;
                     // TRIGGER01 = TRIGGER01;
                     if (CommEnabled)  {
                         AlarmMngr();					// Gestione allarmi*)
                     }
-                    // Reconnect();						// Riconnessione per protocolli TCP e TCPRTU	*)
-                    PLCsync();							// sincronizzazione tra variabili PLC e HMI	*)
+                    // Reconnect();	<-----= NOW IT'S MANAGED BY MODBUS
+                    // PLCsync(); <-----= NOW IT'S CALLED BY SYNCRO
+                    LocalIO();
 //                    timer_sync(IN = TRUE,PT = T#50ms);
 //                    if timer_sync.Q  {
 //                        timer_sync(IN = FALSE);
@@ -424,53 +960,152 @@ void *engineThread(void *statusAdr)
                 }
             }
             pthread_mutex_unlock(&theMutex);
-            usleep(1000);
-        } else if (g_bExiting) {
-            break;
-        } else {
-            usleep(THE_DELAY_ms * 1000);
         }
     }
 
     // thread clean
+    // see dataNotifyStop()
 
     // exit
     *threadStatusPtr = EXITING;
     return NULL;
 }
 
+
+// RTU_Communication.st
+// TCP_Communication.st
+// TCPRTU_Communication.st
+// fb_HW119_Check.st (no more fb_HW119_Reconnect.st)
+// fb_HW119_MODBUS.st
+// fb_HW119_InitComm.st
 void *modbusThread(void *statusAdr)
 {
-    int threadInitOK = FALSE;
+    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
+    enum modbusStatus {ZERO, NOT_CONNECTED, CONNECTED, TIMEOUT, ERROR, NO_HOPE};
+    enum modbusStatus status = ZERO;
+
+    int XProtocol_ON;
+    uint32_t elapsed_ms = 0;
+    uint32_t failures = 0;
+    uint16_t CommID = 0;
+    uint16_t ErroID = 0;
+    modbus_t * ctx = NULL;
+    struct timeval timeout;
 
     // thread init
-    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
-    int status = 0;
+    if (threadStatusPtr == &theModbusRTU0ThreadStatus) {
+        // FIXME
+        return;
+    } else if (threadStatusPtr == &theModbusRTU1ThreadStatus) {
+        XProtocol_ON = RTUProtocol_ON;
+        CommID = 1;
+        ErroID = 0x0000010;
+    } else if (threadStatusPtr == &theModbusTCPThreadStatus) {
+        XProtocol_ON = TCPProtocol_ON;
+        CommID = 2;
+        ErroID = 0x0000020;
+    } else if (threadStatusPtr == &theModbusTCPRTUThreadStatus) {
+        XProtocol_ON = TCPRTUProtocol_ON;
+        CommID = 3;
+        ErroID = 0x0000040;
+    }
+
+    if (CommParameters[CommID].TimeOut == 0) {
+        CommParameters[CommID].TimeOut = 300;
+    }
+    timeout.tv_sec = 0;
+    timeout.tv_usec = CommParameters[CommID].TimeOut * 1000;
 
     // run
     *threadStatusPtr = RUNNING;
-    for (;;) {
-        if (g_bRunning && threadInitOK) {
-            // ready data: receive and immediately reply
+    while (!g_bExiting) {
+
+        usleep(THE_MODBUS_DELAY_ms * 1000);
+        if (g_bRunning && XProtocol_ON) {
             switch (status) {
-            case 0:
+
+            case ZERO:
+                if (threadStatusPtr == &theModbusRTU0ThreadStatus) {
+                    // FIXME
+                    return;
+                } else if (threadStatusPtr == &theModbusRTU1ThreadStatus) {
+                    ctx = modbus_new_rtu(CommParameters[CommID].Device,
+                            CommParameters[CommID].BaudRate, CommParameters[CommID].Parity,
+                            CommParameters[CommID].DataBit, CommParameters[CommID].StopBit);
+                } else if (threadStatusPtr == &theModbusTCPThreadStatus) {
+                    ctx = modbus_new_tcp(CommParameters[CommID].IPaddr,
+                            CommParameters[CommID].Port);
+                } else if (threadStatusPtr == &theModbusTCPRTUThreadStatus) {
+                    ctx = modbus_new_tcprtu(CommParameters[CommID].IPaddr,
+                            CommParameters[CommID].Port);
+                }
+                if (ctx != NULL) {
+                    status = NOT_CONNECTED;
+                    MODBUS_ERR[1 + CommID] = ERR_OK + 2;
+                } else {
+                    status = NO_HOPE; // FIXME
+                    MODBUS_ERR[1 + CommID] = ERR_ERROR + 2;
+                }
                 break;
-            case 1:
+
+            case NOT_CONNECTED:
+                MODBUS_ERR[5 + CommID -1] = 2;
+                if (modbus_connect(ctx) >= 0) {
+                    if (modbus_flush(ctx) >= 0) {
+                        MODBUS_ERR[8] = 2;
+                        modbus_set_response_timeout(ctx, &timeout);
+                        MODBUS_ERR[9] = 2;
+                        status = CONNECTED;
+                    } else {
+                        MODBUS_ERR[8] = 2;
+                    }
+                } else {
+                    status = ERROR;
+                }
+               break;
+
+            case CONNECTED:
+
                 pthread_mutex_lock(&theMutex);
                 {
                 }
                 pthread_mutex_unlock(&theMutex);
+                if (FALSE) {
+                    ++failures;
+                    if (failures < 10) {
+                        status = TIMEOUT;
+                    } else {
+                        failures = 0;
+                        status = ERROR;
+                    }
+                }
                 break;
-            case 2:
+
+            case TIMEOUT:
+                elapsed_ms += THE_MODBUS_DELAY_ms;
+                if (elapsed_ms >= 4000) {
+                    elapsed_ms = 0;
+                    status = NOT_CONNECTED;
+                }
                 break;
+
+            case ERROR:
+                ErrorsState |= ErroID;
+                if (ctx != NULL) {
+                    modbus_free(ctx);
+                    ctx = NULL;
+                }
+                elapsed_ms += THE_MODBUS_DELAY_ms;
+                if (elapsed_ms >= 10000) {
+                    elapsed_ms = 0;
+                    status = ZERO;
+                }
+                break;
+
+            case NO_HOPE:
             default:
                 ;
             }
-            usleep(1000);
-        } else if (g_bExiting) {
-            break;
-        } else {
-            usleep(THE_DELAY_ms * 1000);
         }
     }
 
@@ -517,15 +1152,15 @@ void *dataThread(void *statusAdr)
 
     // run
     *threadStatusPtr = RUNNING;
-    for (;;) {
+    while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
             // wait on server socket, only until timeout
             fd_set recv_set;
             struct timeval tv;
             FD_ZERO(&recv_set);
             FD_SET(udp_recv_socket, &recv_set);
-            tv.tv_sec = THE_DELAY_ms / 1000;
-            tv.tv_usec = (THE_DELAY_ms % 1000) * 1000;
+            tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
+            tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
             if (select(udp_recv_socket + 1, &recv_set, NULL, NULL, &tv) <= 0) {
                 // timeout or error
                 continue;
@@ -544,10 +1179,8 @@ void *dataThread(void *statusAdr)
                 }
             }
             pthread_mutex_unlock(&theMutex);
-        } else if (g_bExiting) {
-            break;
         } else {
-            usleep(THE_DELAY_ms * 1000);
+            usleep(THE_UDP_TIMEOUT_ms * 1000);
         }
     }
 
@@ -562,6 +1195,7 @@ void *dataThread(void *statusAdr)
         close(udp_send_socket);
         udp_send_socket = -1;
      }
+
     // exit
     *threadStatusPtr = EXITING;
     return NULL;
@@ -603,15 +1237,15 @@ void *syncroThread(void *statusAdr)
 
     // run
     *threadStatusPtr = RUNNING;
-    for (;;) {
+    while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
             // wait on server socket, only until timeout
             fd_set recv_set;
             struct timeval tv;
             FD_ZERO(&recv_set);
             FD_SET(udp_recv_socket, &recv_set);
-            tv.tv_sec = THE_DELAY_ms / 1000;
-            tv.tv_usec = (THE_DELAY_ms % 1000) * 1000;
+            tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
+            tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
             if (select(udp_recv_socket + 1, &recv_set, NULL, NULL, &tv) <= 0) {
                 // timeout or error
                 continue;
@@ -621,23 +1255,19 @@ void *syncroThread(void *statusAdr)
             {
                 int rc = do_recv(udp_recv_socket, the_IsyncRegisters, THE_SYNC_UDP_SIZE);
                 if (rc != THE_SYNC_UDP_SIZE) {
-                    // ?
+                    // FIXME: error recovery
                 }
-                // maintain hardware type for the plc application (see syncroInitialize())
-                // hardware type is a 32 bit register and the offset is in bytes
-                uint32_t *data = (uint32_t *)the_IsyncRegisters;
-                data[HARDWARE_TYPE_OFFSET/sizeof(uint32_t)] = hardware_type;
+                // PLC INTERNAL VARIABLES MANAGEMENT
+                PLCsync();
                 int sn = do_sendto(udp_send_socket, the_QsyncRegisters, THE_SYNC_UDP_SIZE,
                         &DestinationAddress);
                 if (sn != THE_SYNC_UDP_SIZE) {
-                    // ?
+                    // FIXME: error recovery
                 }
             }
             pthread_mutex_unlock(&theMutex);
-        } else if (g_bExiting) {
-            break;
         } else {
-            usleep(THE_DELAY_ms * 1000);
+            usleep(THE_UDP_TIMEOUT_ms * 1000);
         }
     }
 
@@ -652,12 +1282,12 @@ void *syncroThread(void *statusAdr)
         close(udp_send_socket);
         udp_send_socket = -1;
      }
+
     // exit
     *threadStatusPtr = EXITING;
     return NULL;
 }
 
-/* ----  Implementations:	--------------------------------------------------- */
 
 /* ---------------------------------------------------------------------------- */
 /**

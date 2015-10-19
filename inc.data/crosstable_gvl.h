@@ -1,13 +1,13 @@
 #ifndef CROSSTABLE_GVL_H
 #define CROSSTABLE_GVL_H
 
-#define ARRAY_CROSSTABLE_INPUT(i) 	the_QdataRegisters[i] // %M -> %Q
-#define ARRAY_CROSSTABLE_OUTPUT(i)  the_IdataRegisters[i] // %I
+#define ARRAY_CROSSTABLE_INPUT      the_QdataRegisters      // %M -> %Q
+#define ARRAY_CROSSTABLE_OUTPUT     the_IdataRegisters      // %I
 
 #define ARRAY_STATES(i) (((uint8_t *)(the_QdataRegisters))[22000 + i])
 
-#define ARRAY_QUEUE(i)              the_IsyncRegisters[i]   // Array delle CODE in lettura
-#define ARRAY_QUEUE_OUTPUT(i)       the_QsyncRegisters[i]   // Array delle CODE in scrittura
+#define ARRAY_QUEUE                 the_IsyncRegisters   // Array delle CODE in lettura
+#define ARRAY_QUEUE_OUTPUT          the_QsyncRegisters   // Array delle CODE in scrittura
                                                             // 	BIT 15 WR EN,
                                                             // BIT 14 RD EN
                                                             // BIT	13..0	ADDRESS CROSSTABLE
@@ -166,9 +166,9 @@ static int16_t IndexTCPRTUQueueGet;
 static int RTUProtocol_ON;
 static int TCPProtocol_ON;
 static int TCPRTUProtocol_ON;
-static int RTU_RUN;
-static int TCP_RUN;
-static int TCPRTU_RUN;
+//static int RTU_RUN;
+//static int TCP_RUN;
+//static int TCPRTU_RUN;
 static int CommEnabled;
 
 
@@ -197,7 +197,7 @@ static int32_t TCPTaskCycle = 30;
 static int32_t TCPRTUTaskCycle = 30;
 
 //	Variabili di debug	*)
-static uint16_t maxQueue = 30; // massima lunhezza di coda raggiunta
+// static uint16_t maxQueue = 30; // massima lunhezza di coda raggiunta
 static uint16_t HW119_ERR[0 + 10];
 static uint16_t MODBUS_ERR[0 + 50];
 
