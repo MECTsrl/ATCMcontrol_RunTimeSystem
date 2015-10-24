@@ -94,12 +94,13 @@ clean: mostlyclean
 	-$(RM) -f $(OBJ_PATH)/*.o 
 	-$(RM) -f $(OBJ_PATH)/*.e
 	-$(RM) -f $(OBJ_PATH)/*.d
-    ifneq ($(LIB_NAME), )
-	  $(RM) -f $(LIB_NAME)
-    endif
-    ifneq ($(BIN_NAME), )
-	  $(RM) -f $(BIN_NAME)
-    endif
+ifneq ($(LIB_NAME), )
+	$(RM) -f $(LIB_NAME)
+endif
+ifneq ($(BIN_NAME), )
+	$(RM) -f $(BIN_NAME)
+	$(RM) -f $(BIN_NAME).map
+endif
 
 clobber: clean
 	-$(DED) $(OBJ_PATH) 
