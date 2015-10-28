@@ -106,7 +106,7 @@ static struct ServerStruct { // for serverThread
     //
     char name[VMM_MAX_IEC_IDENT];
     pthread_t thread_id;
-    enum threadStatus status;
+    enum threadStatus thread_status;
     pthread_mutex_t mutex;
     modbus_t * ctx;
     modbus_mapping_t *mb_mapping;
@@ -248,7 +248,7 @@ static void InitXtable(uint16_t TIPO);
 static int ReadFields(int16_t Index);
 static int ReadAlarmsFields(int16_t Index);
 static int ReadCommFields(int16_t Index);
-static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType);
+static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType);
 static void AlarmMngr(void);
 static void PLCsync(void);
 static void ErrorMNG(void);
@@ -329,8 +329,7 @@ static int ReadFields(int16_t Index)
 {
     int ERR = 0;
     IEC_STRMAX Field;
-    HW119_GET_CROSS_TABLE_FIELD param;
-    param.field = &Field;
+    HW119_GET_CROSS_TABLE_FIELD param = { &Field, 0};
 
     // Enable {0,1,2,3}
     hw119_get_cross_table_field(NULL, NULL, &param);
@@ -689,14 +688,13 @@ static int ReadCommFields(int16_t Index)
 }
 
 // fb_HW119_LoadCrossTab.st
-static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
+static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
 {
     uint16_t FBState = 0;
     int32_t index;
     int32_t STEPS = 50;
     int32_t LowEdge = 0;
     int32_t HiEdge = 0;
-    STaskInfoVMM *pVMM = get_pVMM();
     int END = FALSE;
     int ERR = FALSE;
 
@@ -817,6 +815,165 @@ static int LoadXTable(char *CTFile, int32_t CTDimension, uint16_t CTType)
 static void AlarmMngr(void)
 {
     // FIXME: TODO
+    uint32_t Index = 0;
+    int16_t SourceAddr;
+    int16_t CompareAddr;
+    int16_t TagAddr;
+    uint32_t  CompareVal;
+    uint32_t  tmp, tmpOld;
+    int ERRFlag;
+    uint32_t ERRORVAL = 0x00000001;
+
+    for (Index = 1; Index < DimAlarmsCT; ++Index) {
+        ERRFlag = FALSE;
+        if (ALCrossTable[Index].ALTag[0] != '\0') {
+            IEC_STRMAX varname;
+            varname.MaxLen = VMM_MAX_IEC_STRLEN;
+            varname.CurLen = strnlen(ALCrossTable[Index].ALSource, varname.MaxLen);
+            strncpy(varname.Contents, ALCrossTable[Index].ALSource, varname.CurLen);
+            HW119_GET_ADDR param = { &varname, 0 };
+            hw119_get_addr(NULL, NULL, &param);
+            SourceAddr = param.ret_value;
+            if (SourceAddr == 0xFFFF || SourceAddr > DimCrossTable || SourceAddr == 0) {
+                ERRFlag  = TRUE;
+            } else {
+                if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != 100) {
+                    ERRFlag  = TRUE;
+                } else {
+                    CompareAddr = -1;
+                    if (ALCrossTable[Index].ALCompareVar[0] == '\0') {
+                        CompareVal = ALCrossTable[Index].ALCompareVal;
+                    } else {
+                        varname.CurLen = strnlen(ALCrossTable[Index].ALCompareVar, varname.MaxLen);
+                        strncpy(varname.Contents, ALCrossTable[Index].ALCompareVar, varname.CurLen);
+                        hw119_get_addr(NULL, NULL, &param);
+                        CompareAddr = param.ret_value;
+                        if (CompareAddr == 0xffff || CompareAddr >DimCrossTable || CompareAddr == 0) {
+                            ERRFlag  = TRUE;
+                        } else {
+                            CompareVal = ARRAY_CROSSTABLE_INPUT[CompareAddr];
+                        }
+                    }
+                }
+                varname.CurLen = strnlen(ALCrossTable[Index].ALTag, varname.MaxLen);
+                strncpy(varname.Contents, ALCrossTable[Index].ALTag, varname.CurLen);
+                hw119_get_addr(NULL, NULL, &param);
+                TagAddr  = param.ret_value;
+                if (TagAddr == 0xFFFF || TagAddr > DimCrossTable || TagAddr == 0) {
+                    ERRFlag  = TRUE;
+                }
+            }
+        }
+        if (! ERRFlag) {
+            tmp = ALCrossTable[Index].ALOperator & 0xFF00;
+            switch (tmp) {
+            case 0x100: // >
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] > CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            case 0x200: // >=
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] >= CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            case 0x300: // <
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] < CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            case 0x400: // <=
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] <= CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            case 0x500: // ==
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] == CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            case 0x600: // !=
+                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] != CompareVal) {
+                    if (ALCrossTable[Index].ALFilterCount == 0) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else {
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
+                    }
+                } else {
+                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                }
+                break;
+            default:    // bit
+                tmp = ARRAY_CROSSTABLE_INPUT[SourceAddr] >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
+                tmp &= 1;
+                if (CompareAddr == -1) {
+                    if (tmp == CompareVal) {
+                        if (ALCrossTable[Index].ALFilterCount == 0) {
+                            ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        } else {
+                            ALCrossTable[Index].ALFilterCount -= 1;
+                        }
+                    } else {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
+                    }
+                } else if (CompareAddr == SourceAddr) {
+                    tmpOld = CrossTable[SourceAddr].OldVal >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
+                    tmpOld &= 1;
+                    if (tmp == 1 && tmpOld == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else if (tmp == 1 && tmpOld == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                    } else if (tmp == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    } else if (tmp == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
+                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    }
+                    if (tmp == 0) {
+                        CrossTable[SourceAddr].OldVal = CrossTable[SourceAddr].OldVal & ~(2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
+                    } else {
+                        CrossTable[SourceAddr].OldVal = CrossTable[SourceAddr].OldVal |= (2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
+                    }
+                }
+            }
+        }
+    }
 }
 
 // fb_HW119_PLCsync.st (NB: NOW IT'S CALLED BY SYNCRO)
@@ -965,7 +1122,7 @@ static int checkServersDevicesAndNodes()
                         ;
                     }
                     theServers[s].thread_id = 0;
-                    theServers[s].status = NOT_STARTED;
+                    theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
                     sprintf(theServers[s].name, "[%d]%s_%s_%d", s, fieldbusName[theServers[s].Protocol], theServers[s].IPAddr, theServers[s].Port);
                 }
@@ -1097,7 +1254,7 @@ static void *engineThread(void *statusAdr)
                     ERROR_FLAG = 0;
                     break;
                 case 10: // READ ALARMS FILE
-                    if (LoadXTable(ALcrossTableFile, DimAlarmsCT, 1)) {
+                    if (LoadXTable("Alarms.csv", DimAlarmsCT, 1)) {
                         CommState = 20;	// Fallita lettura crosstable allrmi -> prosegue con lettura cross table variabili
                         ALCrossTableState = FALSE;
                         ERROR_FLAG = ERROR_FLAG | 0x10; //SEGNALO L'ERRORE SUL BIT 4
@@ -1106,7 +1263,7 @@ static void *engineThread(void *statusAdr)
                     }
                     break;
                 case 20: // READ CROSSTABLE FILE
-                    if (LoadXTable(VARcrossTableFile, DimCrossTable, 0)) {
+                    if (LoadXTable("Crosstable.csv", DimCrossTable, 0)) {
                         CommState = 1000;	// Fallita lettura crosstable  variabili: FINE
                         CrossTableState = FALSE;
                         ERROR_FLAG = ERROR_FLAG | 0x20; //SEGNALO L'ERRORE SUL BIT 5
@@ -1115,7 +1272,7 @@ static void *engineThread(void *statusAdr)
                     }
                     break;
                 case 30: // READ DEVICES FILE
-                    if (LoadXTable(CommParFile, 5, 2)) {
+                    if (LoadXTable("Commpar.csv", 5, 2)) {
                         CommState = 1000;	// Fallita lettura crosstable  parametri di comunicazione: FINE
                         ERROR_FLAG = ERROR_FLAG | 0x08; //SEGNALO L'ERRORE SUL BIT 3
                     } else {
@@ -1132,11 +1289,11 @@ static void *engineThread(void *statusAdr)
                 case 50: { // CREATE SERVER THREADS
                     int s;
                     for (s = 0; s < theServersNumber; ++s) {
-                        theServers[s].status = NOT_STARTED;
-                        if (osPthreadCreate(&theServers[s].thread_id, s, &serverThread, NULL, theServers[s].name, 0) == 0) {
+                        theServers[s].thread_status = NOT_STARTED;
+                        if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, s, theServers[s].name, 0) == 0) {
                             do {
                                 usleep(1000);
-                            } while (theServers[s].status != RUNNING);
+                            } while (theServers[s].thread_status != RUNNING);
                         } else {
                     #if defined(RTS_CFG_IO_TRACE)
                             osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
@@ -1149,7 +1306,7 @@ static void *engineThread(void *statusAdr)
                     int d;
                     for (d = 0; d < theDevicesNumber; ++d) {
                         theDevices[d].thread_status = NOT_STARTED;
-                        if (osPthreadCreate(&theDevices[d].thread_id, d, &clientThread, NULL, theDevices[d].name, 0) == 0) {
+                        if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, d, theDevices[d].name, 0) == 0) {
                             do {
                                 usleep(1000);
                             } while (theDevices[d].thread_status != RUNNING);
@@ -1208,11 +1365,6 @@ static void *engineThread(void *statusAdr)
     // exit
     *threadStatusPtr = EXITING;
     return NULL;
-}
-
-static uint16_t modbusOperation(uint16_t QueueIndex, uint16_t DataIndex, uint32_t DataValue[])
-{
-
 }
 
 static uint16_t modbusRegistersNumber(uint16_t DataIndex)
@@ -1535,7 +1687,7 @@ static void *serverThread(void *arg)
     }
 
     // run
-    theServers[s].status = RUNNING;
+    theServers[s].thread_status = RUNNING;
     while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
             // get file descriptor or bind and listen
@@ -1661,7 +1813,7 @@ static void *serverThread(void *arg)
     }
 
     // exit
-    theServers[s].status = EXITING;
+    theServers[s].thread_status = EXITING;
     return arg;
 }
 
@@ -2163,7 +2315,6 @@ static void *syncroThread(void *statusAdr)
             // ready data: receive and immediately reply
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
-                uint16_t buffer[REG_SYNC_NUMBER];
                 int rc = do_recv(udp_recv_socket, the_IsyncRegisters, THE_SYNC_UDP_SIZE);
                 if (rc != THE_SYNC_UDP_SIZE) {
                     // FIXME: error recovery
@@ -2315,7 +2466,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // load retentive area in %I %M %Q
 #if defined(RTS_CFG_MECT_RETAIN)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
-    void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
+    //void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
     OS_MEMCPY(pvIsegment, ptRetentive, lenRetentive);
@@ -2330,7 +2481,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     PLCRevision02 = rev02;
 
     // start the engine, data and sync threads
-    if (osPthreadCreate(&theEngineThread_id, &theEngineThreadStatus, &engineThread, NULL, "engine", 0) == 0) {
+    if (osPthreadCreate(&theEngineThread_id, NULL, &engineThread, &theEngineThreadStatus, "engine", 0) == 0) {
         do {
             usleep(1000);
         } while (theEngineThreadStatus != RUNNING);
@@ -2340,7 +2491,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
         uRes = ERR_FB_INIT;
     }
-    if (osPthreadCreate(&theDataThread_id, &theDataThreadStatus, &dataThread, NULL, "data", 0) == 0) {
+    if (osPthreadCreate(&theDataThread_id, NULL, &dataThread, &theDataThreadStatus, "data", 0) == 0) {
         do {
             usleep(1000);
         } while (theDataThreadStatus != RUNNING);
@@ -2350,7 +2501,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
         uRes = ERR_FB_INIT;
     }
-    if (osPthreadCreate(&theSyncThread_id, &theSyncThreadStatus, &syncroThread, NULL, "syncro", 0) == 0) {
+    if (osPthreadCreate(&theSyncThread_id, NULL, &syncroThread, &theSyncThreadStatus, "syncro", 0) == 0) {
         do {
             usleep(1000);
         } while (theSyncThreadStatus != RUNNING);
@@ -2386,12 +2537,12 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
         int n;
         still_running = FALSE;
         for (n = 0; n < theDevicesNumber && ! still_running; ++n) {
-            if (theDevices[n].status == RUNNING) {
+            if (theDevices[n].thread_status == RUNNING) {
                 still_running = TRUE;
             }
         }
         for (n = 0; n < theServersNumber && ! still_running; ++n) {
-            if (theServers[n].status == RUNNING) {
+            if (theServers[n].thread_status == RUNNING) {
                 still_running = TRUE;
             }
         }
@@ -2433,7 +2584,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                         if (flags[i] != 0) {
                             uint16_t d = CrossTable[i].device;
                             if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                flags[i] = 0;
+                                flags[i] = 0; // zeroes the write flag only if can write in queue
                                 theDevices[d].PLCwriteRequestNumber += 1;
                                 theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Index = i;
                                 theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;

@@ -90,15 +90,15 @@ static uint32_t ErrorsState;
 //  bit 8:	Timeout TCP
 //  bit 9:	Timeout TCPRTU
 
-struct DevicesStruct {
-    // uint16_t Protocollo;
-    uint16_t BlackListed;
-    int16_t RetryCounter;
-    int16_t JumpRead;
-};
-static struct DevicesStruct RTUListDevices[1 + 254];
-static struct DevicesStruct TCPListDevices[1 + 254];
-static struct DevicesStruct TCPRTUListDevices[1 + 254];
+//struct DevicesStruct {
+//    // uint16_t Protocollo;
+//    uint16_t BlackListed;
+//    int16_t RetryCounter;
+//    int16_t JumpRead;
+//};
+//static struct DevicesStruct RTUListDevices[1 + 254];
+//static struct DevicesStruct TCPListDevices[1 + 254];
+//static struct DevicesStruct TCPRTUListDevices[1 + 254];
 
 struct  CrossTableRecord {
     int16_t Enable;
@@ -194,9 +194,9 @@ static uint8_t FailDivisor;
 static int32_t Talta;
 static int32_t Tmedia;
 static int32_t Tbassa;
-static int32_t RTUTaskCycle = 30;
-static int32_t TCPTaskCycle = 30;
-static int32_t TCPRTUTaskCycle = 30;
+//static int32_t RTUTaskCycle = 30;
+//static int32_t TCPTaskCycle = 30;
+//static int32_t TCPRTUTaskCycle = 30;
 
 //	Variabili di debug	*)
 // static uint16_t maxQueue = 30; // massima lunhezza di coda raggiunta

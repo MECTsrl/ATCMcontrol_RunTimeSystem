@@ -422,10 +422,6 @@
 #define RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
 #define	RTS_CFG_DEBUG_GPIO
-#warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-#warning "IF RTS_CFG_DEBUG_GPIO is enabled it conflicts with the DS1390 spi based RTC"
-#warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-
 #undef	RTS_CFG_COMM_TRACE
 #undef	RTS_CFG_IPC_TRACE
 #undef	RTS_CFG_IPC_TRACE_IO
@@ -448,11 +444,7 @@
 
 #undef 	RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
-#define	RTS_CFG_DEBUG_GPIO
-#warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-#warning "IF RTS_CFG_DEBUG_GPIO is enabled it conflicts with the DS1390 spi based RTC"
-#warning "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  INFO  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-
+#undef	RTS_CFG_DEBUG_GPIO
 #undef	RTS_CFG_COMM_TRACE
 #undef	RTS_CFG_IPC_TRACE
 #undef	RTS_CFG_IPC_TRACE_IO

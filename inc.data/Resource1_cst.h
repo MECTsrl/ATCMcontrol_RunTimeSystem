@@ -49,9 +49,9 @@ const int16_t WaitingCycles = 10;
 
 const uint32_t FRONTE_SALITA = 1;
 const uint32_t FRONTE_DISCESA = 0;
-const char ALcrossTableFile[] = "Alarms.csv";
-const char VARcrossTableFile[] = "Crosstable.csv";
-const char CommParFile[] = "Commpar.csv";
+//const char ALcrossTableFile[] = "Alarms.csv";
+//const char VARcrossTableFile[] = "Crosstable.csv";
+//const char CommParFile[] = "Commpar.csv";
 
 #define MaxLocalQueue 15
 
