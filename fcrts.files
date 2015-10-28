@@ -215,13 +215,11 @@ vmLib/funSys22.h
 vmLib/funUSB.h
 vmLib/funUtil.h
 vmLib/fz.c
-vmLib/fz.E
 vmLib/libCanOpen.c
 vmLib/libCanOpen.h
 vmLib/libDatalog.c
 vmLib/libDatalog.h
 vmLib/libDef.c
-vmLib/libDef.E
 vmLib/libFile.c
 vmLib/libFile.h
 vmLib/libHW119.c

@@ -91,7 +91,7 @@ static uint32_t ErrorsState;
 //  bit 9:	Timeout TCPRTU
 
 struct DevicesStruct {
-    uint16_t Protocollo;
+    // uint16_t Protocollo;
     uint16_t BlackListed;
     int16_t RetryCounter;
     int16_t JumpRead;
@@ -118,8 +118,11 @@ struct  CrossTableRecord {
     uint32_t OldVal;
     uint32_t PLCWriteVal;
     uint16_t Error;
+    //
+    int16_t device;
+    int16_t node;
 };
-static struct CrossTableRecord CrossTable[0 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
+static struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
 
 struct  Alarms {
     int ALType;
@@ -138,34 +141,33 @@ static int ALCrossTableState;
 
 // variabili di passaggio tra TASK
 
-static int16_t RTUCurrID;
-static uint32_t RTUCurrVal[0 + MaxLocalQueue];
-static int16_t RTURequestPLCWrite;
-static int16_t RTUCurrNumber;
+//static int16_t RTUCurrID;
+//static uint32_t RTUCurrVal[0 + MaxLocalQueue];
+//static int16_t RTURequestPLCWrite;
+//static int16_t RTUCurrNumber;
+//static uint16_t LocalRTUQueue[0 + MaxLocalQueue];
+//static int16_t IndexRTUQueuePut;
+//static int16_t IndexRTUQueueGet;
 
-static uint16_t LocalRTUQueue[0 + MaxLocalQueue];
-static int16_t IndexRTUQueuePut;
-static int16_t IndexRTUQueueGet;
+//static int16_t TCPCurrID;
+//static uint32_t TCPCurrVal[0 + MaxLocalQueue];
+//static int16_t TCPRequestPLCWrite;
+//static int16_t TCPCurrNumber;
+//static uint16_t LocalTCPQueue[0 + MaxLocalQueue];
+//static int16_t IndexTCPQueuePut;
+//static int16_t IndexTCPQueueGet;
 
-static int16_t TCPCurrID;
-static uint32_t TCPCurrVal[0 + MaxLocalQueue];
-static int16_t TCPRequestPLCWrite;
-static int16_t TCPCurrNumber;
-static uint16_t LocalTCPQueue[0 + MaxLocalQueue];
-static int16_t IndexTCPQueuePut;
-static int16_t IndexTCPQueueGet;
+//static int16_t TCPRTUCurrID;
+//static uint32_t TCPRTUCurrVal[0 + MaxLocalQueue];
+//static int16_t TCPRTURequestPLCWrite;
+//static int16_t TCPRTUCurrNumber;
+//static uint16_t LocalTCPRTUQueue[0 + MaxLocalQueue];
+//static int16_t IndexTCPRTUQueuePut;
+//static int16_t IndexTCPRTUQueueGet;
 
-static int16_t TCPRTUCurrID;
-static uint32_t TCPRTUCurrVal[0 + MaxLocalQueue];
-static int16_t TCPRTURequestPLCWrite;
-static int16_t TCPRTUCurrNumber;
-static uint16_t LocalTCPRTUQueue[0 + MaxLocalQueue];
-static int16_t IndexTCPRTUQueuePut;
-static int16_t IndexTCPRTUQueueGet;
-
-static int RTUProtocol_ON;
-static int TCPProtocol_ON;
-static int TCPRTUProtocol_ON;
+//static int RTUProtocol_ON;
+//static int TCPProtocol_ON;
+//static int TCPRTUProtocol_ON;
 //static int RTU_RUN;
 //static int TCP_RUN;
 //static int TCPRTU_RUN;
@@ -198,7 +200,7 @@ static int32_t TCPRTUTaskCycle = 30;
 
 //	Variabili di debug	*)
 // static uint16_t maxQueue = 30; // massima lunhezza di coda raggiunta
-static uint16_t HW119_ERR[0 + 10];
-static uint16_t MODBUS_ERR[0 + 50];
+// static uint16_t HW119_ERR[0 + 10];
+// static uint16_t MODBUS_ERR[0 + 50];
 
 #endif // CROSSTABLE_GVL_H
