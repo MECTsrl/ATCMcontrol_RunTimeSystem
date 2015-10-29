@@ -63,6 +63,7 @@
 #define THE_CONFIG_DELAY_ms	  1
 #define THE_ENGINE_DELAY_ms 25
 #define THE_CLIENT_DELAY_ms 10
+#define THE_CLIENT_uDELAY_ms 1
 #define THE_SERVER_DELAY_ms 10
 
 // -------- MANAGE THREADS: DATA & SYNCRO
@@ -79,24 +80,20 @@
 
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
 #define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
-#define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(uint32_t)) // 30720 = 0x00007800 30 kiB
+#define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(u_int32_t)) // 30720 = 0x00007800 30 kiB
 #define THE_DATA_UDP_SIZE   THE_DATA_SIZE
 #define	THE_DATA_RECV_PORT	34903
 #define	THE_DATA_SEND_PORT	34902
 
-static uint32_t the_IdataRegisters[REG_DATA_NUMBER];
-static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
+static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
+static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q -> %M
 
-#define ARRAY_CROSSTABLE_INPUT      the_QdataRegisters      // %M -> %Q
-#define ARRAY_CROSSTABLE_OUTPUT     the_IdataRegisters      // %I
 #define ARRAY_STATES(i) (((uint8_t *)(the_QdataRegisters))[22000 + i])
 #define STATO_OK            0
 #define STATO_ERR           1
 #define STATO_RUN           2
 
-#define HARDWARE_TYPE_OFFSET 11464 	// byte offset in crosstable.gvl: HardwareType AT %ID1.11464 : DWORD ;
-static unsigned int hardware_type = 0x00000000;
-#define HardwareType		the_QdataRegisters[5393]
+static u_int32_t hardware_type = 0x00000000;
 // Inizializzazione dal IO layer sync
 // Byte 0 can0:
 //        0 no can,
@@ -112,15 +109,14 @@ static unsigned int hardware_type = 0x00000000;
 
 // -------- SYNC MANAGE FROM HMI ---------------------------------------------
 #define REG_SYNC_NUMBER 	6144 // 1+5472+...
-#define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(uint16_t)) // 12288 = 0x00003000 12 kiB
+#define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(u_int16_t)) // 12288 = 0x00003000 12 kiB
 #define THE_SYNC_UDP_SIZE   11462 // SYNCRO_SIZE_BYTE in qt_library/ATCMutility/common.h
 #define	THE_SYNC_RECV_PORT	34905
 #define	THE_SYNC_SEND_PORT	34904
 
-static uint16_t the_IsyncRegisters[REG_SYNC_NUMBER];
-static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
+static u_int16_t the_IsyncRegisters[REG_SYNC_NUMBER]; // %I Array delle CODE in lettura
+static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in scrittura
 
-#define ARRAY_QUEUE         the_IsyncRegisters   // Array delle CODE in lettura
 #define QueueRWMask         0xE000  // BIT 15 WR EN, BIT 14 RD EN
 #define QueueAddressMask    0x1FFF  // BIT 13..0 CROSSTABLE ADDRESS
 #define READ                0x4000
@@ -130,20 +126,19 @@ static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
 #define WRITE_RIC_SINGLE    0xC000
 #define WRITE_PREPARE       0x2000
 
-#define ARRAY_QUEUE_OUTPUT  the_QsyncRegisters   // Array delle CODE in scrittura
 #define STATO_BUSY_WRITE    1
 #define STATO_BUSY_READ     2
 
-#define RichiestaScrittura          the_IsyncRegisters[5500]//interrupt di scrittura
+#define RichiestaScrittura          the_IsyncRegisters[5500] //interrupt di scrittura
 #define PLCRevision01               the_QsyncRegisters[5501]
 #define PLCRevision02               the_QsyncRegisters[5502]
 #define Reset_RTU                   the_IsyncRegisters[5503]
 #define Reset_TCP                   the_IsyncRegisters[5504]
 #define Reset_TCPRTU                the_IsyncRegisters[5505]
 
-#define CounterRTU(i)               the_QsyncRegisters[5506 + i]
-#define CounterTCP(i)               the_QsyncRegisters[5571 + i]
-#define CounterTCPRTU(i)            the_QsyncRegisters[5636 + i]
+#define CounterRTU(i)               the_QsyncRegisters[5506 + i] // 1+64
+#define CounterTCP(i)               the_QsyncRegisters[5571 + i] // 1+64
+#define CounterTCPRTU(i)            the_QsyncRegisters[5636 + i] // 1+64
 
 #define RTUBlackList_ERROR_WORD     the_QsyncRegisters[5701]
 #define RTUComm_ERROR_WORD          the_QsyncRegisters[5702]
@@ -153,29 +148,38 @@ static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
 #define TCPRTUComm_ERROR_WORD       the_QsyncRegisters[5706]
 #define ERROR_FLAG                  the_QsyncRegisters[5707]
 // segnala se almeno un errore e' stato evidenziato dall'ultimo reset:
-// bit0: errore RTU,
-// bit1: errore TCP,
-// bit2: errore TCPRTU,
-// bit3: errore commpar,
-// bit4: errore CTallarmi,
-// bit5: errore CTvariabili o  errore tipo non riconosciuto su CTvariabili
-// bit6: segnalazione che PLC ha terminalo l'eloaborazine delle CT
-// bit7: RTU_ON
-// bit8: TCP_ON
-// bit9: TCPRTU_ON
+#define ERROR_FLAG_RTU          0x00000001 // bit00: errore RTU
+#define ERROR_FLAG_TCP          0x00000002 // bit01: errore TCP
+#define ERROR_FLAG_TCPRTU       0x00000004 // bit02: errore TCPRTU,
+#define ERROR_FLAG_COMMPAR      0x00000008 // bit03: errore commpar,
+#define ERROR_FLAG_ALARMS       0x00000010 // bit04: errore CTallarmi,
+#define ERROR_FLAG_CROSSTAB     0x00000020 // bit05: errore CTvariabili o  errore tipo non riconosciuto su CTvariabili
+#define ERROR_FLAG_CONF_END     0x00000040 // bit06: segnalazione che PLC ha terminalo l'eloaborazine delle CT
+#define ERROR_FLAG_RTU_ON       0x00000080 // bit07: RTU_ON
+#define ERROR_FLAG_TCP_ON       0x00000100 // bit08: TCP_ON
+#define ERROR_FLAG_TCPRTU_ON    0x00000200 // bit09: TCPRTU_ON
+// -------- new protocols
+#define ERROR_FLAG_CAN          0x00000400 // bit10: errore CAN
+#define ERROR_FLAG_RTUSRV       0x00000800 // bit11: errore RTUSRV
+#define ERROR_FLAG_TCPSRV       0x00001000 // bit12: errore TCPSRV
+#define ERROR_FLAG_TCPRTUSRV    0x00002000 // bit13: errore TCPRTUSRV
+#define ERROR_FLAG_CAN_ON       0x00004000 // bit14: CAN_ON
+#define ERROR_FLAG_RTUSRV_ON    0x00008000 // bit15: RTUSRV_ON
+#define ERROR_FLAG_TCPSRV_ON    0x00010000 // bit16: TCPSRV_ON
+#define ERROR_FLAG_TCPRTUSRV_ON 0x00020000 // bit17: TCPRTUSRV_ON
 
-#define BlackListRTUL      (*(uint32_t *)&the_QsyncRegisters[5708])
-#define BlackListRTUH      (*(uint32_t *)&the_QsyncRegisters[5710])
-#define CommErrRTUL        (*(uint32_t *)&the_QsyncRegisters[5712])
-#define CommErrRTUH        (*(uint32_t *)&the_QsyncRegisters[5714])
-#define BlackListTCPL      (*(uint32_t *)&the_QsyncRegisters[5716])
-#define BlackListTCPH      (*(uint32_t *)&the_QsyncRegisters[5718])
-#define CommErrTCPL        (*(uint32_t *)&the_QsyncRegisters[5720])
-#define CommErrTCPH        (*(uint32_t *)&the_QsyncRegisters[5722])
-#define BlackListTCPRTUL   (*(uint32_t *)&the_QsyncRegisters[5724])
-#define BlackListTCPRTUH   (*(uint32_t *)&the_QsyncRegisters[5726])
-#define CommErrTCPRTUL     (*(uint32_t *)&the_QsyncRegisters[5728])
-#define CommErrTCPRTUH     (*(uint32_t *)&the_QsyncRegisters[5730])
+#define BlackListRTUL      (*(u_int32_t *)&the_QsyncRegisters[5708])
+#define BlackListRTUH      (*(u_int32_t *)&the_QsyncRegisters[5710])
+#define CommErrRTUL        (*(u_int32_t *)&the_QsyncRegisters[5712])
+#define CommErrRTUH        (*(u_int32_t *)&the_QsyncRegisters[5714])
+#define BlackListTCPL      (*(u_int32_t *)&the_QsyncRegisters[5716])
+#define BlackListTCPH      (*(u_int32_t *)&the_QsyncRegisters[5718])
+#define CommErrTCPL        (*(u_int32_t *)&the_QsyncRegisters[5720])
+#define CommErrTCPH        (*(u_int32_t *)&the_QsyncRegisters[5722])
+#define BlackListTCPRTUL   (*(u_int32_t *)&the_QsyncRegisters[5724])
+#define BlackListTCPRTUH   (*(u_int32_t *)&the_QsyncRegisters[5726])
+#define CommErrTCPRTUL     (*(u_int32_t *)&the_QsyncRegisters[5728])
+#define CommErrTCPRTUH     (*(u_int32_t *)&the_QsyncRegisters[5730])
 // bit 0: BL rtu,
 // bit 1: communication error rtu
 // bit 2: BL tcp,
@@ -185,7 +189,7 @@ static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
 
 // -------- RTU SERVER ---------------------------------------------
 #define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_RTUS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define THE_RTUS_SIZE       (REG_TCRS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
 #define	THE_RTUS_DEVICE 	 "/dev/ttyS1"
 #define	THE_RTUS_BAUDRATE	 38400
 #define	THE_RTUS_PARITY 	 'N'
@@ -194,14 +198,14 @@ static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
 
 // -------- TCP SERVER ---------------------------------------------
 #define REG_TCPS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCPS_SIZE       (REG_TCPS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define THE_TCPS_SIZE       (REG_TCPS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
 #define	THE_TCPS_TCP_PORT	 502
 #define	THE_TCPS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
 #define	THE_TCPS_MAX_WORK	 10 // MAX CLIENTS
 
 // -------- TCPRTU SERVER ---------------------------------------------
 #define REG_TCRS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCRS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define THE_TCRS_SIZE       (REG_TCRS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
 #define	THE_TCRS_TCP_PORT	 502
 #define	THE_TCRS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
 #define	THE_TCRS_MAX_WORK	 10 // MAX CLIENTS
@@ -214,23 +218,12 @@ enum threadStatus  {NOT_STARTED, RUNNING, EXITING};
 enum DeviceStatus  {ZERO, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 enum NodeStatus    {NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError, CommError, TimeoutError};
-#define UINT16	   0
-#define INT16     1
-//#define UDINT32   2
-//#define DINT32    3
-#define FLOATDCBA 4
-#define FLOATCDAB 5
-#define FLOATABCD 6
-#define FLOATBADC 7
-#define BIT       8
-#define UDINTDCBA 9
-#define UDINTCDAB 10
-#define UDINTABCD 11
-#define UDINTBADC 12
-#define DINTDCBA  13
-#define DINTCDAB  14
-#define DINTABCD  15
-#define DINTBADC  16
+enum varTypes {UINT16=0, INT16,
+               FLOATDCBA, FLOATCDAB,FLOATABCD, FLOATBADC,
+               BIT,
+               UDINTDCBA, UDINTCDAB, UDINTABCD, UDINTBADC,
+               DINTDCBA, DINTCDAB, DINTABCD, DINTBADC,
+              UNKNOWN};
 
 // manageThread: Data + Syncro
 // serverThread: "RTUSRV", "TCPSRV", "TCPRTUSRV"
@@ -242,23 +235,23 @@ static struct ServerStruct {
     // for serverThread
     enum FieldbusType Protocol;
     char IPAddr[VMM_MAX_IEC_STRLEN];
-    uint16_t Port;
+    u_int16_t Port;
     //
     union ServerData {
         struct {
-            uint16_t Port;
-            uint16_t BaudRate; // FIXME (limit 65535)
+            u_int16_t Port;
+            u_int16_t BaudRate; // FIXME (limit 65535)
             char Parity;
-            uint16_t DataBit;
-            uint16_t StopBit;
+            u_int16_t DataBit;
+            u_int16_t StopBit;
         } rtusrv;
         struct {
             char IPaddr[VMM_MAX_IEC_STRLEN];
-            uint16_t Port;
+            u_int16_t Port;
         } tcpsrv;
         struct {
             char IPaddr[VMM_MAX_IEC_STRLEN];
-            uint16_t Port;
+            u_int16_t Port;
         } tcprtusrv;
     } u;
     //
@@ -270,38 +263,38 @@ static struct ServerStruct {
     modbus_mapping_t *mb_mapping;
     uint8_t *can_buffer;
 } theServers[MAX_SERVERS];
-static uint16_t theServersNumber = 0;
+static u_int16_t theServersNumber = 0;
 
 #define MaxLocalQueue 15
 static struct ClientStruct {
     // for clientThread
     enum FieldbusType Protocol;
     char IPAddr[VMM_MAX_IEC_STRLEN];
-    uint16_t Port;
+    u_int16_t Port;
     //
     union ClientData {
         // no plc client
         struct {
-            uint16_t Port;
-            uint16_t BaudRate; // FIXME (limit 65535)
+            u_int16_t Port;
+            u_int16_t BaudRate; // FIXME (limit 65535)
             char Parity;
-            uint16_t DataBit;
-            uint16_t StopBit;
+            u_int16_t DataBit;
+            u_int16_t StopBit;
         } rtu;
         struct {
             char IPaddr[VMM_MAX_IEC_STRLEN];
-            uint16_t Port;
+            u_int16_t Port;
         } tcp;
         struct {
             char IPaddr[VMM_MAX_IEC_STRLEN];
-            uint16_t Port;
+            u_int16_t Port;
         } tcprtu;
         struct {
-            uint16_t bus;
+            u_int16_t bus;
         } can;
     } u;
     int16_t Tmin;
-    uint16_t TimeOut;
+    u_int16_t TimeOut;
     //
     char name[VMM_MAX_IEC_IDENT];
     enum DeviceStatus status;
@@ -311,44 +304,44 @@ static struct ClientStruct {
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
     // local queue
     struct PLCwriteRequestStruct {
-        uint16_t Index;
-        uint16_t Number;
-        uint32_t Values[MAX_WRITES];
+        u_int16_t Index;
+        u_int16_t Number;
+        u_int32_t Values[MAX_WRITES];
     } PLCwriteRequests[MaxLocalQueue];
-    uint16_t PLCwriteRequestNumber;
-    uint16_t PLCwriteRequestGet;
-    uint16_t PLCwriteRequestPut;
+    u_int16_t PLCwriteRequestNumber;
+    u_int16_t PLCwriteRequestGet;
+    u_int16_t PLCwriteRequestPut;
 } theDevices[MAX_DEVICES];
-static uint16_t theDevicesNumber = 0;
+static u_int16_t theDevicesNumber = 0;
 
 struct NodeStruct {
-    uint16_t device;
-    uint16_t NodeID;
+    u_int16_t device;
+    u_int16_t NodeID;
     //
     enum NodeStatus status;
     int16_t RetryCounter; // TIMEOUT
     int16_t JumpRead; // BLACKLIST
 } theNodes[MAX_NODES];
-static uint16_t theNodesNumber = 0;
+static u_int16_t theNodesNumber = 0;
 
 struct  CrossTableRecord {
     int16_t Enable;
     int Plc;
     char Tag[VMM_MAX_IEC_STRLEN];
-    uint16_t Types;
-    uint16_t Decimal;
-    uint16_t Protocol;	// RTU = 0, TCP=1, TCPRTU=2
+    enum varTypes Types;
+    u_int16_t Decimal;
+    enum FieldbusType Protocol;
     char IPAddress[VMM_MAX_IEC_STRLEN];
-    uint16_t Port;
+    u_int16_t Port;
     uint8_t NodeId;
-    uint16_t Address;
-    uint16_t Block;
+    u_int16_t Address;
+    u_int16_t Block;
     int16_t NReg;
-    uint16_t Handle;
+    u_int16_t Handle;
     int16_t Counter;
-    uint32_t OldVal;
-    uint32_t PLCWriteVal;
-    uint16_t Error;
+    u_int32_t OldVal;
+    u_int32_t PLCWriteVal;
+    u_int16_t Error;
     //
     int16_t device;
     int16_t node;
@@ -362,26 +355,26 @@ struct  Alarms {
     char ALTag[VMM_MAX_IEC_STRLEN];
     char ALSource[VMM_MAX_IEC_STRLEN];
     char ALCompareVar[VMM_MAX_IEC_STRLEN];
-    uint32_t ALCompareVal;
-    uint16_t ALOperator;
-    uint16_t ALFilterTime;
-    uint16_t ALFilterCount;
-    uint16_t ALError;
+    u_int32_t ALCompareVal;
+    u_int16_t ALOperator;
+    u_int16_t ALFilterTime;
+    u_int16_t ALFilterCount;
+    u_int16_t ALError;
 };
 static struct Alarms ALCrossTable[0 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
 
 struct CommParameters {
     char Device[VMM_MAX_IEC_STRLEN];
     char IPaddr[VMM_MAX_IEC_STRLEN];
-    uint16_t Port;
-    uint16_t BaudRate; // FIXME (limit 65535)
+    u_int16_t Port;
+    u_int16_t BaudRate; // FIXME (limit 65535)
     char Parity[VMM_MAX_IEC_STRLEN];
-    uint16_t DataBit;
-    uint16_t StopBit;
+    u_int16_t DataBit;
+    u_int16_t StopBit;
     int16_t Tmin;
-    uint16_t TimeOut;
+    u_int16_t TimeOut;
     int State;
-    uint16_t Retry;
+    u_int16_t Retry;
 };
 static struct  CommParameters CommParameters[1 + 4];
 static int16_t NumberOfFails;
@@ -404,7 +397,7 @@ static enum threadStatus theEngineThreadStatus = NOT_STARTED;
 static enum threadStatus theDataThreadStatus = NOT_STARTED;
 static enum threadStatus theSyncThreadStatus = NOT_STARTED;
 
-static uint32_t ErrorsState;
+static u_int32_t ErrorsState;
 //  ErrorsState: Variabile di errore
 //  bit 0:	fallita lettura crosstable
 //  bit 1:	fallita lettura record crosstable
@@ -431,11 +424,11 @@ static void *clientThread(void *statusAdr);
 
 static int do_recv(int s, void *buffer, ssize_t len);
 static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *address);
-static void InitXtable(uint16_t TIPO);
+static void InitXtable(u_int16_t TIPO);
 static int ReadFields(int16_t Index);
 static int ReadAlarmsFields(int16_t Index);
 static int ReadCommFields(int16_t Index);
-static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType);
+static int LoadXTable(const char *CTFile, int32_t CTDimension, u_int16_t CTType);
 static void AlarmMngr(void);
 static void PLCsync(void);
 static void ErrorMNG(void);
@@ -468,9 +461,9 @@ static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *addre
 }
 
 // fb_HW119_Init.st
-static void InitXtable(uint16_t TIPO)
+static void InitXtable(u_int16_t TIPO)
 {
-    uint16_t k;
+    u_int16_t k;
     int32_t i;
 
     if (TIPO == 0) {
@@ -478,10 +471,10 @@ static void InitXtable(uint16_t TIPO)
             // TRIGGER01  =  0;
             CrossTable[i].Enable = 0;
             CrossTable[i].Plc = FALSE;
-            CrossTable[i].Tag[0] = 0;
+            CrossTable[i].Tag[0] = UNKNOWN;
             CrossTable[i].Types = 0;
             CrossTable[i].Decimal = 0;
-            CrossTable[i].Protocol = 0;
+            CrossTable[i].Protocol = RTU;
             CrossTable[i].IPAddress[0] = 0;
             CrossTable[i].Port = 0;
             CrossTable[i].NodeId = 0;
@@ -491,8 +484,8 @@ static void InitXtable(uint16_t TIPO)
             CrossTable[i].Handle = 0;
             CrossTable[i].OldVal = 0;
             CrossTable[i].Error = 1;
-            k = ARRAY_QUEUE[i + 1];
-            ARRAY_QUEUE_OUTPUT[i + 1] = 0;
+            k = the_IsyncRegisters[i + 1];
+            the_QsyncRegisters[i + 1] = 0;
             ARRAY_STATES(i + 1) = 0;
         }
         CrossTableState = TRUE;
@@ -592,8 +585,8 @@ static int ReadFields(int16_t Index)
             CrossTable[Index].Types = DINTBADC;
         } else {
             if (CrossTable[Index].Enable > 0) {
-                CrossTable[Index].Types = 100; // tipo non riconosciuto
-                ERROR_FLAG |= 0x20;
+                CrossTable[Index].Types = UNKNOWN;
+                ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
             }
         }
     } else {
@@ -611,14 +604,24 @@ static int ReadFields(int16_t Index)
     // Protocol {"", RTU, TCP, TCPRTU}
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        if (strncmp(Field.Contents, "RTU", VMM_MAX_IEC_STRLEN) == 0) {
-            CrossTable[Index].Protocol = 0;
+        if (strncmp(Field.Contents, "PLC", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = PLC;
+        } else if (strncmp(Field.Contents, "RTU", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = RTU;
         } else if (strncmp(Field.Contents, "TCP", VMM_MAX_IEC_STRLEN) == 0) {
-            CrossTable[Index].Protocol = 1;
+            CrossTable[Index].Protocol = TCP;
         } else if (strncmp(Field.Contents, "TCPRTU", VMM_MAX_IEC_STRLEN) == 0) {
-            CrossTable[Index].Protocol = 2;
+            CrossTable[Index].Protocol = TCPRTU;
+        } else if (strncmp(Field.Contents, "CAN", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = CAN;
+        } else if (strncmp(Field.Contents, "RTUSRV", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = RTUSRV;
+        } else if (strncmp(Field.Contents, "TCPSRV", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = TCPSRV;
+        } else if (strncmp(Field.Contents, "TCPRTUSRV", VMM_MAX_IEC_STRLEN) == 0) {
+            CrossTable[Index].Protocol = TCPRTUSRV;
         } else {
-            CrossTable[Index].Protocol = 100; // PROTOCOLLO NON RICONOSCIUTO
+            CrossTable[Index].Protocol = PLC;
             // FIXME: ERR ?
         }
     } else {
@@ -869,9 +872,9 @@ static int ReadCommFields(int16_t Index)
 }
 
 // fb_HW119_LoadCrossTab.st
-static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
+static int LoadXTable(const char *CTFile, int32_t CTDimension, u_int16_t CTType)
 {
-    uint16_t FBState = 0;
+    u_int16_t FBState = 0;
     int32_t index;
     int32_t STEPS = 50;
     int32_t LowEdge = 0;
@@ -996,14 +999,14 @@ static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
 static void AlarmMngr(void)
 {
     // FIXME: TODO
-    uint32_t Index = 0;
+    u_int32_t Index = 0;
     int16_t SourceAddr;
     int16_t CompareAddr;
     int16_t TagAddr;
-    uint32_t  CompareVal;
-    uint32_t  tmp, tmpOld;
+    u_int32_t  CompareVal;
+    u_int32_t  tmp, tmpOld;
     int ERRFlag;
-    uint32_t ERRORVAL = 0x00000001;
+    u_int32_t ERRORVAL = 0x00000001;
 
     for (Index = 1; Index < DimAlarmsCT; ++Index) {
         ERRFlag = FALSE;
@@ -1018,7 +1021,7 @@ static void AlarmMngr(void)
             if (SourceAddr == 0xFFFF || SourceAddr > DimCrossTable || SourceAddr == 0) {
                 ERRFlag  = TRUE;
             } else {
-                if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != 100) {
+                if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
                     ERRFlag  = TRUE;
                 } else {
                     CompareAddr = -1;
@@ -1032,7 +1035,7 @@ static void AlarmMngr(void)
                         if (CompareAddr == 0xffff || CompareAddr >DimCrossTable || CompareAddr == 0) {
                             ERRFlag  = TRUE;
                         } else {
-                            CompareVal = ARRAY_CROSSTABLE_INPUT[CompareAddr];
+                            CompareVal = the_QdataRegisters[CompareAddr];
                         }
                     }
                 }
@@ -1049,102 +1052,102 @@ static void AlarmMngr(void)
             tmp = ALCrossTable[Index].ALOperator & 0xFF00;
             switch (tmp) {
             case 0x100: // >
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] > CompareVal) {
+                if (the_QdataRegisters[SourceAddr] > CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             case 0x200: // >=
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] >= CompareVal) {
+                if (the_QdataRegisters[SourceAddr] >= CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             case 0x300: // <
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] < CompareVal) {
+                if (the_QdataRegisters[SourceAddr] < CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             case 0x400: // <=
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] <= CompareVal) {
+                if (the_QdataRegisters[SourceAddr] <= CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             case 0x500: // ==
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] == CompareVal) {
+                if (the_QdataRegisters[SourceAddr] == CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             case 0x600: // !=
-                if (ARRAY_CROSSTABLE_INPUT[SourceAddr] != CompareVal) {
+                if (the_QdataRegisters[SourceAddr] != CompareVal) {
                     if (ALCrossTable[Index].ALFilterCount == 0) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else {
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
                     }
                 } else {
-                    ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                    the_QdataRegisters[TagAddr] = 0;
                     ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                 }
                 break;
             default:    // bit
-                tmp = ARRAY_CROSSTABLE_INPUT[SourceAddr] >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
+                tmp = the_QdataRegisters[SourceAddr] >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
                 tmp &= 1;
                 if (CompareAddr == -1) {
                     if (tmp == CompareVal) {
                         if (ALCrossTable[Index].ALFilterCount == 0) {
-                            ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                            the_QdataRegisters[TagAddr] = ERRORVAL;
                         } else {
                             ALCrossTable[Index].ALFilterCount -= 1;
                         }
                     } else {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                        the_QdataRegisters[TagAddr] = 0;
                         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
                     }
                 } else if (CompareAddr == SourceAddr) {
                     tmpOld = CrossTable[SourceAddr].OldVal >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
                     tmpOld &= 1;
                     if (tmp == 1 && tmpOld == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else if (tmp == 1 && tmpOld == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = ERRORVAL;
+                        the_QdataRegisters[TagAddr] = ERRORVAL;
                     } else if (tmp == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                        the_QdataRegisters[TagAddr] = 0;
                     } else if (tmp == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
-                        ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
+                        the_QdataRegisters[TagAddr] = 0;
                     }
                     if (tmp == 0) {
                         CrossTable[SourceAddr].OldVal &= ~(2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
@@ -1160,33 +1163,48 @@ static void AlarmMngr(void)
 // fb_HW119_PLCsync.st (NB: NOW IT'S CALLED BY SYNCRO)
 static void PLCsync(void)
 {
-    uint16_t IndexPLC;
-    uint16_t RW;
+    u_int16_t indx;
+    u_int16_t RW;
     int16_t addr;
 
-    for (IndexPLC = 1; IndexPLC <= DimCrossTable; ++IndexPLC) {
-        RW = ARRAY_QUEUE[IndexPLC] & QueueRWMask;
-        addr = ARRAY_QUEUE[IndexPLC] & QueueAddressMask;
+    for (indx = 1; indx <= DimCrossTable; ++indx) {
+        RW = the_IsyncRegisters[indx] & QueueRWMask;
+        addr = the_IsyncRegisters[indx] & QueueAddressMask;
         if (addr < DimCrossTable) {
             if (RW == 0 && addr == 0) {
-                ARRAY_QUEUE_OUTPUT[IndexPLC] = 0;
+                // queue tail
+                the_QsyncRegisters[indx] = 0;
                 break;
             }
-            if (CrossTable[addr].Protocol == 100) {
-                if (RW == 0 && ARRAY_QUEUE_OUTPUT[IndexPLC] == STATO_BUSY_WRITE) {
-                    ARRAY_QUEUE_OUTPUT[IndexPLC] = 0;
-                } else if ((RW == WRITE_SINGLE || RW == WRITE_RIC_SINGLE || RW == WRITE_MULTIPLE) && ARRAY_QUEUE_OUTPUT[IndexPLC] != STATO_BUSY_WRITE) {
-                    ARRAY_QUEUE_OUTPUT[IndexPLC] = STATO_BUSY_WRITE;
-                    if (RW == WRITE_SINGLE || RW == WRITE_RIC_SINGLE) {
-                        ARRAY_CROSSTABLE_INPUT[addr] = ARRAY_CROSSTABLE_OUTPUT[addr];
-                    } else {
-                        uint16_t I;
+            if (CrossTable[addr].Protocol == PLC) {
+                switch (RW) {
+                case 0:
+                    // acknowledged READ/WRITE
+                    if (the_QsyncRegisters[indx] != 0) {
+                        the_QsyncRegisters[indx] = 0;
+                    }
+                    break;
+                case READ: // never called, because all PLC variables are always ready
+                    the_QsyncRegisters[indx] = STATO_BUSY_READ;
+                    // the_QdataRegisters[addr] = the_QdataRegisters[addr]; :)
+                    break;
+                case WRITE_SINGLE:
+                case WRITE_MULTIPLE:
+                case WRITE_RIC_SINGLE:
+                case WRITE_RIC_MULTIPLE:
+                    if (the_QsyncRegisters[indx] != STATO_BUSY_WRITE) {
+                        u_int16_t i;
 
-                        for (I = 0; I <= (CrossTable[addr].NReg - 1); ++I) {
-                            ARRAY_CROSSTABLE_INPUT[addr + I] = ARRAY_CROSSTABLE_OUTPUT[addr + I];
-                            CrossTable[addr + I].Error = 0; // FIXME: remove line
+                        the_QsyncRegisters[indx] = STATO_BUSY_WRITE;
+                        for (i = 0; i <= (CrossTable[addr].NReg - 1); ++i) {
+                            the_QdataRegisters[addr + i] = the_IdataRegisters[addr + i];
                         }
                     }
+                    break;
+                case WRITE_PREPARE:
+                    ; // nop
+                default:
+                    ;
                 }
             }
         }
@@ -1200,7 +1218,7 @@ static void LocalIO(void)
 {
     // TICtimer
     float PLC_time, PLC_timeMin, PLC_timeMax;
-    uint32_t tic_ms;
+    u_int32_t tic_ms;
 
     tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
     PLC_time = tic_ms / 1000.0;
@@ -1211,19 +1229,21 @@ static void LocalIO(void)
         PLC_timeMin = PLC_time - 10.0;
         PLC_timeMax = PLC_time;
     }
-    // PLC_time    AT %MD0.21560:REAL; 5390
-    // PLC_timeMin AT %MD0.21564:REAL; 5391
-    // PLC_timeMax AT %MD0.21568:REAL; 5392
-    memcpy(&ARRAY_CROSSTABLE_INPUT[5390], &PLC_time, sizeof(uint32_t));
-    memcpy(&ARRAY_CROSSTABLE_INPUT[5391], &PLC_timeMin, sizeof(uint32_t));
-    memcpy(&ARRAY_CROSSTABLE_INPUT[5392], &PLC_timeMax, sizeof(uint32_t));
+    // PLC_time         AT %QD0.21560: REAL; 5390
+    // PLC_timeMin      AT %QD0.21564: REAL; 5391
+    // PLC_timeMax      AT %QD0.21568: REAL; 5392
+    // PLC_hardwareType AT %QD0.21572:UDINT; 5393
+    memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
+    memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
+    memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
+    the_QdataRegisters[5393] = hardware_type;
 
     // TPAC1006, TPAC1008
-    if (HardwareType & 0x000000FF) {
+    if (hardware_type & 0x000000FF) {
         // TPAC1006_LIOsync();
     }
     // TPAC1007
-    if (HardwareType & 0x00FF0000) {
+    if (hardware_type & 0x00FF0000) {
         // TPAC1007_LIOsync();
     }
 
@@ -1240,7 +1260,7 @@ static int checkServersDevicesAndNodes()
     int retval = 0;
 
     // for each enabled variable
-    uint16_t i;
+    u_int16_t i;
     for (i = 1; i <= DimCrossTable; ++i) {
         if (CrossTable[i].Enable > 0) {
 
@@ -1259,7 +1279,7 @@ static int checkServersDevicesAndNodes()
             case RTUSRV:
             case TCPSRV:
             case TCPRTUSRV: {
-                uint16_t s;
+                u_int16_t s;
                 // add unique variable's server
                 for (s = 0; s < theServersNumber; ++s) {
                     if (CrossTable[i].Protocol == theServers[s].Protocol
@@ -1329,9 +1349,9 @@ static int checkServersDevicesAndNodes()
             case RTUSRV:
             case TCPSRV:
             case TCPRTUSRV: {
-                uint16_t d;
-                uint16_t n;
-                uint16_t s;
+                u_int16_t d;
+                u_int16_t n;
+                u_int16_t s;
                 // add unique variable's device
                 for (d = 0; d < theDevicesNumber; ++d) {
                     if (CrossTable[i].Protocol == theDevices[d].Protocol
@@ -1426,7 +1446,7 @@ static int checkServersDevicesAndNodes()
 // Program1.st
 static void *engineThread(void *statusAdr)
 {
-    uint32_t CommState = 0;
+    u_int32_t CommState = 0;
 
     // thread init
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
@@ -1445,7 +1465,7 @@ static void *engineThread(void *statusAdr)
                     if (LoadXTable("Alarms.csv", DimAlarmsCT, 1)) {
                         CommState = 20;	// Fallita lettura crosstable allrmi -> prosegue con lettura cross table variabili
                         ALCrossTableState = FALSE;
-                        ERROR_FLAG = ERROR_FLAG | 0x10; //SEGNALO L'ERRORE SUL BIT 4
+                        ERROR_FLAG |= ERROR_FLAG_ALARMS;
                     } else {
                         CommState = 20;				//lettura crosstable  Allarmi  OK  -> prosegue
                     }
@@ -1454,7 +1474,7 @@ static void *engineThread(void *statusAdr)
                     if (LoadXTable("Crosstable.csv", DimCrossTable, 0)) {
                         CommState = 1000;	// Fallita lettura crosstable  variabili: FINE
                         CrossTableState = FALSE;
-                        ERROR_FLAG = ERROR_FLAG | 0x20; //SEGNALO L'ERRORE SUL BIT 5
+                        ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
                     } else {
                         CommState = 30;				// lettura crosstable  variabili  OK ->  prosegue
                     }
@@ -1462,7 +1482,7 @@ static void *engineThread(void *statusAdr)
                 case 30: // READ DEVICES FILE
                     if (LoadXTable("Commpar.csv", 5, 2)) {
                         CommState = 1000;	// Fallita lettura crosstable  parametri di comunicazione: FINE
-                        ERROR_FLAG = ERROR_FLAG | 0x08; //SEGNALO L'ERRORE SUL BIT 3
+                        ERROR_FLAG |= ERROR_FLAG_COMMPAR;
                     } else {
                         CommState = 40;				// lettura crosstable  parametri di comunicazione  OK ->  prosegue
                     }
@@ -1470,7 +1490,7 @@ static void *engineThread(void *statusAdr)
                 case 40: // CREATE SERVER, DEVICES AND NODES TABLES
                     if (checkServersDevicesAndNodes()) {
                         CommState = 1000;
-                        ERROR_FLAG = ERROR_FLAG | 0x08; //SEGNALO L'ERRORE SUL BIT 3
+                        ERROR_FLAG |= ERROR_FLAG_COMMPAR;
                     } else {
                         CommState = 50;
                     }
@@ -1507,7 +1527,7 @@ static void *engineThread(void *statusAdr)
                     CommState = 70;
                 }   break;
                 case 70:
-                    ERROR_FLAG = ERROR_FLAG | 0x40;	// SEGNALA SUL BIT 6 CHE HA TERMINATO L'INIZIALIZZAZIONE DELLE CT
+                    ERROR_FLAG |= ERROR_FLAG_CONF_END;
                     if  (ALCrossTableState) {
                         CommEnabled = TRUE;
                     }
@@ -1536,7 +1556,7 @@ static void *engineThread(void *statusAdr)
                     LocalIO();
                     break;
                 case 1000:
-                    ERROR_FLAG = ERROR_FLAG | 0x40; // SEGNALA SUL BIT 6 CHE HA TERMINATO L'INIZIALIZZAZIONE DELLE CT*)
+                    ERROR_FLAG |= ERROR_FLAG_CONF_END;
                     ErrorMNG();
                     break;
                 default:
@@ -1555,10 +1575,10 @@ static void *engineThread(void *statusAdr)
     return NULL;
 }
 
-static uint16_t modbusRegistersNumber(uint16_t DataIndex)
+static u_int16_t modbusRegistersNumber(u_int16_t DataIndex)
 {
-    uint16_t retval = 0;
-    uint16_t i;
+    u_int16_t retval = 0;
+    u_int16_t i;
 
     for (i = 0; i < CrossTable[DataIndex].NReg; ++i) {
         switch (CrossTable[DataIndex + i].Types) {
@@ -1574,24 +1594,21 @@ static uint16_t modbusRegistersNumber(uint16_t DataIndex)
     return retval;
 }
 
-static enum fieldbusError fieldbusRead(uint16_t d, uint16_t QueueIndex, uint16_t DataIndex, uint32_t DataValue[], uint16_t DataNumber)
+static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int16_t DataIndex, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
-    uint16_t i, e = 0;
+    u_int16_t i, e = 0;
     uint8_t bitRegs[MODBUS_MAX_READ_BITS];         // > MAX_READS
-    uint16_t uintRegs[MODBUS_MAX_READ_REGISTERS];  // > MAX_READS
+    u_int16_t uintRegs[MODBUS_MAX_READ_REGISTERS];  // > MAX_READS
 
     switch (theDevices[d].Protocol) {
     case PLC:
-        // FIXME: no lock on Crosstable mutex
-        for (i = 0; i < DataNumber; ++i) {
-            DataValue[i] = ARRAY_CROSSTABLE_INPUT[DataIndex + i];
-        }
+        // FIXME: assert
         break;
     case RTU:
     case TCP:
     case TCPRTU: {
-        uint16_t regs = modbusRegistersNumber(DataIndex);
+        u_int16_t regs = modbusRegistersNumber(DataIndex);
 
         if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataIndex].NodeId)) {
             retval = CommError;
@@ -1605,7 +1622,7 @@ static enum fieldbusError fieldbusRead(uint16_t d, uint16_t QueueIndex, uint16_t
             e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, regs, uintRegs);
         }
         if (e == 0) {
-            uint16_t r = 0;
+            u_int16_t r = 0;
             for (i = 0; i < DataNumber; ++i) {
                 uint8_t *p = (uint8_t *)&uintRegs[r];
                 uint8_t a = p[0];
@@ -1642,12 +1659,12 @@ static enum fieldbusError fieldbusRead(uint16_t d, uint16_t QueueIndex, uint16_t
         }
     }   break;
     case CAN: {
-        uint16_t device = CrossTable[DataIndex].device;
-        uint16_t server = theDevices[device].server;
+        u_int16_t device = CrossTable[DataIndex].device;
+        u_int16_t server = theDevices[device].server;
         pthread_mutex_lock(&theServers[server].mutex);
         {
             for (i = 0; i < DataNumber; ++i) {
-                uint16_t offset = CrossTable[DataIndex + i].Address;
+                u_int16_t offset = CrossTable[DataIndex + i].Address;
                 uint8_t *p = (uint8_t *)&theServers[server].can_buffer[offset];
                 uint8_t a = p[0];
                 uint8_t b = p[1];
@@ -1686,8 +1703,8 @@ static enum fieldbusError fieldbusRead(uint16_t d, uint16_t QueueIndex, uint16_t
     case RTUSRV:
     case TCPSRV:
     case TCPRTUSRV: {
-        uint16_t device = CrossTable[DataIndex].device;
-        uint16_t server = theDevices[device].server;
+        u_int16_t device = CrossTable[DataIndex].device;
+        u_int16_t server = theDevices[device].server;
         pthread_mutex_lock(&theServers[server].mutex);
         {
             for (i = 0; i < DataNumber; ++i) {
@@ -1704,30 +1721,27 @@ static enum fieldbusError fieldbusRead(uint16_t d, uint16_t QueueIndex, uint16_t
     return retval;
 }
 
-static enum fieldbusError fieldbusWrite(uint16_t d, uint16_t QueueIndex, uint16_t DataIndex, uint32_t DataValue[], uint16_t DataNumber)
+static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int16_t DataIndex, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
-    uint16_t i, e = 0;
+    u_int16_t i, e = 0;
     uint8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
-    uint16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
+    u_int16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
 
     switch (theDevices[d].Protocol) {
     case PLC:
-        // FIXME: no lock on Crosstable mutex
-        for (i = 0; i < DataNumber; ++i) {
-            ARRAY_CROSSTABLE_INPUT[DataIndex + i] = DataValue[i];
-        }
+        // FIXME: assert
         break;
     case RTU:
     case TCP:
     case TCPRTU: {
-        uint16_t regs = modbusRegistersNumber(DataIndex);
+        u_int16_t regs = modbusRegistersNumber(DataIndex);
 
         if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataIndex].NodeId)) {
             retval = CommError;
             break;
         }
-        uint16_t r = 0;
+        u_int16_t r = 0;
         for (i = 0; i < DataNumber; ++i) {
             uint8_t *p = (uint8_t *)&DataValue[i];
             uint8_t a = p[0];
@@ -1770,20 +1784,20 @@ static enum fieldbusError fieldbusWrite(uint16_t d, uint16_t QueueIndex, uint16_
         }
     }   break;
     case CAN: {
-        uint16_t device = CrossTable[DataIndex].device;
-        uint16_t server = theDevices[device].server;
+        u_int16_t device = CrossTable[DataIndex].device;
+        u_int16_t server = theDevices[device].server;
         pthread_mutex_lock(&theServers[server].mutex);
         {
             for (i = 0; i < DataNumber; ++i) {
-                uint16_t offset = CrossTable[DataIndex + i].Address;
+                u_int16_t offset = CrossTable[DataIndex + i].Address;
                 uint8_t *p = (uint8_t *)&DataValue[i];
                 uint8_t a = p[0];
                 uint8_t b = p[1];
                 uint8_t c = p[2];
                 uint8_t d = p[3];
                 uint8_t * p8 = &theServers[server].can_buffer[offset];
-                uint16_t * p16 = (uint16_t *)&theServers[server].can_buffer[offset];
-                uint32_t * p32 = (uint32_t *)&theServers[server].can_buffer[offset];
+                u_int16_t * p16 = (u_int16_t *)&theServers[server].can_buffer[offset];
+                u_int32_t * p32 = (u_int32_t *)&theServers[server].can_buffer[offset];
 
                 switch (CrossTable[DataIndex + i].Types) {
                 case       BIT:
@@ -1817,8 +1831,8 @@ static enum fieldbusError fieldbusWrite(uint16_t d, uint16_t QueueIndex, uint16_
     case RTUSRV:
     case TCPSRV:
     case TCPRTUSRV: {
-        uint16_t device = CrossTable[DataIndex].device;
-        uint16_t server = theDevices[device].server;
+        u_int16_t device = CrossTable[DataIndex].device;
+        u_int16_t server = theDevices[device].server;
         pthread_mutex_lock(&theServers[server].mutex);
         {
             for (i = 0; i < DataNumber; ++i) {
@@ -1837,7 +1851,7 @@ static enum fieldbusError fieldbusWrite(uint16_t d, uint16_t QueueIndex, uint16_
 
 static void *serverThread(void *arg)
 {
-    uint32_t s = (uint32_t)arg;
+    u_int32_t s = (u_int32_t)arg;
     modbus_t * modbus_ctx = NULL;
     uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int master_socket;
@@ -2013,29 +2027,29 @@ static void *serverThread(void *arg)
 // fb_HW119_InitComm.st
 static void *clientThread(void *arg)
 {
-    uint32_t d = (uint32_t)arg;
-    uint32_t blacklist_ms = 0;
-    uint32_t read_failures[MAX_NODES];
+    u_int32_t d = (u_int32_t)arg;
+    u_int32_t blacklist_ms = 0;
+    u_int32_t read_failures[MAX_NODES];
 
     struct timeval response_timeout;
     struct timespec abstime;
-    uint32_t now_ms;
-    uint32_t next_tic_ms[3];
+    u_int32_t now_ms;
+    u_int32_t next_tic_ms[3];
 
-    uint16_t current_write_index;
-    uint16_t current_read_index[MAX_PRIORITY];
+    u_int16_t current_write_index;
+    u_int16_t current_read_index[MAX_PRIORITY];
 
-    uint16_t prio; // priority of variables
-    uint16_t indx; // command index in queue
-    uint16_t oper; // command operation
-    uint16_t addr; // variable in crosstable
+    u_int16_t prio; // priority of variables
+    u_int16_t indx; // command index in queue
+    u_int16_t oper; // command operation
+    u_int16_t addr; // variable in crosstable
 
     // data for one fieldbus operation
-    uint16_t QueueIndex;    // command index in the queue
-    uint16_t Operation;     // read/write normal/recipe single/multiple
-    uint16_t DataIndex;     // variable index in the crosstable
-    uint32_t DataValue[64]; // max 64 reads and 16 writes
-    uint32_t DataNumber; // max 64 reads and 16 writes
+    u_int16_t QueueIndex;    // command index in the queue
+    u_int16_t Operation;     // read/write normal/recipe single/multiple
+    u_int16_t DataIndex;     // variable index in the crosstable
+    u_int32_t DataValue[64]; // max 64 reads and 16 writes
+    u_int32_t DataNumber;    // max 64 reads and 16 writes
     enum fieldbusError error;
 
     // thread init
@@ -2112,11 +2126,69 @@ static void *clientThread(void *arg)
         usleep(THE_CLIENT_DELAY_ms * 1000);
         if (g_bRunning) {
 
-            // manage device state
+            // manage the reset of error flags
+            switch (theDevices[d].Protocol) {
+            case PLC:
+                // FIXME: assert
+                break;
+            case RTU:
+                if (Reset_RTU) {
+                    int i;
+                    for (i = 1; i <= 64; ++i) {
+                        CounterRTU(i) = 0;
+                    }
+                    RTUBlackList_ERROR_WORD = 0;
+                    RTUComm_ERROR_WORD = 0;
+                    BlackListRTUL = 0;
+                    BlackListRTUH = 0;
+                    CommErrRTUL = 0;
+                    CommErrRTUH = 0;
+                    ERROR_FLAG &= ~ERROR_FLAG_RTU;
+                }
+                break;
+            case TCP:
+                if (Reset_TCP) {
+                    int i;
+                    for (i = 1; i <= 64; ++i) {
+                        CounterTCP(i) = 0;
+                    }
+                    TCPBlackList_ERROR_WORD = 0;
+                    TCPComm_ERROR_WORD = 0;
+                    BlackListTCPL = 0;
+                    BlackListTCPH = 0;
+                    CommErrTCPL = 0;
+                    CommErrTCPH = 0;
+                    ERROR_FLAG &= ~ERROR_FLAG_TCP;
+                }
+                break;
+            case TCPRTU:
+                if (Reset_TCPRTU) {
+                    int i;
+                    for (i = 1; i <= 64; ++i) {
+                        CounterTCPRTU(i) = 0;
+                    }
+                    TCPRTUBlackList_ERROR_WORD = 0;
+                    TCPRTUComm_ERROR_WORD = 0;
+                    BlackListTCPRTUL = 0;
+                    BlackListTCPRTUH = 0;
+                    CommErrTCPRTUL = 0;
+                    CommErrTCPRTUH = 0;
+                    ERROR_FLAG &= ~ERROR_FLAG_TCPRTU;
+                }
+                break;
+            case CAN:
+            case RTUSRV:
+            case TCPSRV:
+            case TCPRTUSRV:
+                break;
+            default:
+                ;
+            }
+
+            // manage device status
             switch (theDevices[d].status) {
             case ZERO:
             case NO_HOPE:
-                continue;
                 break;
             case NOT_CONNECTED:
                 // try connection
@@ -2135,40 +2207,39 @@ static void *clientThread(void *arg)
                             modbus_close(theDevices[d].modbus_ctx);
                             blacklist_ms = 0;
                             theDevices[d].status = DEVICE_BLACKLIST;
-                            continue;
                         }
                     } else {
                         blacklist_ms = 0;
                         theDevices[d].status = DEVICE_BLACKLIST;
-                        continue;
                     }
                     break;
                 case CAN:
                     theDevices[d].status = CONNECTED; // FIXME
-                    continue;
                     break;
                 case RTUSRV:
                 case TCPSRV:
                 case TCPRTUSRV:
                     theDevices[d].status = CONNECTED;
-                    continue;
                     break;
                 default:
-                    continue;
+                    ;
                 }
                 break;
             case CONNECTED:
             case CONNECTED_WITH_ERRORS:
-                // ok proceed with the code below
+                // ok proceed with the fieldbus operations
                 break;
             case DEVICE_BLACKLIST:
                 blacklist_ms += THE_CLIENT_DELAY_ms;
                 if (blacklist_ms >= 4000) {
                     theDevices[d].status = NOT_CONNECTED;
                 }
-                continue;
                 break;
             default:
+                ;
+            }
+
+            if (!(theDevices[d].status == CONNECTED || theDevices[d].status == CONNECTED)) {
                 continue;
             }
 
@@ -2182,7 +2253,7 @@ static void *clientThread(void *arg)
                     DataIndex = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Index;
                     DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
                     Operation = (DataNumber == 1) ? WRITE_SINGLE : WRITE_MULTIPLE;
-                    uint16_t n;
+                    u_int16_t n;
                     for (n = 0; n < DataNumber; ++n) {
                         DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
                     }
@@ -2194,8 +2265,8 @@ static void *clientThread(void *arg)
                     indx = current_write_index;
                     do {
                         if (indx == 0) indx = 1;
-                        oper = ARRAY_QUEUE[indx] & QueueRWMask;
-                        addr = ARRAY_QUEUE[indx] & QueueAddressMask;
+                        oper = the_IsyncRegisters[indx] & QueueRWMask;
+                        addr = the_IsyncRegisters[indx] & QueueAddressMask;
                         if (CrossTable[addr].device == d
                          && (oper == WRITE_SINGLE || oper == WRITE_MULTIPLE
                           || oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE)) {
@@ -2224,8 +2295,8 @@ static void *clientThread(void *arg)
                             indx = current_read_index[prio];
                             do {
                                 if (indx == 0) indx = 1;
-                                oper = ARRAY_QUEUE[indx] & QueueRWMask;
-                                addr = ARRAY_QUEUE[indx] & QueueAddressMask;
+                                oper = the_IsyncRegisters[indx] & QueueRWMask;
+                                addr = the_IsyncRegisters[indx] & QueueAddressMask;
                                 if (CrossTable[addr].device == d
                                  && oper == READ) {
                                     found = TRUE;
@@ -2264,18 +2335,18 @@ static void *clientThread(void *arg)
             // device operation (without locking the mutex)
             switch (Operation) {
             case READ:
-                ARRAY_QUEUE_OUTPUT[QueueIndex] = STATO_BUSY_READ;
+                the_QsyncRegisters[QueueIndex] = STATO_BUSY_READ;
                 error = fieldbusRead(d, QueueIndex, DataIndex, DataValue, DataNumber);
                 break;
             case WRITE_SINGLE:
             case WRITE_MULTIPLE:
             case WRITE_RIC_MULTIPLE:
             case WRITE_RIC_SINGLE:
-                ARRAY_QUEUE_OUTPUT[QueueIndex] = STATO_BUSY_WRITE;
+                the_QsyncRegisters[QueueIndex] = STATO_BUSY_WRITE;
                 error = fieldbusWrite(d, QueueIndex, DataIndex, DataValue, DataNumber);
                 break;
             case WRITE_PREPARE:
-                break;
+                break; // nop
             default:
                 ;
             }
@@ -2287,48 +2358,59 @@ static void *clientThread(void *arg)
                 case NoError:
                     switch (Operation) {
                     case READ: {
-                        uint16_t i;
+                        u_int16_t i;
                         for (i = 0; i < CrossTable[DataIndex].NReg; ++i) {
                             CrossTable[DataIndex + i].Error = 0;
                             ARRAY_STATES(DataIndex + i) = STATO_OK;
-                            ARRAY_CROSSTABLE_INPUT[DataIndex + i] = DataValue[i];
+                            the_QdataRegisters[DataIndex + i] = DataValue[i];
                         }
                     } break;
                     case WRITE_SINGLE:
                     case WRITE_MULTIPLE:
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE: {
-                        uint16_t i;
+                        u_int16_t i;
                         for (i = 0; i < CrossTable[DataIndex].NReg; ++i) {
                             CrossTable[DataIndex + i].Error = 0;
                             ARRAY_STATES(DataIndex + i) = STATO_OK;
                             if (QueueIndex == 0) {
-                                ARRAY_CROSSTABLE_INPUT[DataIndex + i] = CrossTable[DataIndex + i].PLCWriteVal;
+                                the_QdataRegisters[DataIndex + i] = CrossTable[DataIndex + i].PLCWriteVal;
                             } else {
-                                ARRAY_CROSSTABLE_INPUT[DataIndex + i] = ARRAY_CROSSTABLE_OUTPUT[DataIndex + i];
+                                the_QdataRegisters[DataIndex + i] = the_IdataRegisters[DataIndex + i];
                             }
                         }
                     }   break;
                     case WRITE_PREPARE:
-                        break;
+                        break; // nop
                     default:
                         ;
                     }
 #if defined(RTS_CFG_MECT_RETAIN)
                 {
                     // retentive memory update
-                    uint32_t *retentive = (uint32_t *)ptRetentive;
-                    uint16_t i;
+                    u_int32_t *retentive = (u_int32_t *)ptRetentive;
+                    u_int16_t i;
 
                     for (i = 0; i < CrossTable[DataIndex].NReg; ++i) {
-                        retentive[(DataIndex - 1) + i ] = ARRAY_CROSSTABLE_INPUT[DataIndex + i];
+                        retentive[(DataIndex - 1) + i ] = the_QdataRegisters[DataIndex + i];
                     }
                 }
 #endif
                     break;
                 case CommError:
-                    break;
                 case TimeoutError:
+                    switch (theDevices[d].Protocol) {
+                    case PLC:       ; break; // FIXME: assert                  
+                    case RTU:       ERROR_FLAG |= ERROR_FLAG_RTU; break;
+                    case TCP:       ERROR_FLAG |= ERROR_FLAG_TCP; break;
+                    case TCPRTU:    ERROR_FLAG |= ERROR_FLAG_TCPRTU; break;
+                    case CAN:       ERROR_FLAG |= ERROR_FLAG_CAN; break;
+                    case RTUSRV:    ERROR_FLAG |= ERROR_FLAG_RTUSRV; break;
+                    case TCPSRV:    ERROR_FLAG |= ERROR_FLAG_TCPSRV; break;
+                    case TCPRTUSRV: ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV; break;
+                    default:        ;
+                    }
+
                     break;
                 default:
                     ;
@@ -2630,9 +2712,6 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
 #ifdef RTS_CFG_MECT_LIB // now undefined
 #endif
-    // maintain hardware type for the plc application
-    // hardware type is a 32 bit register and the offset is in bytes
-    HardwareType = hardware_type;
     g_bConfigured	= TRUE;
 	g_bRunning	= FALSE;
 	RETURN(uRes);
@@ -2767,15 +2846,15 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     int i;
                     void *pvQsegment = pIO->Q.pAdr + pIO->Q.ulOffs;
                     void *pvWsegment = pIO->W.pAdr + pIO->W.ulOffs;
-                    uint32_t *values = (uint32_t *)pvQsegment;
-                    uint32_t *flags = (uint32_t *)pvWsegment;
+                    u_int32_t *values = (u_int32_t *)pvQsegment;
+                    u_int32_t *flags = (u_int32_t *)pvWsegment;
                     for (i = 0; i < REG_DATA_NUMBER; ++i) {
                         if (flags[i] != 0) {
-                            uint16_t d = CrossTable[i].device;
+                            u_int16_t d = CrossTable[i].device;
                             if (d == -1) {
                                 // PLC
                                 flags[i] = 0;
-                                ARRAY_CROSSTABLE_INPUT[i] = values[i];
+                                the_QdataRegisters[i] = values[i];
                             } else {
                                 // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
                                 if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
