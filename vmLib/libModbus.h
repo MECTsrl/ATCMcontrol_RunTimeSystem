@@ -439,7 +439,7 @@ void mb_set_float(STDLIBFUNCALL);
 void mb_set_float_dcba(STDLIBFUNCALL);
 void mb_set_float_badc(STDLIBFUNCALL);
 void mb_set_float_cdab(STDLIBFUNCALL);
-void mb_set_error_recovery(STDLIBFUBCALL);
+void mb_set_error_recovery(STDLIBFUNCALL);
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
 #include "osAlign.h"

@@ -71,7 +71,7 @@ ARCH_INCLUDE     = \
         -I$(ROOTFS)/usr/src/linux/include \
         -I$(CC_DIRECTORY)/arm-none-linux-gnueabi
 XENO_CC = gcc
-XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
+XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
 XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(ROOTFS)/usr/xenomai/lib
 
@@ -127,7 +127,7 @@ else
   OFLAGS = -O0
 endif
 
-CFLAGS           = $(XENO_CFLAGS) $(TFLAGS) -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -fno-builtin -Wall -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)
+CFLAGS           = $(XENO_CFLAGS) $(TFLAGS) -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -Wall -Wno-attributes -fno-builtin -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)
 CFLAGS_AS        = $(CFLAGS)
 
 LD_FLAGS         = $(XENO_LDFLAGS) -lm -lpthread $(CFLAGS) -lrt -L$(ROOTFS)/usr/lib -lts -lsocketcan -ldl

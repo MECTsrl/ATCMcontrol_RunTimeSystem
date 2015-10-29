@@ -5634,7 +5634,7 @@ void mb_report_slave_id(STDLIBFUNCALL)
 		return;
 	}
 
-	ret = modbus_report_slave_id(ctx, (uint8_t)pPara->slave);
+    ret = modbus_report_slave_id(ctx, (uint8_t *)&pPara->slave);
 	if (ret == OTHER_ERROR)
 	{
 		pPara->ret_value = ERR_ERROR;
@@ -5907,7 +5907,7 @@ void mb_rtu_get_serial_mode(STDLIBFUNCALL)
 	int ret;
 	MB_RTU_GET_SERIAL_MODE_PARAM OS_SPTR *pPara = (MB_RTU_GET_SERIAL_MODE_PARAM OS_SPTR *)pIN;
 	DBG_PRINT("\n");
-	pPara->mode = modbus_rtu_get_serial_mode(ctx_rtu);
+    ret = modbus_rtu_get_serial_mode(ctx_rtu);
 	if ( ret < 0)
 	{
 		pPara->ret_value = ERR_ERROR;

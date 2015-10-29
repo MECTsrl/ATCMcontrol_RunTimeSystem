@@ -39,9 +39,6 @@
 #error "Include via stdInc.h only!"
 #endif
 
-/* BUILD VERSION */
-#define VERSION "atn01-100"
-
 /* Tasking and Communication Configurations
  * ----------------------------------------------------------------------------
  * 0 ...................... Custom Configuration. 

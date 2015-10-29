@@ -83,11 +83,6 @@ static IEC_DINT g_lMemObject = 0;
 
 static void *xx_base_ptr = NULL;
 static int xx_fd = -1;
-static pthread_mutex_t xx_mutex;
-static struct {
-	pthread_t id;
-	unsigned bits;
-} xx_gpio_bits[XX_MAX_THR];
 static struct {
 	unsigned offset;
 	unsigned value;

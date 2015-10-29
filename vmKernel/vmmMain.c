@@ -466,13 +466,13 @@ static IEC_UINT vmmInitialize(STaskInfoVMM **ppVMM)
 	{	
 		IEC_UINT uLen;
 
-		uRes = sysGetVersionInfo(pVMM->pBuffer);
+        uRes = sysGetVersionInfo((char *)pVMM->pBuffer);
 		if (uRes != OK)
 		{
 			RETURN(uRes);
 		}
 
-		uLen = (IEC_UINT)OS_STRLEN(pVMM->pBuffer);
+        uLen = (IEC_UINT)OS_STRLEN((char *)pVMM->pBuffer);
 
 		osTrace("\r\n%s\r\n", pVMM->pBuffer);
 

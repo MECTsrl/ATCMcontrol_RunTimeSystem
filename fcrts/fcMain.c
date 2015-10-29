@@ -105,6 +105,7 @@ static int application_options(int argc, char *argv[])
 {
 	int option_index = 0;
 	int c = 0;
+    char version[VMM_MAX_IEC_STRLEN];
 
 	if (argc <= 0)
 		return 0;
@@ -115,7 +116,10 @@ static int application_options(int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'v':
-				printf("%s version: %s\n", argv[0], VERSION);
+                if (sysGetVersionInfo(version) != OK) {
+                    sprintf(version, "(unknown)");
+                }
+                printf("%s version: %s\n", argv[0], version);
 				exit(0);
 				break;
 			default:

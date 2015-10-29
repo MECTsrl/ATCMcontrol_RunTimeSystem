@@ -64,15 +64,62 @@
 #define THE_CLIENT_DELAY_ms 10
 #define THE_SERVER_DELAY_ms 10
 
+// -------- MANAGE THREADS: DATA & SYNCRO
 #define THE_UDP_TIMEOUT_ms	500
 #define THE_UDP_SEND_ADDR   "127.0.0.1"
 
+// -------- DATA MANAGE FROM HMI ---------------------------------------------
+#define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
+#define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(uint32_t)) // 30720 = 0x00007800 30 kiB
+#define THE_DATA_UDP_SIZE   THE_DATA_SIZE
+#define	THE_DATA_RECV_PORT	34903
+#define	THE_DATA_SEND_PORT	34902
+
+static uint32_t the_IdataRegisters[REG_DATA_NUMBER];
+static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
+
+// -------- SYNC MANAGE FROM HMI ---------------------------------------------
+#define REG_SYNC_NUMBER 	6144 // 1+5472+...
+#define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(uint16_t)) // 12288 = 0x00003000 12 kiB
+#define THE_SYNC_UDP_SIZE   11462 // SYNCRO_SIZE_BYTE in qt_library/ATCMutility/common.h
+#define	THE_SYNC_RECV_PORT	34905
+#define	THE_SYNC_SEND_PORT	34904
+
+#define HARDWARE_TYPE_OFFSET 11464 	// byte offset in crosstable.gvl: HardwareType AT %ID1.11464 : DWORD ;
+static unsigned int hardware_type = 0x00000000;
+static uint16_t the_IsyncRegisters[REG_SYNC_NUMBER];
+static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
+
+// -------- RTU SERVER ---------------------------------------------
+#define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
+#define THE_RTUS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define	THE_RTUS_DEVICE 	 "/dev/ttyS1"
+#define	THE_RTUS_BAUDRATE	 38400
+#define	THE_RTUS_PARITY 	 'N'
+#define	THE_RTUS_DATABIT 	 8
+#define	THE_RTUS_STOPBIT 	 1
+
+// -------- TCP SERVER ---------------------------------------------
+#define REG_TCPS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
+#define THE_TCPS_SIZE       (REG_TCPS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define	THE_TCPS_TCP_PORT	 502
+#define	THE_TCPS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
+#define	THE_TCPS_MAX_WORK	 10 // MAX CLIENTS
+
+// -------- TCPRTU SERVER ---------------------------------------------
+#define REG_TCRS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
+#define THE_TCRS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
+#define	THE_TCRS_TCP_PORT	 502
+#define	THE_TCRS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
+#define	THE_TCRS_MAX_WORK	 10 // MAX CLIENTS
+
+//#define RTS_CFG_DEBUG_OUTPUT
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV};
 static const char fieldbusName[][10] = {"PLC", "RTU", "TCP", "TCPRTU", "CAN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
 
-enum threadStatus {NOT_STARTED, RUNNING, EXITING};
-enum DeviceStatus {ZERO, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
-enum NodeStatus {NODE_OK, TIMEOUT, BLACKLIST};
+enum threadStatus  {NOT_STARTED, RUNNING, EXITING};
+enum DeviceStatus  {ZERO, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
+enum NodeStatus    {NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError, CommError, TimeoutError};
 
 // manageThread: Data + Syncro
@@ -81,7 +128,8 @@ enum fieldbusError {NoError, CommError, TimeoutError};
 
 static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
 
-static struct ServerStruct { // for serverThread
+static struct ServerStruct {
+    // for serverThread
     enum FieldbusType Protocol;
     char IPAddr[VMM_MAX_IEC_STRLEN];
     uint16_t Port;
@@ -114,7 +162,8 @@ static struct ServerStruct { // for serverThread
 } theServers[MAX_SERVERS];
 static uint16_t theServersNumber = 0;
 
-static struct ClientStruct { // for clientThread
+static struct ClientStruct {
+    // for clientThread
     enum FieldbusType Protocol;
     char IPAddr[VMM_MAX_IEC_STRLEN];
     uint16_t Port;
@@ -173,52 +222,6 @@ struct NodeStruct {
 } theNodes[MAX_NODES];
 static uint16_t theNodesNumber = 0;
 
-// -------- DATA SERVER FROM HMI ---------------------------------------------
-#define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
-#define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(uint32_t)) // 30720 = 0x00007800 30 kiB
-#define THE_DATA_UDP_SIZE   THE_DATA_SIZE
-#define	THE_DATA_RECV_PORT	34903
-#define	THE_DATA_SEND_PORT	34902
-
-static uint32_t the_IdataRegisters[REG_DATA_NUMBER];
-static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
-
-// -------- SYNC SERVER FROM HMI ---------------------------------------------
-#define REG_SYNC_NUMBER 	6144 // 1+5472+...
-#define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(uint16_t)) // 12288 = 0x00003000 12 kiB
-#define THE_SYNC_UDP_SIZE   11462 // SYNCRO_SIZE_BYTE in qt_library/ATCMutility/common.h
-#define	THE_SYNC_RECV_PORT	34905
-#define	THE_SYNC_SEND_PORT	34904
-
-#define HARDWARE_TYPE_OFFSET 11464 	// byte offset in crosstable.gvl: HardwareType AT %ID1.11464 : DWORD ;
-static unsigned int hardware_type = 0x00000000;
-static uint16_t the_IsyncRegisters[REG_SYNC_NUMBER];
-static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
-
-// -------- RTU SERVER ---------------------------------------------
-#define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_RTUS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
-#define	THE_RTUS_DEVICE 	 "/dev/ttyS1"
-#define	THE_RTUS_BAUDRATE	 38400
-#define	THE_RTUS_PARITY 	 "N"
-#define	THE_RTUS_DATABIT 	 8
-#define	THE_RTUS_STOPBIT 	 1
-
-// -------- TCP SERVER ---------------------------------------------
-#define REG_TCPS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCPS_SIZE       (REG_TCPS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
-#define	THE_TCPS_TCP_PORT	 502
-#define	THE_TCPS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
-#define	THE_TCPS_MAX_WORK	 10 // MAX CLIENTS
-
-// -------- TCPRTU SERVER ---------------------------------------------
-#define REG_TCRS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCRS_SIZE       (REG_TCRS_NUMBER * sizeof(uint16_t)) // 0x00002000 8kB
-#define	THE_TCRS_TCP_PORT	 502
-#define	THE_TCRS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
-#define	THE_TCRS_MAX_WORK	 10 // MAX CLIENTS
-
-//#define RTS_CFG_DEBUG_OUTPUT
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
@@ -329,10 +332,10 @@ static int ReadFields(int16_t Index)
 {
     int ERR = 0;
     IEC_STRMAX Field;
-    HW119_GET_CROSS_TABLE_FIELD param = { &Field, 0};
+    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     // Enable {0,1,2,3}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].Enable = atoi(Field.Contents);
     } else {
@@ -340,7 +343,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Plc {H,P,S,F}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         switch (Field.Contents[0]) {
         case 'H':
@@ -359,7 +362,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Tag {identifier}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         strncpy(CrossTable[Index].Tag, param.field->Contents, VMM_MAX_IEC_STRLEN);
     } else {
@@ -367,7 +370,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Types {UINT, UDINT, DINT, FDCBA, ...}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         if (strncmp(Field.Contents, "UINT", VMM_MAX_IEC_STRLEN) == 0) {
             CrossTable[Index].Types = UINT16;
@@ -414,7 +417,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Decimal {0, 1, 2, 3, 4, ...}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].Decimal = atoi(param.field->Contents);
     } else {
@@ -422,7 +425,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Protocol {"", RTU, TCP, TCPRTU}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         if (strncmp(Field.Contents, "RTU", VMM_MAX_IEC_STRLEN) == 0) {
             CrossTable[Index].Protocol = 0;
@@ -439,7 +442,7 @@ static int ReadFields(int16_t Index)
     }
 
     // IPAddress {identifier}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         strncpy(CrossTable[Index].IPAddress, param.field->Contents, VMM_MAX_IEC_STRLEN);
     } else {
@@ -447,7 +450,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Port {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].Port = atoi(param.field->Contents);
     } else {
@@ -455,19 +458,15 @@ static int ReadFields(int16_t Index)
     }
 
     // NodeId {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        if (strncmp(CrossTable[Index].Protocol, "TCP", VMM_MAX_IEC_STRLEN) == 0) {
-            CrossTable[Index].NodeId = 1;
-        } else {
-            CrossTable[Index].NodeId = atoi(param.field->Contents);
-        }
+        CrossTable[Index].NodeId = atoi(param.field->Contents);
     } else {
         ERR = TRUE;
     }
 
     // Address {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].Address = atoi(param.field->Contents);
     } else {
@@ -475,7 +474,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Block {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].Block = atoi(param.field->Contents);
     } else {
@@ -483,7 +482,7 @@ static int ReadFields(int16_t Index)
     }
 
     // NReg {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         CrossTable[Index].NReg = atoi(param.field->Contents);
     } else {
@@ -501,11 +500,10 @@ static int ReadAlarmsFields(int16_t Index)
 {
     int ERR = FALSE;
     IEC_STRMAX Field;
-    HW119_GET_CROSS_TABLE_FIELD param;
-    param.field = &Field;
+    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     // ALType {0,1}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         ALCrossTable[Index].ALType = atoi(Field.Contents);
     } else {
@@ -513,7 +511,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALTag {identifier}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         strncpy(ALCrossTable[Index].ALTag, param.field->Contents, VMM_MAX_IEC_STRLEN);
     } else {
@@ -521,7 +519,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALSource {identifier}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         strncpy(ALCrossTable[Index].ALSource, param.field->Contents, VMM_MAX_IEC_STRLEN);
     } else {
@@ -529,7 +527,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALCompareVar {identifier}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         strncpy(ALCrossTable[Index].ALCompareVar, param.field->Contents, VMM_MAX_IEC_STRLEN);
     } else {
@@ -537,7 +535,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALCompareVal {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         ALCrossTable[Index].ALCompareVal = atoi(Field.Contents);
     } else {
@@ -545,7 +543,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALOperator {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         ALCrossTable[Index].ALOperator = atoi(Field.Contents);
     } else {
@@ -553,7 +551,7 @@ static int ReadAlarmsFields(int16_t Index)
     }
 
     // ALFilterTime {number}
-    hw119_get_cross_table_field(NULL, NULL, &param);
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         ALCrossTable[Index].ALFilterTime = atoi(Field.Contents);
         ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
@@ -569,20 +567,19 @@ static int ReadCommFields(int16_t Index)
 {
     int ERR = FALSE;
     IEC_STRMAX Field;
-    HW119_GET_CROSS_TABLE_FIELD param;
-    param.field = &Field;
+    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     switch (Index) {
     case 1: // retries
         // NumberOfFails {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             NumberOfFails = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // FailDivisor {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             FailDivisor = atoi(Field.Contents);
         } else {
@@ -591,21 +588,21 @@ static int ReadCommFields(int16_t Index)
         break;
     case 2: // priorities
         // Talta {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             Talta = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // Tmedia {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             Tmedia = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // Tbassa {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             Tbassa = atoi(Field.Contents);
         } else {
@@ -616,63 +613,63 @@ static int ReadCommFields(int16_t Index)
     case 4: // tcp
     case 5: // tcprtu
         // Device {text}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             strncpy(CommParameters[Index - 2].Device, param.field->Contents, VMM_MAX_IEC_STRLEN);
         } else {
             ERR = TRUE;
         }
         // IPaddr {text}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             strncpy(CommParameters[Index - 2].IPaddr, param.field->Contents, VMM_MAX_IEC_STRLEN);
         } else {
             ERR = TRUE;
         }
         // Port {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].Port = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // BaudRate {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].BaudRate = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // Parity {text}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             strncpy(CommParameters[Index - 2].Parity, param.field->Contents, VMM_MAX_IEC_STRLEN);
         } else {
             ERR = TRUE;
         }
         // DataBit {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].DataBit = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // StopBit {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].StopBit = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // Tmin {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].Tmin = atoi(Field.Contents);
         } else {
             ERR = TRUE;
         }
         // TimeOut {number}
-        hw119_get_cross_table_field(NULL, NULL, &param);
+        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].TimeOut = atoi(Field.Contents);
         } else {
@@ -715,8 +712,8 @@ static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
             filename.MaxLen = VMM_MAX_IEC_STRLEN;
             filename.CurLen = strnlen(CTFile, filename.MaxLen);
             strncpy(filename.Contents, CTFile, filename.CurLen);
-            HW119_OPEN_CROSS_TABLE_PARAM param = { &filename, 0 };
-            hw119_open_cross_table(NULL, NULL, &param);
+            HW119_OPEN_CROSS_TABLE_PARAM param = {(IEC_STRING *)&filename, 0 };
+            hw119_open_cross_table(NULL, NULL, (unsigned char *)&param);
              if (param.ret_value == 0)  {	// Operazione andata a buon fine
                 FBState = 20;
             } else {
@@ -732,7 +729,7 @@ static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
                 } else {
                     param.error = FALSE;
                 }
-                hw119_read_cross_table_record(NULL, NULL, &param);
+                hw119_read_cross_table_record(NULL, NULL, (unsigned char *)&param);
                 if (param.ret_value == 0) {
                     switch (CTType) {
                     case 0:
@@ -783,7 +780,7 @@ static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
             break;
         case 40: {
             HW119_CLOSE_CROSS_TABLE_PARAM param;
-            hw119_close_cross_table(NULL, NULL, &param);
+            hw119_close_cross_table(NULL, NULL, (unsigned char *)&param);
             if (param.ret_value == 0) {
                 FBState = 100;
             } else {
@@ -796,7 +793,7 @@ static int LoadXTable(const char *CTFile, int32_t CTDimension, uint16_t CTType)
             break;
         case 1000: {
             HW119_CLOSE_CROSS_TABLE_PARAM param;
-            hw119_close_cross_table(NULL, NULL, &param);
+            hw119_close_cross_table(NULL, NULL, (unsigned char *)&param);
             FBState = 1010;
             ERR = TRUE;
         }   break;
@@ -831,8 +828,8 @@ static void AlarmMngr(void)
             varname.MaxLen = VMM_MAX_IEC_STRLEN;
             varname.CurLen = strnlen(ALCrossTable[Index].ALSource, varname.MaxLen);
             strncpy(varname.Contents, ALCrossTable[Index].ALSource, varname.CurLen);
-            HW119_GET_ADDR param = { &varname, 0 };
-            hw119_get_addr(NULL, NULL, &param);
+            HW119_GET_ADDR param = {(IEC_STRING *)&varname, 0 };
+            hw119_get_addr(NULL, NULL, (unsigned char *)&param);
             SourceAddr = param.ret_value;
             if (SourceAddr == 0xFFFF || SourceAddr > DimCrossTable || SourceAddr == 0) {
                 ERRFlag  = TRUE;
@@ -846,7 +843,7 @@ static void AlarmMngr(void)
                     } else {
                         varname.CurLen = strnlen(ALCrossTable[Index].ALCompareVar, varname.MaxLen);
                         strncpy(varname.Contents, ALCrossTable[Index].ALCompareVar, varname.CurLen);
-                        hw119_get_addr(NULL, NULL, &param);
+                        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
                         CompareAddr = param.ret_value;
                         if (CompareAddr == 0xffff || CompareAddr >DimCrossTable || CompareAddr == 0) {
                             ERRFlag  = TRUE;
@@ -857,7 +854,7 @@ static void AlarmMngr(void)
                 }
                 varname.CurLen = strnlen(ALCrossTable[Index].ALTag, varname.MaxLen);
                 strncpy(varname.Contents, ALCrossTable[Index].ALTag, varname.CurLen);
-                hw119_get_addr(NULL, NULL, &param);
+                hw119_get_addr(NULL, NULL, (unsigned char *)&param);
                 TagAddr  = param.ret_value;
                 if (TagAddr == 0xFFFF || TagAddr > DimCrossTable || TagAddr == 0) {
                     ERRFlag  = TRUE;
@@ -966,9 +963,9 @@ static void AlarmMngr(void)
                         ARRAY_CROSSTABLE_INPUT[TagAddr] = 0;
                     }
                     if (tmp == 0) {
-                        CrossTable[SourceAddr].OldVal = CrossTable[SourceAddr].OldVal & ~(2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
+                        CrossTable[SourceAddr].OldVal &= ~(2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
                     } else {
-                        CrossTable[SourceAddr].OldVal = CrossTable[SourceAddr].OldVal |= (2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
+                        CrossTable[SourceAddr].OldVal |=  (2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
                     }
                 }
             }
@@ -1211,7 +1208,7 @@ static int checkServersDevicesAndNodes()
                 // add variable's node
                 for (n = 0; n < theNodesNumber; ++n) {
                     if (CrossTable[i].device == theNodes[n].device
-                     && CrossTable[i].NodeId, theNodes[n].NodeID) {
+                     && CrossTable[i].NodeId == theNodes[n].NodeID) {
                         // already present
                         break;
                     }
@@ -1290,7 +1287,7 @@ static void *engineThread(void *statusAdr)
                     int s;
                     for (s = 0; s < theServersNumber; ++s) {
                         theServers[s].thread_status = NOT_STARTED;
-                        if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, s, theServers[s].name, 0) == 0) {
+                        if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
                             do {
                                 usleep(1000);
                             } while (theServers[s].thread_status != RUNNING);
@@ -1306,7 +1303,7 @@ static void *engineThread(void *statusAdr)
                     int d;
                     for (d = 0; d < theDevicesNumber; ++d) {
                         theDevices[d].thread_status = NOT_STARTED;
-                        if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, d, theDevices[d].name, 0) == 0) {
+                        if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
                             do {
                                 usleep(1000);
                             } while (theDevices[d].thread_status != RUNNING);
@@ -1649,7 +1646,7 @@ static enum fieldbusError fieldbusWrite(uint16_t d, uint16_t QueueIndex, uint16_
 
 static void *serverThread(void *arg)
 {
-    uint16_t s = (uint16_t)arg;
+    uint32_t s = (uint32_t)arg;
     modbus_t * modbus_ctx = NULL;
     uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int master_socket;
@@ -1825,7 +1822,7 @@ static void *serverThread(void *arg)
 // fb_HW119_InitComm.st
 static void *clientThread(void *arg)
 {
-    uint16_t d = (uint16_t)arg;
+    uint32_t d = (uint32_t)arg;
     uint32_t blacklist_ms = 0;
     uint32_t read_failures[MAX_NODES];
 
@@ -2068,7 +2065,7 @@ static void *clientThread(void *arg)
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
                 // check device and node
-
+                // FIXME: TODO
 
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);

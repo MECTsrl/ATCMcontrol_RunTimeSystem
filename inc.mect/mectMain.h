@@ -44,18 +44,6 @@ void *IO_Layer_SYN(void *lpParam);
 void *IO_Layer_ModbusTCPS(void *lpParam);
 void *IO_Layer_ModbusRTUC(void *lpParam);
 
-#ifdef THREAD
-#warning thread and nanosleep  are used for CanOpen implementation
-extern pthread_t msg0_threadid;
-extern pthread_t msg1_threadid;
-extern pthread_t stack0_threadid;
-extern pthread_t stack1_threadid;
-#else
-#warning real-time timer are used for CanOpen implementation
-extern timer_t msg_timerid;
-extern timer_t stack_timerid;
-#endif
-
 extern int Can0InitDone;
 extern int Can1InitDone;
 extern int CanDone;
