@@ -44,10 +44,11 @@
 #include "mectRetentive.h"
 #endif
 
-#include "Resource1_cst.h"
-#include "crosstable_gvl.h"
 #include "libHW119.h"
 #include "libModbus.h"
+
+#define REVISION_HI  7
+#define REVISION_LO  0
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
@@ -68,6 +69,14 @@
 #define THE_UDP_TIMEOUT_ms	500
 #define THE_UDP_SEND_ADDR   "127.0.0.1"
 
+// --------
+#define DimCrossTable   5472
+#define DimCrossTable_2 22004
+#define DimCrossTable_3 44004
+#define DimCrossTable_4 (DimCrossTable_3 + 2 * DimCrossTable + 2 + 2)
+#define DimAlarmsCT     1152
+
+
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
 #define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
 #define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(uint32_t)) // 30720 = 0x00007800 30 kiB
@@ -78,6 +87,29 @@
 static uint32_t the_IdataRegisters[REG_DATA_NUMBER];
 static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
 
+#define ARRAY_CROSSTABLE_INPUT      the_QdataRegisters      // %M -> %Q
+#define ARRAY_CROSSTABLE_OUTPUT     the_IdataRegisters      // %I
+#define ARRAY_STATES(i) (((uint8_t *)(the_QdataRegisters))[22000 + i])
+#define STATO_OK            0
+#define STATO_ERR           1
+#define STATO_RUN           2
+
+#define HARDWARE_TYPE_OFFSET 11464 	// byte offset in crosstable.gvl: HardwareType AT %ID1.11464 : DWORD ;
+static unsigned int hardware_type = 0x00000000;
+#define HardwareType		the_QdataRegisters[5393]
+// Inizializzazione dal IO layer sync
+// Byte 0 can0:
+//        0 no can,
+//        1 tpac1006 Base
+//        2 tpac1006 u315
+//        3 ..
+// Byte 1	can 1:
+// Byte 2 modbus 0
+//        0: NO modbus
+//        1: tpac1007
+// byte 3 modbus 1
+
+
 // -------- SYNC MANAGE FROM HMI ---------------------------------------------
 #define REG_SYNC_NUMBER 	6144 // 1+5472+...
 #define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(uint16_t)) // 12288 = 0x00003000 12 kiB
@@ -85,10 +117,71 @@ static uint32_t the_QdataRegisters[REG_DATA_NUMBER];
 #define	THE_SYNC_RECV_PORT	34905
 #define	THE_SYNC_SEND_PORT	34904
 
-#define HARDWARE_TYPE_OFFSET 11464 	// byte offset in crosstable.gvl: HardwareType AT %ID1.11464 : DWORD ;
-static unsigned int hardware_type = 0x00000000;
 static uint16_t the_IsyncRegisters[REG_SYNC_NUMBER];
 static uint16_t the_QsyncRegisters[REG_SYNC_NUMBER];
+
+#define ARRAY_QUEUE         the_IsyncRegisters   // Array delle CODE in lettura
+#define QueueRWMask         0xE000  // BIT 15 WR EN, BIT 14 RD EN
+#define QueueAddressMask    0x1FFF  // BIT 13..0 CROSSTABLE ADDRESS
+#define READ                0x4000
+#define WRITE_SINGLE        0x8000
+#define WRITE_MULTIPLE      0xA000
+#define WRITE_RIC_MULTIPLE  0xE000
+#define WRITE_RIC_SINGLE    0xC000
+#define WRITE_PREPARE       0x2000
+
+#define ARRAY_QUEUE_OUTPUT  the_QsyncRegisters   // Array delle CODE in scrittura
+#define STATO_BUSY_WRITE    1
+#define STATO_BUSY_READ     2
+
+#define RichiestaScrittura          the_IsyncRegisters[5500]//interrupt di scrittura
+#define PLCRevision01               the_QsyncRegisters[5501]
+#define PLCRevision02               the_QsyncRegisters[5502]
+#define Reset_RTU                   the_IsyncRegisters[5503]
+#define Reset_TCP                   the_IsyncRegisters[5504]
+#define Reset_TCPRTU                the_IsyncRegisters[5505]
+
+#define CounterRTU(i)               the_QsyncRegisters[5506 + i]
+#define CounterTCP(i)               the_QsyncRegisters[5571 + i]
+#define CounterTCPRTU(i)            the_QsyncRegisters[5636 + i]
+
+#define RTUBlackList_ERROR_WORD     the_QsyncRegisters[5701]
+#define RTUComm_ERROR_WORD          the_QsyncRegisters[5702]
+#define TCPBlackList_ERROR_WORD     the_QsyncRegisters[5703]
+#define TCPComm_ERROR_WORD          the_QsyncRegisters[5704]
+#define TCPRTUBlackList_ERROR_WORD  the_QsyncRegisters[5705]
+#define TCPRTUComm_ERROR_WORD       the_QsyncRegisters[5706]
+#define ERROR_FLAG                  the_QsyncRegisters[5707]
+// segnala se almeno un errore e' stato evidenziato dall'ultimo reset:
+// bit0: errore RTU,
+// bit1: errore TCP,
+// bit2: errore TCPRTU,
+// bit3: errore commpar,
+// bit4: errore CTallarmi,
+// bit5: errore CTvariabili o  errore tipo non riconosciuto su CTvariabili
+// bit6: segnalazione che PLC ha terminalo l'eloaborazine delle CT
+// bit7: RTU_ON
+// bit8: TCP_ON
+// bit9: TCPRTU_ON
+
+#define BlackListRTUL      (*(uint32_t *)&the_QsyncRegisters[5708])
+#define BlackListRTUH      (*(uint32_t *)&the_QsyncRegisters[5710])
+#define CommErrRTUL        (*(uint32_t *)&the_QsyncRegisters[5712])
+#define CommErrRTUH        (*(uint32_t *)&the_QsyncRegisters[5714])
+#define BlackListTCPL      (*(uint32_t *)&the_QsyncRegisters[5716])
+#define BlackListTCPH      (*(uint32_t *)&the_QsyncRegisters[5718])
+#define CommErrTCPL        (*(uint32_t *)&the_QsyncRegisters[5720])
+#define CommErrTCPH        (*(uint32_t *)&the_QsyncRegisters[5722])
+#define BlackListTCPRTUL   (*(uint32_t *)&the_QsyncRegisters[5724])
+#define BlackListTCPRTUH   (*(uint32_t *)&the_QsyncRegisters[5726])
+#define CommErrTCPRTUL     (*(uint32_t *)&the_QsyncRegisters[5728])
+#define CommErrTCPRTUH     (*(uint32_t *)&the_QsyncRegisters[5730])
+// bit 0: BL rtu,
+// bit 1: communication error rtu
+// bit 2: BL tcp,
+// bit 3: communication error tcp
+// bit 4: BL tcprtu,
+// bit 5: communication error tcprtu
 
 // -------- RTU SERVER ---------------------------------------------
 #define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
@@ -121,6 +214,23 @@ enum threadStatus  {NOT_STARTED, RUNNING, EXITING};
 enum DeviceStatus  {ZERO, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 enum NodeStatus    {NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError, CommError, TimeoutError};
+#define UINT16	   0
+#define INT16     1
+//#define UDINT32   2
+//#define DINT32    3
+#define FLOATDCBA 4
+#define FLOATCDAB 5
+#define FLOATABCD 6
+#define FLOATBADC 7
+#define BIT       8
+#define UDINTDCBA 9
+#define UDINTCDAB 10
+#define UDINTABCD 11
+#define UDINTBADC 12
+#define DINTDCBA  13
+#define DINTCDAB  14
+#define DINTABCD  15
+#define DINTBADC  16
 
 // manageThread: Data + Syncro
 // serverThread: "RTUSRV", "TCPSRV", "TCPRTUSRV"
@@ -162,6 +272,7 @@ static struct ServerStruct {
 } theServers[MAX_SERVERS];
 static uint16_t theServersNumber = 0;
 
+#define MaxLocalQueue 15
 static struct ClientStruct {
     // for clientThread
     enum FieldbusType Protocol;
@@ -169,9 +280,7 @@ static struct ClientStruct {
     uint16_t Port;
     //
     union ClientData {
-        struct {
-            uint16_t dummy;
-        } plc;
+        // no plc client
         struct {
             uint16_t Port;
             uint16_t BaudRate; // FIXME (limit 65535)
@@ -222,6 +331,64 @@ struct NodeStruct {
 } theNodes[MAX_NODES];
 static uint16_t theNodesNumber = 0;
 
+struct  CrossTableRecord {
+    int16_t Enable;
+    int Plc;
+    char Tag[VMM_MAX_IEC_STRLEN];
+    uint16_t Types;
+    uint16_t Decimal;
+    uint16_t Protocol;	// RTU = 0, TCP=1, TCPRTU=2
+    char IPAddress[VMM_MAX_IEC_STRLEN];
+    uint16_t Port;
+    uint8_t NodeId;
+    uint16_t Address;
+    uint16_t Block;
+    int16_t NReg;
+    uint16_t Handle;
+    int16_t Counter;
+    uint32_t OldVal;
+    uint32_t PLCWriteVal;
+    uint16_t Error;
+    //
+    int16_t device;
+    int16_t node;
+};
+static struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
+
+#define FRONTE_SALITA   1
+#define FRONTE_DISCESA  0
+struct  Alarms {
+    int ALType;
+    char ALTag[VMM_MAX_IEC_STRLEN];
+    char ALSource[VMM_MAX_IEC_STRLEN];
+    char ALCompareVar[VMM_MAX_IEC_STRLEN];
+    uint32_t ALCompareVal;
+    uint16_t ALOperator;
+    uint16_t ALFilterTime;
+    uint16_t ALFilterCount;
+    uint16_t ALError;
+};
+static struct Alarms ALCrossTable[0 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
+
+struct CommParameters {
+    char Device[VMM_MAX_IEC_STRLEN];
+    char IPaddr[VMM_MAX_IEC_STRLEN];
+    uint16_t Port;
+    uint16_t BaudRate; // FIXME (limit 65535)
+    char Parity[VMM_MAX_IEC_STRLEN];
+    uint16_t DataBit;
+    uint16_t StopBit;
+    int16_t Tmin;
+    uint16_t TimeOut;
+    int State;
+    uint16_t Retry;
+};
+static struct  CommParameters CommParameters[1 + 4];
+static int16_t NumberOfFails;
+static uint8_t FailDivisor;
+static int32_t Talta;
+static int32_t Tmedia;
+static int32_t Tbassa;
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
@@ -236,6 +403,23 @@ static pthread_t theSyncThread_id = -1;
 static enum threadStatus theEngineThreadStatus = NOT_STARTED;
 static enum threadStatus theDataThreadStatus = NOT_STARTED;
 static enum threadStatus theSyncThreadStatus = NOT_STARTED;
+
+static uint32_t ErrorsState;
+//  ErrorsState: Variabile di errore
+//  bit 0:	fallita lettura crosstable
+//  bit 1:	fallita lettura record crosstable
+//  bit 2:	fallita lettura field crosstable
+//  bit 3:	fallita chiusura crosstable
+//  bit 4:	Apertura Modbus RTU fallita
+//  bit 5:	Apertura Modbus TCP fallita
+//  bit 6:	Apertura Modbus TCPRTU fallita
+//  bit 7:	Timeout RTU
+//  bit 8:	Timeout TCP
+//  bit 9:	Timeout TCPRTU
+
+static int CrossTableState;
+static int ALCrossTableState;
+static int CommEnabled;
 
 /* ----  Local Functions:	--------------------------------------------------- */
 
@@ -1063,6 +1247,8 @@ static int checkServersDevicesAndNodes()
             // server variables =---> enable the server thread
             switch (CrossTable[i].Protocol) {
             case PLC:
+                // no plc client
+                break;
             case RTU:
             case TCP:
             case TCPRTU:
@@ -1096,6 +1282,7 @@ static int checkServersDevicesAndNodes()
                     case TCP:
                     case TCPRTU:
                     case CAN:
+                        // FIXME: assert
                         break;
                     case RTUSRV:
                         theServers[s].u.rtusrv.Port = CrossTable[i].Port;
@@ -1131,6 +1318,10 @@ static int checkServersDevicesAndNodes()
             // client variables =---> link to the server and add unique devices and nodes
             switch (CrossTable[i].Protocol) {
             case PLC:
+                // no plc client
+                CrossTable[i].device = -1;
+                CrossTable[i].node = -1;
+                break;
             case RTU:
             case TCP:
             case TCPRTU:
@@ -1160,7 +1351,7 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].server = 0xffff;
                     switch (theDevices[d].Protocol) {
                     case PLC:
-                        theDevices[d].u.plc.dummy = 0;
+                        // FIXME: assert
                         break;
                     case RTU:
                         theDevices[d].u.rtu.Port = CrossTable[i].Port;
@@ -1852,6 +2043,7 @@ static void *clientThread(void *arg)
     theDevices[d].modbus_ctx = NULL;
     switch (theDevices[d].Protocol) {
     case PLC:
+        // FIXME: assert
         break;
     case RTU: {
         char device[VMM_MAX_PATH];
@@ -1879,7 +2071,7 @@ static void *clientThread(void *arg)
     // -- check device status
     switch (theDevices[d].Protocol) {
     case PLC:
-        theDevices[d].status = NOT_CONNECTED;
+        // FIXME: assert
         break;
     case RTU:
     case TCP:
@@ -1930,8 +2122,7 @@ static void *clientThread(void *arg)
                 // try connection
                 switch (theDevices[d].Protocol) {
                 case PLC:
-                    theDevices[d].status = CONNECTED;
-                    continue;
+                    // FIXME: assert
                     break;
                 case RTU:
                 case TCP:
@@ -2150,6 +2341,7 @@ static void *clientThread(void *arg)
     // thread clean
     switch (theDevices[d].Protocol) {
     case PLC:
+        // FIXME: assert
         break;
     case RTU:
     case TCP:
@@ -2474,8 +2666,8 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
 
     // initialize array
-    PLCRevision01 = rev01;
-    PLCRevision02 = rev02;
+    PLCRevision01 = REVISION_HI;
+    PLCRevision02 = REVISION_LO;
 
     // start the engine, data and sync threads
     if (osPthreadCreate(&theEngineThread_id, NULL, &engineThread, &theEngineThreadStatus, "engine", 0) == 0) {
@@ -2580,14 +2772,21 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     for (i = 0; i < REG_DATA_NUMBER; ++i) {
                         if (flags[i] != 0) {
                             uint16_t d = CrossTable[i].device;
-                            if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                flags[i] = 0; // zeroes the write flag only if can write in queue
-                                theDevices[d].PLCwriteRequestNumber += 1;
-                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Index = i;
-                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
-                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
-                                theDevices[d].PLCwriteRequestPut += 1;
-                                theDevices[d].PLCwriteRequestPut %= MaxLocalQueue;
+                            if (d == -1) {
+                                // PLC
+                                flags[i] = 0;
+                                ARRAY_CROSSTABLE_INPUT[i] = values[i];
+                            } else {
+                                // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
+                                if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
+                                    flags[i] = 0; // zeroes the write flag only if can write in queue
+                                    theDevices[d].PLCwriteRequestNumber += 1;
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Index = i;
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                    theDevices[d].PLCwriteRequestPut += 1;
+                                    theDevices[d].PLCwriteRequestPut %= MaxLocalQueue;
+                                }
                             }
                          }
                     }
