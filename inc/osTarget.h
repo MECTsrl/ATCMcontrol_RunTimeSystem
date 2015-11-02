@@ -56,13 +56,13 @@
  * ----------------------------------------------------------------------------
  */
 #ifdef USE_CROSSTABLE
-#define RTS_CFG_IOCANOPEN
+#undef RTS_CFG_IOCANOPEN
 #undef  RTS_CFG_IOUDP
 #define RTS_CFG_IODAT
-#define RTS_CFG_IOSYN
+#undef RTS_CFG_IOSYN
 #undef  RTS_CFG_IOKEYPAD
-#define RTS_CFG_IOMBTCPS
-#define RTS_CFG_IOMBRTUC
+#undef RTS_CFG_IOMBTCPS
+#undef RTS_CFG_IOMBRTUC
 #elif USE_NO_CROSSTABLE
 #define RTS_CFG_IOCANOPEN
 #undef  RTS_CFG_IOUDP

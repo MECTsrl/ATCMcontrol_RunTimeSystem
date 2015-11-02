@@ -66,6 +66,7 @@
 #define THE_CLIENT_DELAY_ms     10
 #define THE_CLIENT_uDELAY_ms    1
 #define THE_SERVER_DELAY_ms     10
+#define THE_CONNECTION_DELAY_ms 1000
 #define THE_DEVICE_BLACKLIST_ms 4000
 
 // -------- MANAGE THREADS: DATA & SYNCRO
@@ -1170,46 +1171,76 @@ static void PLCsync(void)
     u_int16_t RW;
     int16_t addr;
 
+    // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
         RW = the_IsyncRegisters[indx] & QueueOperMask;
         addr = the_IsyncRegisters[indx] & QueueAddrMask;
         if (addr < DimCrossTable) {
-            if (RW == 0 && addr == 0) {
-                // queue tail
+            switch (RW) {
+            case 0:
                 the_QsyncRegisters[indx] = STATO_EMPTY;
+                if (addr == 0) {
+                    // queue tail
+                    break;
+                }
                 break;
-            }
-            if (CrossTable[addr].Protocol == PLC) {
-                switch (RW) {
-                case 0:
-                    // acknowledged READ/WRITE
-                    if (the_QsyncRegisters[indx] != STATO_EMPTY) {
-                        the_QsyncRegisters[indx] = STATO_EMPTY;
+            case READ:
+                if (the_QsyncRegisters[indx] != STATO_BUSY_READ) {
+                    switch (CrossTable[addr].Protocol) {
+                    case PLC:
+                        // all PLC variables are always ready
+                        // the_QdataRegisters[addr] = the_QdataRegisters[addr]; :)
+                        break;
+                    case RTU:
+                    case TCP:
+                    case TCPRTU:
+                    case CAN:
+                    case RTUSRV:
+                    case TCPSRV:
+                    case TCPRTUSRV:
+                        the_QsyncRegisters[indx] = STATO_BUSY_READ;
+                        sem_post(&theDevices[CrossTable[addr].device].newOperations);
+                        break;
+                    default:
+                        ;
                     }
-                    break;
-                case READ: // never called, because all PLC variables are always ready
-                    the_QsyncRegisters[indx] = STATO_BUSY_READ;
-                    // the_QdataRegisters[addr] = the_QdataRegisters[addr]; :)
-                    break;
-                case WRITE_SINGLE:
-                case WRITE_MULTIPLE:
-                case WRITE_RIC_SINGLE:
-                case WRITE_RIC_MULTIPLE:
-                    if (the_QsyncRegisters[indx] != STATO_BUSY_WRITE) {
-                        u_int16_t i;
+                }
+                break;
+            case WRITE_SINGLE:
+            case WRITE_MULTIPLE:
+            case WRITE_RIC_SINGLE:
+            case WRITE_RIC_MULTIPLE:
+                if (the_QsyncRegisters[indx] != STATO_BUSY_WRITE) {
+                    u_int16_t i;
 
+                    switch (CrossTable[addr].Protocol) {
+                    case PLC:
                         the_QsyncRegisters[indx] = STATO_BUSY_WRITE;
                         for (i = 0; i <= (CrossTable[addr].NReg - 1); ++i) {
                             the_QdataRegisters[addr + i] = the_IdataRegisters[addr + i];
                         }
+                        break;
+                    case RTU:
+                    case TCP:
+                    case TCPRTU:
+                    case CAN:
+                    case RTUSRV:
+                    case TCPSRV:
+                    case TCPRTUSRV:
+                        the_QsyncRegisters[indx] = STATO_BUSY_WRITE;
+                        sem_post(&theDevices[CrossTable[addr].device].newOperations);
+                        break;
+                    default:
+                        ;
                     }
-                    break;
-                case WRITE_PREPARE:
-                    ; // nop
-                default:
-                    ;
                 }
+                break;
+            case WRITE_PREPARE:
+                ; // nop
+            default:
+                ;
             }
+            break;
         }
     }
 }
@@ -2048,7 +2079,7 @@ static void *clientThread(void *arg)
     // data for each fieldbus operation
     u_int16_t QueueIndex;    // command index in the queue
     u_int16_t Operation;     // read/write normal/recipe single/multiple
-    u_int16_t DataAddr;      // variable address in the crosstable
+    u_int16_t DataAddr = 0;  // variable address in the crosstable
     u_int32_t DataValue[64]; // max 64 reads and 16 writes
     u_int32_t DataNumber;    // max 64 reads and 16 writes
     u_int16_t DataNodeId;    // variable node ID ("0" if not applicable)
@@ -2109,6 +2140,33 @@ static void *clientThread(void *arg)
     default:
         ;
     }
+    switch (theDevices[d].Protocol) {
+    case PLC: // FIXME: assert
+        break;
+    case RTU:
+        ERROR_FLAG |= ERROR_FLAG_RTU_ON;
+        break;
+    case TCP:
+        ERROR_FLAG |= ERROR_FLAG_TCP_ON;
+        break;
+    case TCPRTU:
+        ERROR_FLAG |= ERROR_FLAG_TCPRTU_ON;
+        break;
+    case CAN:
+        ERROR_FLAG |= ERROR_FLAG_CAN_ON;
+        break;
+    case RTUSRV:
+        ERROR_FLAG |= ERROR_FLAG_RTUSRV_ON;
+        break;
+    case TCPSRV:
+        ERROR_FLAG |= ERROR_FLAG_TCPSRV_ON;
+        break;
+    case TCPRTUSRV:
+        ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV_ON;
+        break;
+    default:
+        ;
+    }
 
     // ------------------------------------------ run
     theDevices[d].thread_status = RUNNING;
@@ -2125,66 +2183,13 @@ static void *clientThread(void *arg)
     }
     while (!g_bExiting) {
 
-        if (!g_bRunning) {
-            usleep(THE_CLIENT_DELAY_ms * 1000);
+        if (!g_bRunning || theDevices[d].status == NO_HOPE) {
+            usleep(THE_CONNECTION_DELAY_ms * 1000);
         } else {
-            // manage the reset of error flags
-            switch (theDevices[d].Protocol) {
-            case PLC: // FIXME: assert
-                break;
-            case RTU:
-                if (Reset_RTU) {
-                    int i;
-                    for (i = 1; i <= 64; ++i) {
-                        CounterRTU(i) = 0;
-                    }
-                    RTUBlackList_ERROR_WORD = 0;
-                    RTUComm_ERROR_WORD = 0;
-                    BlackListRTU = 0ULL;
-                    CommErrRTU = 0ULL;
-                    ERROR_FLAG &= ~ERROR_FLAG_RTU;
-                }
-                break;
-            case TCP:
-                if (Reset_TCP) {
-                    int i;
-                    for (i = 1; i <= 64; ++i) {
-                        CounterTCP(i) = 0;
-                    }
-                    TCPBlackList_ERROR_WORD = 0;
-                    TCPComm_ERROR_WORD = 0;
-                    BlackListTCP = 0ULL;
-                    CommErrTCP = 0ULL;
-                    ERROR_FLAG &= ~ERROR_FLAG_TCP;
-                }
-                break;
-            case TCPRTU:
-                if (Reset_TCPRTU) {
-                    int i;
-                    for (i = 1; i <= 64; ++i) {
-                        CounterTCPRTU(i) = 0;
-                    }
-                    TCPRTUBlackList_ERROR_WORD = 0;
-                    TCPRTUComm_ERROR_WORD = 0;
-                    BlackListTCPRTU = 0ULL;
-                    CommErrTCPRTU = 0ULL;
-                    ERROR_FLAG &= ~ERROR_FLAG_TCPRTU;
-                }
-                break;
-            case CAN:
-            case RTUSRV:
-            case TCPSRV:
-            case TCPRTUSRV:
-                // FIXME: add flags (missing the Reset_XXX)
-                break;
-            default:
-                ;
-            }
-
             // manage the device status (see also the node status)
             switch (theDevices[d].status) {
             case ZERO:
-            case NO_HOPE:
+            case NO_HOPE: // FIXME: assert
                 break;
             case NOT_CONNECTED:
                 // try connection
@@ -2209,7 +2214,7 @@ static void *clientThread(void *arg)
                     }
                     break;
                 case CAN:
-                    theDevices[d].status = CONNECTED; // FIXME
+                    theDevices[d].status = CONNECTED; // FIXME: check bus status
                     break;
                 case RTUSRV:
                 case TCPSRV:
@@ -2225,7 +2230,7 @@ static void *clientThread(void *arg)
                 // ok proceed with the fieldbus operations
                 break;
             case DEVICE_BLACKLIST:
-                device_blacklist_ms += THE_CLIENT_DELAY_ms;
+                device_blacklist_ms += THE_CONNECTION_DELAY_ms;
                 if (device_blacklist_ms >= THE_DEVICE_BLACKLIST_ms) {
                     theDevices[d].status = NOT_CONNECTED;
                 }
@@ -2235,21 +2240,88 @@ static void *clientThread(void *arg)
             }
 
             // can we continue?
-            if (!(theDevices[d].status == CONNECTED || theDevices[d].status == CONNECTED)) {
+            if (theDevices[d].status == NOT_CONNECTED || theDevices[d].status == DEVICE_BLACKLIST) {
                 // no operations while not being able to operate
-                usleep(THE_CLIENT_DELAY_ms * 1000);
+                usleep(THE_CONNECTION_DELAY_ms * 1000);
                 continue; // while (!g_bExiting)
             }
 
             // start the fieldbus operations loop
+            // the device is connected: wait for newoperations then continue processing
             DataAddr = 0;
             while (TRUE) {
                 clock_gettime(CLOCK_REALTIME, &abstime);
                 now_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
-                // time limit to ~500ms
-                if ((now_ms -this_loop_start_ms) > THE_UDP_TIMEOUT_ms) {
-                    usleep(THE_CLIENT_uDELAY_ms * 1000);
-                    break; // the fieldbus operations loop
+                abstime.tv_sec += (THE_UDP_TIMEOUT_ms / 1000);
+                abstime.tv_nsec += (THE_UDP_TIMEOUT_ms % 1000) * 1000 * 1000; // ms -> ns
+                if (abstime.tv_nsec >= (1000*1000*1000)) {
+                    abstime.tv_sec += abstime.tv_nsec / (1000*1000*1000);
+                    abstime.tv_nsec = abstime.tv_nsec % (1000*1000*1000);
+                }
+                int rc;
+                do {
+                    rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
+                    if (rc == -1 && errno == EINTR){
+                        continue;
+                    } else {
+                        break;
+                    }
+                } while (TRUE);
+                if (rc == -1 && (errno == ETIMEDOUT || errno == EINVAL)) {
+                    break; // end operations loop and return to while (!g_bExiting)
+                }
+
+                // manage the reset of error flags
+                switch (theDevices[d].Protocol) {
+                case PLC: // FIXME: assert
+                    break;
+                case RTU:
+                    if (Reset_RTU) {
+                        int i;
+                        for (i = 1; i <= 64; ++i) {
+                            CounterRTU(i) = 0;
+                        }
+                        RTUBlackList_ERROR_WORD = 0;
+                        RTUComm_ERROR_WORD = 0;
+                        BlackListRTU = 0ULL;
+                        CommErrRTU = 0ULL;
+                        ERROR_FLAG &= ~ERROR_FLAG_RTU;
+                    }
+                    break;
+                case TCP:
+                    if (Reset_TCP) {
+                        int i;
+                        for (i = 1; i <= 64; ++i) {
+                            CounterTCP(i) = 0;
+                        }
+                        TCPBlackList_ERROR_WORD = 0;
+                        TCPComm_ERROR_WORD = 0;
+                        BlackListTCP = 0ULL;
+                        CommErrTCP = 0ULL;
+                        ERROR_FLAG &= ~ERROR_FLAG_TCP;
+                    }
+                    break;
+                case TCPRTU:
+                    if (Reset_TCPRTU) {
+                        int i;
+                        for (i = 1; i <= 64; ++i) {
+                            CounterTCPRTU(i) = 0;
+                        }
+                        TCPRTUBlackList_ERROR_WORD = 0;
+                        TCPRTUComm_ERROR_WORD = 0;
+                        BlackListTCPRTU = 0ULL;
+                        CommErrTCPRTU = 0ULL;
+                        ERROR_FLAG &= ~ERROR_FLAG_TCPRTU;
+                    }
+                    break;
+                case CAN:
+                case RTUSRV:
+                case TCPSRV:
+                case TCPRTUSRV:
+                    // FIXME: add flags (missing the Reset_XXX)
+                    break;
+                default:
+                    ;
                 }
 
                 // choose the read/write command either in the local queue or in the queue from HMI
@@ -2384,9 +2456,9 @@ static void *clientThread(void *arg)
                     ;
                 }
 
+                // check error and set values and flags
                 pthread_mutex_lock(&theCrosstableClientMutex);
                 {
-                    // check error and set values and flags
                     switch (error) {
                     case NoError:
                         switch (Operation) {
@@ -2471,7 +2543,7 @@ static void *clientThread(void *arg)
                         case TimeoutError:
                             theNodes[Data_node].RetryCounter = 0;
                             theNodes[Data_node].status = TIMEOUT;
-                            DataAddr = DataAddr; // i.e. RETRY this
+                            DataAddr = DataAddr; // i.e. RETRY this <-----=
                             break;
                         default:
                             ;
@@ -2958,10 +3030,13 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                 // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
                                 if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
                                     flags[i] = 0; // zeroes the write flag only if can write in queue
-                                    theDevices[d].PLCwriteRequestNumber += 1;
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                    // awake the device thread
+                                    sem_post(&theDevices[d].newOperations);
+                                    // manage local queue
+                                    theDevices[d].PLCwriteRequestNumber += 1;
                                     theDevices[d].PLCwriteRequestPut += 1;
                                     theDevices[d].PLCwriteRequestPut %= MaxLocalQueue;
                                 }
