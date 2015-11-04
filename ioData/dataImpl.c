@@ -348,8 +348,8 @@ struct  CrossTableRecord {
     u_int32_t PLCWriteVal;
     u_int16_t Error;
     //
-    int16_t device;
-    int16_t node;
+    u_int16_t device;
+    u_int16_t node;
 };
 static struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
 
@@ -477,7 +477,7 @@ static void InitXtable(u_int16_t TIPO)
             CrossTable[i].Tag[0] = UNKNOWN;
             CrossTable[i].Types = 0;
             CrossTable[i].Decimal = 0;
-            CrossTable[i].Protocol = RTU;
+            CrossTable[i].Protocol = PLC;
             CrossTable[i].IPAddress[0] = 0;
             CrossTable[i].Port = 0;
             CrossTable[i].NodeId = 0;
@@ -487,6 +487,8 @@ static void InitXtable(u_int16_t TIPO)
             CrossTable[i].Handle = 0;
             CrossTable[i].OldVal = 0;
             CrossTable[i].Error = 1;
+            CrossTable[i].device = 0xffff;
+            CrossTable[i].node = 0xffff;
             k = the_IsyncRegisters[i + 1];
             the_QsyncRegisters[i + 1] = STATO_EMPTY;
             the_QdataStates[i + 1] = STATO_OK;
@@ -511,7 +513,7 @@ static void InitXtable(u_int16_t TIPO)
 static int ReadFields(int16_t Index)
 {
     int ERR = 0;
-    IEC_STRMAX Field;
+    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
     HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     // Enable {0,1,2,3}
@@ -689,7 +691,7 @@ static int ReadFields(int16_t Index)
 static int ReadAlarmsFields(int16_t Index)
 {
     int ERR = FALSE;
-    IEC_STRMAX Field;
+    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
     HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     // ALType {0,1}
@@ -756,7 +758,7 @@ static int ReadAlarmsFields(int16_t Index)
 static int ReadCommFields(int16_t Index)
 {
     int ERR = FALSE;
-    IEC_STRMAX Field;
+    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
     HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     switch (Index) {
@@ -1182,7 +1184,7 @@ static void PLCsync(void)
             case 0:
                 the_QsyncRegisters[indx] = STATO_EMPTY;
                 if (addr == 0) {
-                    // queue tail
+                    indx = DimCrossTable; // queue tail
                     break;
                 }
                 break;
@@ -1239,11 +1241,10 @@ static void PLCsync(void)
                 }
                 break;
             case WRITE_PREPARE:
-                ; // nop
+                break; // nop
             default:
                 ;
             }
-            break;
         }
     }
 }
@@ -1376,8 +1377,8 @@ static int checkServersDevicesAndNodes()
             switch (CrossTable[i].Protocol) {
             case PLC:
                 // no plc client
-                CrossTable[i].device = -1;
-                CrossTable[i].node = -1;
+                CrossTable[i].device = 0xffff;
+                CrossTable[i].node = 0xffff;
                 break;
             case RTU:
             case TCP:
@@ -1491,93 +1492,91 @@ static void *engineThread(void *statusAdr)
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
     while (!g_bExiting && CommState < 80) {
         usleep(THE_CONFIG_DELAY_ms * 1000);
-        if (g_bRunning) {
-            pthread_mutex_lock(&theCrosstableClientMutex);
-            {
-                switch (CommState) {
-                case 0:
-                    ErrorsState = 0;
-                    CommState = 10;
-                    ERROR_FLAG = 0;
-                    break;
-                case 10: // READ ALARMS FILE
-                    if (LoadXTable("Alarms.csv", DimAlarmsCT, 1)) {
-                        CommState = 20;	// Fallita lettura crosstable allrmi -> prosegue con lettura cross table variabili
-                        ALCrossTableState = FALSE;
-                        ERROR_FLAG |= ERROR_FLAG_ALARMS;
-                    } else {
-                        CommState = 20;				//lettura crosstable  Allarmi  OK  -> prosegue
-                    }
-                    break;
-                case 20: // READ CROSSTABLE FILE
-                    if (LoadXTable("Crosstable.csv", DimCrossTable, 0)) {
-                        CommState = 1000;	// Fallita lettura crosstable  variabili: FINE
-                        CrossTableState = FALSE;
-                        ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
-                    } else {
-                        CommState = 30;				// lettura crosstable  variabili  OK ->  prosegue
-                    }
-                    break;
-                case 30: // READ DEVICES FILE
-                    if (LoadXTable("Commpar.csv", 5, 2)) {
-                        CommState = 1000;	// Fallita lettura crosstable  parametri di comunicazione: FINE
-                        ERROR_FLAG |= ERROR_FLAG_COMMPAR;
-                    } else {
-                        CommState = 40;				// lettura crosstable  parametri di comunicazione  OK ->  prosegue
-                    }
-                    break;
-                case 40: // CREATE SERVER, DEVICES AND NODES TABLES
-                    if (checkServersDevicesAndNodes()) {
-                        CommState = 1000;
-                        ERROR_FLAG |= ERROR_FLAG_COMMPAR;
-                    } else {
-                        CommState = 50;
-                    }
-                case 50: { // CREATE SERVER THREADS
-                    int s;
-                    for (s = 0; s < theServersNumber; ++s) {
-                        theServers[s].thread_status = NOT_STARTED;
-                        if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
-                            do {
-                                usleep(1000);
-                            } while (theServers[s].thread_status != RUNNING);
-                        } else {
-                    #if defined(RTS_CFG_IO_TRACE)
-                            osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
-                    #endif
-                        }
-                    }
-                    CommState = 60;
-                }   break;
-                case 60: { // CREATE DEVICE THREADS
-                    int d;
-                    for (d = 0; d < theDevicesNumber; ++d) {
-                        theDevices[d].thread_status = NOT_STARTED;
-                        if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
-                            do {
-                                usleep(1000);
-                            } while (theDevices[d].thread_status != RUNNING);
-                        } else {
-                    #if defined(RTS_CFG_IO_TRACE)
-                            osTrace("[%s] ERROR creating device thread %s: %s.\n", __func__, theDevices[d].name, strerror(errno));
-                    #endif
-                        }
-                    }
-                    CommState = 70;
-                }   break;
-                case 70:
-                    ERROR_FLAG |= ERROR_FLAG_CONF_END;
-                    if  (ALCrossTableState) {
-                        CommEnabled = TRUE;
-                    }
-                    CommState = 80;
-                    break;
-                default:
-                    ;
+        pthread_mutex_lock(&theCrosstableClientMutex);
+        {
+            switch (CommState) {
+            case 0:
+                ErrorsState = 0;
+                CommState = 10;
+                ERROR_FLAG = 0;
+                break;
+            case 10: // READ ALARMS FILE
+                if (LoadXTable("Alarms.csv", DimAlarmsCT, 1)) {
+                    CommState = 20;	// Fallita lettura crosstable allrmi -> prosegue con lettura cross table variabili
+                    ALCrossTableState = FALSE;
+                    ERROR_FLAG |= ERROR_FLAG_ALARMS;
+                } else {
+                    CommState = 20;				//lettura crosstable  Allarmi  OK  -> prosegue
                 }
+                break;
+            case 20: // READ CROSSTABLE FILE
+                if (LoadXTable("Crosstable.csv", DimCrossTable, 0)) {
+                    CommState = 1000;	// Fallita lettura crosstable  variabili: FINE
+                    CrossTableState = FALSE;
+                    ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
+                } else {
+                    CommState = 30;				// lettura crosstable  variabili  OK ->  prosegue
+                }
+                break;
+            case 30: // READ DEVICES FILE
+                if (LoadXTable("Commpar.csv", 5, 2)) {
+                    CommState = 1000;	// Fallita lettura crosstable  parametri di comunicazione: FINE
+                    ERROR_FLAG |= ERROR_FLAG_COMMPAR;
+                } else {
+                    CommState = 40;				// lettura crosstable  parametri di comunicazione  OK ->  prosegue
+                }
+                break;
+            case 40: // CREATE SERVER, DEVICES AND NODES TABLES
+                if (checkServersDevicesAndNodes()) {
+                    CommState = 1000;
+                    ERROR_FLAG |= ERROR_FLAG_COMMPAR;
+                } else {
+                    CommState = 50;
+                }
+            case 50: { // CREATE SERVER THREADS
+                int s;
+                for (s = 0; s < theServersNumber; ++s) {
+                    theServers[s].thread_status = NOT_STARTED;
+                    if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
+                        do {
+                            usleep(1000);
+                        } while (theServers[s].thread_status != RUNNING);
+                    } else {
+                #if defined(RTS_CFG_IO_TRACE)
+                        osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
+                #endif
+                    }
+                }
+                CommState = 60;
+            }   break;
+            case 60: { // CREATE DEVICE THREADS
+                int d;
+                for (d = 0; d < theDevicesNumber; ++d) {
+                    theDevices[d].thread_status = NOT_STARTED;
+                    if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
+                        do {
+                            usleep(1000);
+                        } while (theDevices[d].thread_status != RUNNING);
+                    } else {
+                #if defined(RTS_CFG_IO_TRACE)
+                        osTrace("[%s] ERROR creating device thread %s: %s.\n", __func__, theDevices[d].name, strerror(errno));
+                #endif
+                    }
+                }
+                CommState = 70;
+            }   break;
+            case 70:
+                ERROR_FLAG |= ERROR_FLAG_CONF_END;
+                if  (ALCrossTableState) {
+                    CommEnabled = TRUE;
+                }
+                CommState = 80;
+                break;
+            default:
+                ;
             }
-            pthread_mutex_unlock(&theCrosstableClientMutex);
         }
+        pthread_mutex_unlock(&theCrosstableClientMutex);
     }
 
     // run
@@ -3115,7 +3114,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     for (i = 0; i < REG_DATA_NUMBER; ++i) {
                         if (flags[i] != 0) {
                             u_int16_t d = CrossTable[i].device;
-                            if (d == -1) {
+                            if (d == 0xffff) {
                                 // PLC
                                 flags[i] = 0;
                                 the_QdataRegisters[i] = values[i];
