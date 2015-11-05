@@ -190,18 +190,18 @@ void hw119_open_cross_table(STDLIBFUNCALL)
 	}
 
 	sprintf(fullfilename, "%s/%s", basepath, filename);
-	fprintf(stderr,"################# Base path '%s' fullfilename '%s'\n", basepath, fullfilename);
 
 	hw119_fp = fopen(fullfilename, "r");
 	if (hw119_fp == NULL)
 	{
 		DBG_PRINT("Cannot open '%s'\n", fullfilename);
 		pPara->ret_value = ERR_ERROR;
-	}
+    } else {
+        fprintf(stderr,"reading '%s'\n", fullfilename);
+    }
 
 	if (var_map != NULL && strcmp(filename, CROSS_TABLE) == 0)
 	{
-		DBG_PRINT("CLEAR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 		HASH_CLEAR(hh,var_map);
 		var_map = NULL;
 	}
