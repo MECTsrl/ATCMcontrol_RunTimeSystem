@@ -58,14 +58,10 @@ typedef struct mbrtu_cfg_s {      /* MODBUS stack settings */
 #ifdef RTS_CFG_MECT_LIB
 extern serial_cfg_s mect_cfg;
 #endif
-#ifdef RTS_CFG_IOCANOPEN
 extern serial_cfg_s can0_cfg;
 extern serial_cfg_s can1_cfg;
-#endif
-#ifdef RTS_CFG_IOMBRTUC
 extern mbrtu_cfg_s modbus0_cfg;
 extern mbrtu_cfg_s modbus1_cfg;
-#endif
 
 enum app_conf_section_e {
 	APP_CONF_NONE = 0,

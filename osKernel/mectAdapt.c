@@ -66,14 +66,10 @@ CLOCK_REALTIME: the timer return the time in seconds and milliseconds since the 
 int Can0InitDone;
 int Can1InitDone;
 int CanDone;
-#ifdef RTS_CFG_IOCANOPEN
 serial_cfg_s can0_cfg;
 serial_cfg_s can1_cfg;
-#endif
-#ifdef RTS_CFG_IOMBRTUC
 mbrtu_cfg_s modbus0_cfg;
 mbrtu_cfg_s modbus1_cfg;
-#endif
 
 /* ----  Local Functions:	--------------------------------------------------- */
 

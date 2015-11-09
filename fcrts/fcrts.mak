@@ -49,9 +49,9 @@ ifeq ($(DEBUG), 0)    # --- Release -------------------------------------------
   BIN_NAME         = $(BIN_PATH)/$(SRC_PATH)
   LIB_NAME         = 
 
-  WA_LIBS          = $(LIB_PATH)/vmKernel.a  
+  WA_LIBS          = $(LIB_PATH)/vmKernel.a $(LIB_PATH)/osKernel.a  
 
-  LIBS             = $(LIB_PATH)/vmLib.a  $(LIB_PATH)/osKernel.a  $(LIB_PATH)/osShared.a \
+  LIBS             = $(LIB_PATH)/vmLib.a   $(LIB_PATH)/osShared.a \
                      $(LIB_PATH)/ioTest.a $(LIB_PATH)/ioCANopen.a \
                      $(LIB_PATH)/ioUDP.a  $(LIB_PATH)/ioKeypad.a \
                      $(LIB_PATH)/ioModbusTCPS.a $(LIB_PATH)/ioModbusRTUC.a \
@@ -69,9 +69,9 @@ else                  # --- Debug ---------------------------------------------
   BIN_NAME         = $(BIN_PATH)/$(SRC_PATH)_d
   LIB_NAME         = 
 
-  WA_LIBS          = $(LIB_PATH)/vmKernel_d.a
+  WA_LIBS          = $(LIB_PATH)/vmKernel_d.a $(LIB_PATH)/osKernel_d.a
 
-  LIBS             = $(LIB_PATH)/vmLib_d.a  $(LIB_PATH)/osKernel_d.a  $(LIB_PATH)/osShared_d.a \
+  LIBS             = $(LIB_PATH)/vmLib_d.a  $(LIB_PATH)/osShared_d.a \
                      $(LIB_PATH)/ioTest_d.a $(LIB_PATH)/ioCANopen_d.a \
                      $(LIB_PATH)/ioUDP_d.a  $(LIB_PATH)/ioKeypad_d.a \
                      $(LIB_PATH)/ioModbusTCPS_d.a $(LIB_PATH)/ioModbusRTUC_d.a \

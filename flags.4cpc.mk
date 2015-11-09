@@ -124,7 +124,7 @@ ifeq ($(DEBUG), 1)
   DFLAGS += -DDEBUG
   OFLAGS = -O0
 else
-  OFLAGS = -O0
+  OFLAGS = -O2
 endif
 
 CFLAGS           = $(XENO_CFLAGS) $(TFLAGS) -DRW_MULTI_THREAD -D_GNU_SOURCE -D_REENTRANT -Wall -Wno-attributes -fno-builtin -fno-strict-aliasing $(IFLAGS) $(SFLAGS) $(DFLAGS)

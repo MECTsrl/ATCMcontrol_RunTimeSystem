@@ -134,32 +134,24 @@ int app_config_load(enum app_conf_section_e section)
 		case APP_CONF_MB:
 			break;
     case APP_CONF_MB0:
-#ifdef RTS_CFG_IOMBRTUC
         memset (&modbus0_cfg, 0xFF, sizeof(modbus0_cfg));
         modbus0_cfg.serial_cfg.enabled = 0;
-#endif
         break;
     case APP_CONF_MB1:
-#ifdef RTS_CFG_IOMBRTUC
         memset (&modbus1_cfg, 0xFF, sizeof(modbus1_cfg));
         modbus1_cfg.serial_cfg.enabled = 0;
-#endif
         break;
 
 		case APP_CONF_WD:
 			/* Do nothing */
 			break;
 		case APP_CONF_CAN0:
-#ifdef RTS_CFG_IOCANOPEN
 			memset (&can0_cfg, 0xFF, sizeof(can0_cfg));
 			can0_cfg.enabled = 0;
-#endif
 			break;
 		case APP_CONF_CAN1:
-#ifdef RTS_CFG_IOCANOPEN
 			memset (&can1_cfg, 0xFF , sizeof(can1_cfg));
 			can1_cfg.enabled = 0;
-#endif
 			break;
 		case APP_CONF_NONE:
 			/* Do nothing */
@@ -335,7 +327,6 @@ int app_config_load(enum app_conf_section_e section)
 					break;
 
             case APP_CONF_MB0:
-#ifdef RTS_CFG_IOMBRTUC
                 if (section == APP_CONF_MB0)
                 {
                     if ((tl = app_property_name_check(l, "enabled"))) {
@@ -427,11 +418,9 @@ int app_config_load(enum app_conf_section_e section)
                         return 45;
                     }
                 }
-#endif
                 break;
 
             case APP_CONF_MB1:
-#ifdef RTS_CFG_IOMBRTUC
                 if (section == APP_CONF_MB1)
                 {
                     if ((tl = app_property_name_check(l, "enabled"))) {
@@ -523,14 +512,12 @@ int app_config_load(enum app_conf_section_e section)
                         return 45;
                     }
                 }
-#endif
                 break;
 
 				case APP_CONF_WD:
 					/* Do nothing */
 					break;
 				case APP_CONF_CAN0:
-#ifdef RTS_CFG_IOCANOPEN
 					if (section == APP_CONF_CAN0)
 					{
 						if ((tl = app_property_name_check(l, "enabled"))) {
@@ -549,10 +536,8 @@ int app_config_load(enum app_conf_section_e section)
 							}
 						}
 					}
-#endif
 					break;
 				case APP_CONF_CAN1:
-#ifdef RTS_CFG_IOCANOPEN
 					if (section == APP_CONF_CAN1)
 					{
 						if ((tl = app_property_name_check(l, "enabled"))) {
@@ -571,7 +556,6 @@ int app_config_load(enum app_conf_section_e section)
 							}
 						}
 					}
-#endif
 					break;
 				case APP_CONF_NONE:
 					/* Do nothing */
