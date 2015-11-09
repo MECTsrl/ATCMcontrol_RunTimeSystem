@@ -472,6 +472,9 @@ void hw119_get_cross_table_field(STDLIBFUNCALL)
 
 	//DBG_PRINT("token '%s' full token '%s' record '%s'\n", token, hw119_record_iterator, hw119_record);
 	pPara->ret_value = utilAnsiToIec(token, (IEC_STRING OS_LPTR *)(pPara->field));
+    if (pPara->field->CurLen < pPara->field->MaxLen) {
+        ((IEC_STRING OS_LPTR *)(pPara->field))->Contents[pPara->field->CurLen] = '\0';
+    }
 }
 
 /* ---------------------------------------------------------------------------- */

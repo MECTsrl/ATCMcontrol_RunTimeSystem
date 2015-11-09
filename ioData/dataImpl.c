@@ -38,9 +38,9 @@
 
 #if defined(RTS_CFG_IODAT)
 
+#include "mectCfgUtil.h"
 #include "dataMain.h"
 #include "iolDef.h"
-#include "mectCfgUtil.h"
 #if defined(RTS_CFG_MECT_RETAIN)
 #include "mectRetentive.h"
 #endif
@@ -188,6 +188,12 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define CommErrTCP         (*(u_int64_t *)&the_QsyncRegisters[5720])
 #define BlackListTCPRTU    (*(u_int64_t *)&the_QsyncRegisters[5724])
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
+
+// -------- RTU CLIENT ---------------------------------------------
+#define	THE_RTUC_BAUDRATE	 38400
+#define	THE_RTUC_PARITY 	 'N'
+#define	THE_RTUC_DATABIT 	 8
+#define	THE_RTUC_STOPBIT 	 1
 
 // -------- RTU SERVER ---------------------------------------------
 #define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
@@ -1349,10 +1355,40 @@ static int checkServersDevicesAndNodes()
                         break;
                     case RTUSRV:
                         theServers[s].u.rtusrv.Port = CrossTable[i].Port;
-                        theServers[s].u.rtusrv.BaudRate = THE_RTUS_BAUDRATE;
-                        theServers[s].u.rtusrv.Parity = THE_RTUS_PARITY;
-                        theServers[s].u.rtusrv.DataBit = THE_RTUS_DATABIT;
-                        theServers[s].u.rtusrv.StopBit = THE_RTUS_STOPBIT;
+                        switch (theServers[s].u.rtusrv.Port) {
+                        case 0:
+                            theServers[s].u.rtusrv.BaudRate = modbus0_cfg.serial_cfg.baud;
+                            switch (modbus0_cfg.serial_cfg.parity) {
+                            case 0: theServers[s].u.rtusrv.Parity = 'N'; break;
+                            case 1: theServers[s].u.rtusrv.Parity = 'O'; break;
+                            case 2: theServers[s].u.rtusrv.Parity = 'E'; break;
+                            default:
+                                ;
+                            }
+                            theServers[s].u.rtusrv.DataBit = modbus0_cfg.serial_cfg.databits;
+                            theServers[s].u.rtusrv.StopBit = modbus0_cfg.serial_cfg.stopbits;
+                            break;
+                        case 1:
+                            theServers[s].u.rtusrv.BaudRate = modbus1_cfg.serial_cfg.baud;
+                            switch (modbus1_cfg.serial_cfg.parity) {
+                            case 0: theServers[s].u.rtusrv.Parity = 'N'; break;
+                            case 1: theServers[s].u.rtusrv.Parity = 'O'; break;
+                            case 2: theServers[s].u.rtusrv.Parity = 'E'; break;
+                            default:
+                                ;
+                            }
+                            theServers[s].u.rtusrv.DataBit = modbus1_cfg.serial_cfg.databits;
+                            theServers[s].u.rtusrv.StopBit = modbus1_cfg.serial_cfg.stopbits;
+                            break;
+                        case 3:
+                            theServers[s].u.rtusrv.BaudRate = THE_RTUS_BAUDRATE;
+                            theServers[s].u.rtusrv.Parity = THE_RTUS_PARITY;
+                            theServers[s].u.rtusrv.DataBit = THE_RTUS_DATABIT;
+                            theServers[s].u.rtusrv.StopBit = THE_RTUS_STOPBIT;
+                            break;
+                        default:
+                            ;
+                        }
                         theServers[s].ctx = NULL;
                         break;
                     case TCPSRV:
@@ -1420,10 +1456,40 @@ static int checkServersDevicesAndNodes()
                         break;
                     case RTU:
                         theDevices[d].u.rtu.Port = CrossTable[i].Port;
-                        theDevices[d].u.rtu.BaudRate = CommParameters[RTU].BaudRate;
-                        theDevices[d].u.rtu.Parity = CommParameters[RTU].Parity;
-                        theDevices[d].u.rtu.DataBit = CommParameters[RTU].DataBit;
-                        theDevices[d].u.rtu.StopBit = CommParameters[RTU].StopBit;
+                        switch (theDevices[d].u.rtu.Port) {
+                        case 0:
+                            theDevices[d].u.rtu.BaudRate = modbus0_cfg.serial_cfg.baud;
+                            switch (modbus0_cfg.serial_cfg.parity) {
+                            case 0: theDevices[d].u.rtu.Parity = 'N'; break;
+                            case 1: theDevices[d].u.rtu.Parity = 'O'; break;
+                            case 2: theDevices[d].u.rtu.Parity = 'E'; break;
+                            default:
+                                ;
+                            }
+                            theDevices[d].u.rtu.DataBit = modbus0_cfg.serial_cfg.databits;
+                            theDevices[d].u.rtu.StopBit = modbus0_cfg.serial_cfg.stopbits;
+                            break;
+                        case 1:
+                            theDevices[d].u.rtu.BaudRate = modbus1_cfg.serial_cfg.baud;
+                            switch (modbus1_cfg.serial_cfg.parity) {
+                            case 0: theDevices[d].u.rtu.Parity = 'N'; break;
+                            case 1: theDevices[d].u.rtu.Parity = 'O'; break;
+                            case 2: theDevices[d].u.rtu.Parity = 'E'; break;
+                            default:
+                                ;
+                            }
+                            theDevices[d].u.rtu.DataBit = modbus1_cfg.serial_cfg.databits;
+                            theDevices[d].u.rtu.StopBit = modbus1_cfg.serial_cfg.stopbits;
+                            break;
+                        case 3:
+                            theDevices[d].u.rtu.BaudRate = THE_RTUC_BAUDRATE;
+                            theDevices[d].u.rtu.Parity = THE_RTUC_PARITY;
+                            theDevices[d].u.rtu.DataBit = THE_RTUC_DATABIT;
+                            theDevices[d].u.rtu.StopBit = THE_RTUC_STOPBIT;
+                            break;
+                        default:
+                            ;
+                        }
                         break;
                     case TCP:
                         strncpy(theDevices[d].u.tcp.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
@@ -2193,6 +2259,7 @@ static void *clientThread(void *arg)
     this_loop_start_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
         read_time_ms[prio] = this_loop_start_ms;
+        read_index[prio] = 1;
     }
     theDevices[d].last_good_ms = this_loop_start_ms;
 
@@ -2479,6 +2546,7 @@ static void *clientThread(void *arg)
             case READ:
                 the_QsyncRegisters[QueueIndex] = STATO_BUSY_READ;
                 error = fieldbusRead(d, QueueIndex, DataAddr, DataValue, DataNumber);
+                // fieldbusWait afterwards
                 break;
             case WRITE_SINGLE:
             case WRITE_MULTIPLE:
@@ -2486,6 +2554,7 @@ static void *clientThread(void *arg)
             case WRITE_RIC_SINGLE:
                 the_QsyncRegisters[QueueIndex] = STATO_BUSY_WRITE;
                 error = fieldbusWrite(d, QueueIndex, DataAddr, DataValue, DataNumber);
+                // fieldbusWait afterwards
                 break;
             case WRITE_PREPARE:
                 error = NoError;
@@ -2681,6 +2750,28 @@ static void *clientThread(void *arg)
             break;
         case DEVICE_BLACKLIST:
             // FIXME: assert
+            break;
+        default:
+            ;
+        }
+        // wait, if necessary, after fieldbus operations
+        switch (theDevices[d].Protocol) {
+        case PLC:
+            // FIXME: assert
+            break;
+        case RTU:
+            usleep(CommParameters[0].Tmin * 1000);
+            break;
+        case TCP:
+        case TCPRTU:
+            // nothing to do
+            break;
+        case CAN:
+            // FIXME: check can state
+            break;
+        case RTUSRV:
+        case TCPSRV:
+        case TCPRTUSRV:
             break;
         default:
             ;
@@ -2957,27 +3048,32 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
      || pIO->M.ulSize < THE_DATA_SIZE) {
         uRes = ERR_INVALID_PARAM;
     }
-    // set hardware type according to configuration files
-#ifdef RTS_CFG_IOCANOPEN
-    app_config_load(APP_CONF_CAN0);
-    app_config_load(APP_CONF_CAN1);
+    // read configuration file
+    if (app_config_load(APP_CONF_CAN0)) {
+        fprintf(stderr, "[%s]: Error loading config file (can0).\n", __func__);
+    }
+    if (app_config_load(APP_CONF_CAN1)) {
+        fprintf(stderr, "[%s]: Error loading config file (can1).\n", __func__);
+    }
+    if (app_config_load(APP_CONF_MB0)) {
+        fprintf(stderr, "[%s]: Error loading config file (mb0).\n", __func__);
+    }
+    if (app_config_load(APP_CONF_MB1)) {
+        fprintf(stderr, "[%s]: Error loading config file (mb1).\n", __func__);
+    }
+    // set hardware type according to configuration file
     if (can0_cfg.enabled) {
         hardware_type |= (can0_cfg.enabled & 0xFF) << 0;	// 0x000000FF
     }
     if (can1_cfg.enabled) {
         hardware_type |= (can1_cfg.enabled & 0xFF) << 8;	// 0x0000FF00
     }
-#endif
-#ifdef RTS_CFG_IOMBRTUC
-    app_config_load(APP_CONF_MB0);
-    app_config_load(APP_CONF_MB1);
     if (modbus0_cfg.serial_cfg.enabled) {
         hardware_type |= (modbus0_cfg.serial_cfg.enabled & 0xFF) << 16;	// 0x00FF0000
     }
     if (modbus1_cfg.serial_cfg.enabled) {
         hardware_type |= (modbus1_cfg.serial_cfg.enabled & 0xFF) << 24;	// 0xFF000000
     }
-#endif
 #ifdef RTS_CFG_MECT_LIB // now undefined
 #endif
     g_bConfigured	= TRUE;
