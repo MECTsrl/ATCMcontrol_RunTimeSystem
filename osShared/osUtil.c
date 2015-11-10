@@ -275,7 +275,11 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 	fflush(stdout);
 
 	retval = pthread_create(thread, attr, start_routine, arg);
-	pthread_set_name_np(*thread, name);
+    if (retval) {
+        // error
+    } else {
+        pthread_set_name_np(*thread, name);
+    }
 #else
 	retval = pthread_create(thread, attr, start_routine, arg);
 #endif
