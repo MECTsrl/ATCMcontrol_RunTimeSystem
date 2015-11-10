@@ -79,8 +79,7 @@ fflush(stderr);
 #define NRE_REG_BASE_BYTE   NRE_BIT_BASE_BYTE + NRE_BIT_SIZE_BYTE
 #define NRE_REG_SIZE_BYTE   NRE_REG_NB * REG_OCCUPATION_BYTE
 
-/* WARNING this value is used also into the HMI, so if you change the value here you must change it also into common/common.h */
-#define CROSS_TABLE "Crosstable.csv"
+#define CROSS_TABLE "/local/etc/sysconfig/Crosstable.csv"
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 #include <ctype.h>
@@ -168,8 +167,6 @@ int getBasePath(char * valueread)
 void hw119_open_cross_table(STDLIBFUNCALL)
 {
 	char filename[VMM_MAX_IEC_STRLEN] = "";
-	char fullfilename[VMM_MAX_IEC_STRLEN] = "";
-	char basepath[VMM_MAX_IEC_STRLEN] = "";
 	HW119_OPEN_CROSS_TABLE_PARAM OS_SPTR *pPara = (HW119_OPEN_CROSS_TABLE_PARAM OS_SPTR *)pIN;
 
 	if ((pPara->filename->CurLen) >= VMM_MAX_IEC_STRLEN)
@@ -181,23 +178,11 @@ void hw119_open_cross_table(STDLIBFUNCALL)
 
 	utilIecToAnsi((IEC_STRING OS_LPTR *)pPara->filename, filename);
 
-	if (getBasePath(basepath) != 0)
-	{
-		DBG_PRINT("Cannot get base path '%s'\n", basepath);
-		fprintf(stderr,"################# Cannot get base path '%s'\n", basepath);
-		pPara->ret_value = ERR_ERROR;
-		return;
-	}
-
-	sprintf(fullfilename, "%s/%s", basepath, filename);
-
-	hw119_fp = fopen(fullfilename, "r");
+	hw119_fp = fopen(filename, "r");
 	if (hw119_fp == NULL)
 	{
-		DBG_PRINT("Cannot open '%s'\n", fullfilename);
+		DBG_PRINT("Cannot open '%s'\n", filename);
 		pPara->ret_value = ERR_ERROR;
-    } else {
-        fprintf(stderr,"reading '%s'\n", fullfilename);
     }
 
 	if (var_map != NULL && strcmp(filename, CROSS_TABLE) == 0)
