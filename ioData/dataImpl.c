@@ -190,7 +190,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
 
 // -------- RTU CLIENT ---------------------------------------------
-#define	THE_RTUC_BAUDRATE	 38400
+#define	THE_RTUC_BAUDRATE	 38400 // 230400 // 38400
 #define	THE_RTUC_PARITY 	 'N'
 #define	THE_RTUC_DATABIT 	 8
 #define	THE_RTUC_STOPBIT 	 1
@@ -221,15 +221,18 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv, Commpar_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV};
+enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
 static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CAN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
 
 enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
 enum DeviceStatus  {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError = 0, CommError, TimeoutError};
-enum varTypes {UINT16=0, INT16,
-               FLOATDCBA, FLOATCDAB,FLOATABCD, FLOATBADC,
-               BIT,
+#undef WORD_BIT
+enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
+               UINT16BA, UINT16AB,
+               INT16BA, INT16AB,
+               FLOATDCBA, FLOATCDAB, FLOATABCD, FLOATBADC,
                UDINTDCBA, UDINTCDAB, UDINTABCD, UDINTBADC,
                DINTDCBA, DINTCDAB, DINTABCD, DINTBADC,
                UNKNOWN};
@@ -257,7 +260,7 @@ static struct ServerStruct {
     union ServerData {
         struct {
             u_int16_t Port;
-            u_int16_t BaudRate; // FIXME (limit 65535)
+            u_int32_t BaudRate;
             char Parity;
             u_int16_t DataBit;
             u_int16_t StopBit;
@@ -293,7 +296,7 @@ static struct ClientStruct {
         // no plc client
         struct {
             u_int16_t Port;
-            u_int16_t BaudRate; // FIXME (limit 65535)
+            u_int32_t BaudRate;
             char Parity;
             u_int16_t DataBit;
             u_int16_t StopBit;
@@ -345,7 +348,7 @@ static u_int16_t theNodesNumber = 0;
 
 struct  CrossTableRecord {
     int16_t Enable;
-    int Plc;
+    enum UpdateType Plc;
     char Tag[MAX_IDNAME_LEN];
     enum varTypes Types;
     u_int16_t Decimal;
@@ -353,10 +356,11 @@ struct  CrossTableRecord {
     char IPAddress[MAX_IPADDR_LEN];
     u_int16_t Port;
     uint8_t NodeId;
-    u_int16_t Address;
+    u_int16_t Offset;
     u_int16_t Block;
-    int16_t NReg;
-    u_int16_t Handle;
+    u_int16_t BlockBase;
+    int16_t BlockSize;
+    int Output;
     int16_t Counter;
     u_int32_t OldVal;
     u_int32_t PLCWriteVal;
@@ -498,15 +502,19 @@ static int ReadFields(int16_t Index)
     if (param.ret_value == 0) {
         switch (Field.Contents[0]) {
         case 'H':
-            CrossTable[Index].Plc = FALSE;
+            CrossTable[Index].Plc = Htype;
             break;
         case 'P':
+            CrossTable[Index].Plc = Ptype;
+            break;
         case 'S':
+            CrossTable[Index].Plc = Stype;
+            break;
         case 'F':
-            CrossTable[Index].Plc = TRUE;
+            CrossTable[Index].Plc = Ftype;
             break;
         default:
-            ; // nothing
+            ERR = TRUE;
         }
     } else {
         ERR = TRUE;
@@ -525,10 +533,26 @@ static int ReadFields(int16_t Index)
     Field.MaxLen = MAX_VARTYPE_LEN;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        if (strncmp(Field.Contents, "UINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16;
+        if (strncmp(Field.Contents, "BIT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = BIT;
+        } else if (strncmp(Field.Contents, "BYTE_BIT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = BYTE_BIT;
+        } else if (strncmp(Field.Contents, "WORD_BIT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = WORD_BIT;
+        } else if (strncmp(Field.Contents, "DWORD_BIT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = DWORD_BIT;
+        } else if (strncmp(Field.Contents, "UINT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = UINT16AB; // backward compatibility
+        } else if (strncmp(Field.Contents, "UINTAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = UINT16AB;
+        } else if (strncmp(Field.Contents, "UINTBA", Field.CurLen) == 0) {
+            CrossTable[Index].Types = UINT16BA;
         } else if (strncmp(Field.Contents, "INT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16;
+            CrossTable[Index].Types = INT16AB; // backward compatibility
+        } else if (strncmp(Field.Contents, "INTAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = INT16AB;
+        } else if (strncmp(Field.Contents, "INTBA", Field.CurLen) == 0) {
+            CrossTable[Index].Types = INT16BA;
         } else if (strncmp(Field.Contents, "UDINT", Field.CurLen) == 0) {
             CrossTable[Index].Types = UDINTABCD; // backward compatibility
         } else if (strncmp(Field.Contents, "DINT", Field.CurLen) == 0) {
@@ -541,8 +565,6 @@ static int ReadFields(int16_t Index)
             CrossTable[Index].Types = FLOATABCD;
         } else if (strncmp(Field.Contents, "FBADC", Field.CurLen) == 0) {
             CrossTable[Index].Types = FLOATBADC;
-        } else if (strncmp(Field.Contents, "BIT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = BIT;
         } else if (strncmp(Field.Contents, "UDINTDCBA", Field.CurLen) == 0) {
             CrossTable[Index].Types = UDINTDCBA;
         } else if (strncmp(Field.Contents, "UDINTCDAB", Field.CurLen) == 0) {
@@ -637,7 +659,7 @@ static int ReadFields(int16_t Index)
     Field.MaxLen = MAX_NUMBER_LEN;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        CrossTable[Index].Address = atoi(param.field->Contents);
+        CrossTable[Index].Offset = atoi(param.field->Contents);
     } else {
         ERR = TRUE;
     }
@@ -655,13 +677,23 @@ static int ReadFields(int16_t Index)
     Field.MaxLen = MAX_NUMBER_LEN;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        CrossTable[Index].NReg = atoi(param.field->Contents);
+        CrossTable[Index].BlockSize = atoi(param.field->Contents);
     } else {
         ERR = TRUE;
     }
 
-    // Handle {text}
-    // ignored
+    // Handle ([RO]|[RD]|[RW]){text}
+    Field.MaxLen = MAX_LINE_SIZE;
+    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
+    if (param.ret_value == 0) {
+        if (strncmp(param.field->Contents, "[RW]", 4) == 0) {
+            CrossTable[Index].Output = TRUE;
+        } else {
+            CrossTable[Index].Output = FALSE;
+        }
+    } else {
+        ERR = TRUE;
+    }
 
     return ERR;
 }
@@ -905,10 +937,10 @@ static int LoadXTable(enum TableType CTType)
             CrossTable[index].IPAddress[0] = '\0';
             CrossTable[index].Port = 0;
             CrossTable[index].NodeId = 0;
-            CrossTable[index].Address = 0;
+            CrossTable[index].Offset = 0;
             CrossTable[index].Block = 0;
-            CrossTable[index].NReg = 0;
-            CrossTable[index].Handle = 0;
+            CrossTable[index].BlockSize = 0;
+            CrossTable[index].Output = FALSE;
             CrossTable[index].OldVal = 0;
             CrossTable[index].Error = 1;
             CrossTable[index].device = 0xffff;
@@ -1195,6 +1227,7 @@ static void PLCsync(void)
     u_int16_t indx;
     u_int16_t RW;
     int16_t addr;
+    u_int16_t i;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
@@ -1225,6 +1258,9 @@ static void PLCsync(void)
                     case TCPSRV:
                     case TCPRTUSRV:
                         the_QsyncRegisters[indx] = STATO_BUSY_READ;
+                        for (i = 1; i <= (CrossTable[addr].BlockSize - 1); ++i) { // FIXME: capoblocco?
+                            the_QsyncRegisters[indx + i] = STATO_BUSY_READ;
+                        }
                         if (CrossTable[addr].device != 0xffff) {
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
@@ -1239,13 +1275,15 @@ static void PLCsync(void)
             case WRITE_RIC_SINGLE:
             case WRITE_RIC_MULTIPLE:
                 if (the_QsyncRegisters[indx] != STATO_BUSY_WRITE) {
-                    u_int16_t i;
-
                     switch (CrossTable[addr].Protocol) {
                     case PLC:
                         the_QsyncRegisters[indx] = STATO_BUSY_WRITE;
-                        for (i = 0; i <= (CrossTable[addr].NReg - 1); ++i) {
-                            the_QdataRegisters[addr + i] = the_IdataRegisters[addr + i];
+                        the_QdataRegisters[addr] = the_IdataRegisters[addr];
+                        if (RW == WRITE_MULTIPLE || RW == WRITE_RIC_MULTIPLE) {
+                            for (i = 1; i <= (CrossTable[addr].BlockSize - 1); ++i) { // FIXME: capoblocco?
+                                the_QsyncRegisters[indx + i] = STATO_BUSY_WRITE;
+                                the_QdataRegisters[addr + i] = the_IdataRegisters[addr + i];
+                            }
                         }
                         break;
                     case RTU:
@@ -1330,9 +1368,20 @@ static int checkServersDevicesAndNodes()
     bzero(&theNodes[0], sizeof(theNodes));
 
     // for each enabled variable
-    u_int16_t i;
+    u_int16_t i, base, block;
     fprintf(stderr, "%s()\n", __func__);
-    for (i = 1; i <= DimCrossTable; ++i) {
+    for (i = 1, base = 1, block = 0; i <= DimCrossTable; ++i) {
+
+        // find block base addresses
+        if (CrossTable[i].Block != block) {
+            base = i;
+            block = CrossTable[i].Block;
+        }
+        if (block > 0) {
+            CrossTable[i].BlockBase = base;
+        } else {
+            CrossTable[i].BlockBase = 0;
+        }
         if (CrossTable[i].Enable > 0) {
 
             // server variables =---> enable the server thread
@@ -1701,29 +1750,66 @@ static void *engineThread(void *statusAdr)
     return NULL;
 }
 
-static u_int16_t modbusRegistersNumber(u_int16_t DataIndex)
+static u_int16_t modbusRegistersNumber(u_int16_t DataIndex, u_int16_t DataNumber)
 {
     u_int16_t retval = 0;
+#if 0
     u_int16_t i;
 
-    for (i = 0; i < CrossTable[DataIndex].NReg; ++i) {
+    for (i = 0; i < DataNumber; ++i) {
         switch (CrossTable[DataIndex + i].Types) {
         case  DINTABCD: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
         case UDINTABCD: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
         case FLOATABCD: case FLOATDCBA: case FLOATCDAB: case FLOATBADC:
             retval += 2;
             break;
-        default:
+        case  INT16AB: case  INT16BA:
+        case UINT16AB: case UINT16BA:
             retval += 1;
+            break;
+        case BIT:
+            if (CrossTable[DataIndex + i].Decimal == 0) {
+                retval += 1;
+            } else {
+                retval += 1;
+            }
+            break;
+        default:
+            // FIXME: assert
         }
     }
+#else
+    switch (CrossTable[DataIndex].Types) {
+    case  DINTABCD: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
+    case UDINTABCD: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
+    case FLOATABCD: case FLOATDCBA: case FLOATCDAB: case FLOATBADC:
+        retval = 2 * DataNumber;
+        break;
+    case  INT16AB: case  INT16BA:
+    case UINT16AB: case UINT16BA:
+        retval = 1 * DataNumber;
+        break;
+    case BIT:
+        retval = 1 * DataNumber;
+        break;
+    case BYTE_BIT:
+    case WORD_BIT:
+        retval = 1;
+        break;
+    case DWORD_BIT:
+        retval = 2;
+        break;
+    default:
+        ; // FIXME: assert
+    }
+#endif
     return retval;
 }
 
-static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int16_t DataIndex, u_int32_t DataValue[], u_int16_t DataNumber)
+static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
-    u_int16_t i;
+    u_int16_t i, r, regs, device, server, x;
     int e = 0;
     uint8_t bitRegs[MODBUS_MAX_READ_BITS];         // > MAX_READS
     u_int16_t uintRegs[MODBUS_MAX_READ_REGISTERS];  // > MAX_READS
@@ -1734,38 +1820,61 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int1
         break;
     case RTU:
     case TCP:
-    case TCPRTU: {
-        u_int16_t regs = modbusRegistersNumber(DataIndex);
+    case TCPRTU:
+        regs = modbusRegistersNumber(DataAddr, DataNumber);
 
-        if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataIndex].NodeId)) {
+        if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataAddr].NodeId)) {
             retval = CommError;
             break;
         }
-        if (CrossTable[DataIndex].Types == BIT) {
-            e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, regs, bitRegs);
+        if (CrossTable[DataAddr].Types == BIT) {
+            bzero(bitRegs, sizeof(bitRegs));
+            e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
         } else if (regs == 1) {
-            e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, 1, uintRegs);
+            bzero(uintRegs, sizeof(uintRegs));
+            e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, 1, uintRegs);
         } else if (regs > 1) {
-            e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, regs, uintRegs);
+            bzero(uintRegs, sizeof(uintRegs));
+            e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
         }
         switch (e) {
-        case 0: {
-            u_int16_t r = 0;
-
+        case -1: // OTHER_ERROR
+            retval = CommError;
+            break;
+        case -2: // TIMEOUT_ERROR
+            retval = TimeoutError;
+            break;
+        default:
             retval = NoError;
-            for (i = 0; i < DataNumber; ++i) {
-                uint8_t *p = (uint8_t *)&uintRegs[r];
-                uint8_t a = p[0];
-                uint8_t b = p[1];
-                uint8_t c = p[2];
-                uint8_t d = p[3];
+            for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
+                register uint8_t *p = (uint8_t *)&uintRegs[r];
+                register uint8_t a = p[0];
+                register uint8_t b = p[1];
+                register uint8_t c = p[2];
+                register uint8_t d = p[3];
 
-                switch (CrossTable[DataIndex + i].Types) {
+                switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
-                    DataValue[i] = bitRegs[r]; r += 1; break;
-                case    UINT16:
-                case     INT16:
+                        DataValue[i] = bitRegs[r]; r += 1;
+                        break;
+                case  BYTE_BIT:
+                case  WORD_BIT:
+                case DWORD_BIT:
+                        x = CrossTable[DataAddr + i].Decimal; // 1..32
+                        if (x <= 16 && regs >= 1) {
+                            DataValue[i] = (uintRegs[0] & (1 << (x - 1))) ? 1 : 0;
+                        } else if (x <= 32 && regs == 2) {
+                            DataValue[i] = (uintRegs[1] & (1 << (x - 17))) ? 1 : 0;
+                        } else {
+                            // FIXME: assert
+                        }
+                        break;
+                case  UINT16AB:
+                case   INT16AB:
                     DataValue[i] = uintRegs[r]; r += 1; break;
+                case  UINT16BA:
+                case   INT16BA:
+                    DataValue[i] = b + (a << 8); r += 1; break;
                 case UDINTABCD:
                 case  DINTABCD:
                 case FLOATABCD:
@@ -1786,38 +1895,48 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int1
                     ;
                 }
             }
-        }   break;
-        case -1:
-            retval = CommError;
-            break;
-        case -2:
-            retval = TimeoutError;
-            break;
-        default:
-            retval = CommError;
         }
-    }   break;
-    case CAN: {
-        u_int16_t device = CrossTable[DataIndex].device;
+        break;
+    case CAN:
+        device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
-            u_int16_t server = theDevices[device].server;
+            server = theDevices[device].server;
             if (server != 0xffff) {
                 pthread_mutex_lock(&theServers[server].mutex);
                 {
                     for (i = 0; i < DataNumber; ++i) {
-                        u_int16_t offset = CrossTable[DataIndex + i].Address;
-                        uint8_t *p = (uint8_t *)&theServers[server].can_buffer[offset];
-                        uint8_t a = p[0];
-                        uint8_t b = p[1];
-                        uint8_t c = p[2];
-                        uint8_t d = p[3];
+                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                        register uint8_t *p = (uint8_t *)&theServers[server].can_buffer[offset];
+                        register uint8_t a = p[0];
+                        register uint8_t b = p[1];
+                        register uint8_t c = p[2];
+                        register uint8_t d = p[3];
 
-                        switch (CrossTable[DataIndex + i].Types) {
+                        switch (CrossTable[DataAddr + i].Types) {
                         case       BIT:
                             DataValue[i] = a; break;
-                        case    UINT16:
-                        case     INT16:
+                        case  BYTE_BIT:
+                        case  WORD_BIT:
+                        case DWORD_BIT:
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 8) {
+                                DataValue[i] = (a & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 16) {
+                                DataValue[i] = (b & (1 << (x - 9))) ? 1 : 0;
+                            } else if (x <= 24) {
+                                DataValue[i] = (c & (1 << (x - 17))) ? 1 : 0;
+                            } else if (x <= 32)  {
+                                DataValue[i] = (d & (1 << (x - 25))) ? 1 : 0;
+                            } else {
+                                // FIXME: assert
+                            }
+                            break;
+                        case  UINT16AB:
+                        case   INT16AB:
                             DataValue[i] = a + (b << 8); break;
+                        case  UINT16BA:
+                        case   INT16BA:
+                            DataValue[i] = b + (a << 8); break;
                         case UDINTABCD:
                         case  DINTABCD:
                         case FLOATABCD:
@@ -1842,13 +1961,13 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int1
                 pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
-    }   break;
+        break;
     case RTUSRV:
     case TCPSRV:
-    case TCPRTUSRV: {
-        u_int16_t device = CrossTable[DataIndex].device;
+    case TCPRTUSRV:
+        device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
-            u_int16_t server = theDevices[device].server;
+            server = theDevices[device].server;
             if (server != 0xffff) {
                 pthread_mutex_lock(&theServers[server].mutex);
                 {
@@ -1861,17 +1980,17 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t QueueIndex, u_int1
                 pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
-    }   break;
+        break;
     default:
         ;
     }
     return retval;
 }
 
-static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int16_t DataIndex, u_int32_t DataValue[], u_int16_t DataNumber)
+static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
-    u_int16_t i;
+    u_int16_t i, r, regs, device, server, x;
     int e = 0;
     uint8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
     u_int16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
@@ -1882,27 +2001,46 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int
         break;
     case RTU:
     case TCP:
-    case TCPRTU: {
-        u_int16_t regs = modbusRegistersNumber(DataIndex);
+    case TCPRTU:
+        regs = modbusRegistersNumber(DataAddr, DataNumber);
 
-        if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataIndex].NodeId)) {
+        if (modbus_set_slave(theDevices[d].modbus_ctx, CrossTable[DataAddr].NodeId)) {
             retval = CommError;
             break;
         }
-        u_int16_t r = 0;
-        for (i = 0; i < DataNumber; ++i) {
-            uint8_t *p = (uint8_t *)&DataValue[i];
-            uint8_t a = p[0];
-            uint8_t b = p[1];
-            uint8_t c = p[2];
-            uint8_t d = p[3];
+        if (CrossTable[DataAddr].Types == BIT) {
+            bzero(bitRegs, sizeof(bitRegs));
+        } else {
+            bzero(uintRegs, sizeof(uintRegs));
+        }
+        for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
+            register uint8_t *p = (uint8_t *)&DataValue[i];
+            register uint8_t a = p[0];
+            register uint8_t b = p[1];
+            register uint8_t c = p[2];
+            register uint8_t d = p[3];
 
-            switch (CrossTable[DataIndex + i].Types) {
+            switch (CrossTable[DataAddr + i].Types) {
             case       BIT:
-                bitRegs[r] = DataValue[i]; r += 1; break;
-            case    UINT16:
-            case     INT16:
+                     bitRegs[r] = DataValue[i]; r += 1; break;
+             case  BYTE_BIT:
+             case  WORD_BIT:
+             case DWORD_BIT:
+                 x = CrossTable[DataAddr + i].Decimal; // 1..32
+                 if (x <= 16 && regs >= 1) {
+                     uintRegs[0] |= ((DataValue[i] ? 1 : 0) << (x - 1));
+                 } else if (x <= 32 && regs == 2) {
+                     uintRegs[1] |= ((DataValue[i] ? 1 : 0) << (x - 17));
+                 } else {
+                     // FIXME: assert
+                 }
+                 break;
+            case  UINT16AB:
+            case   INT16AB:
                 uintRegs[r] = DataValue[i]; r += 1; break;
+            case  UINT16BA:
+            case   INT16BA:
+                uintRegs[r] = b + (a << 8); r += 1; break;
             case UDINTABCD:
             case  DINTABCD:
             case FLOATABCD:
@@ -1923,36 +2061,33 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int
                 ;
             }
         }
-        if (CrossTable[DataIndex].Types == BIT) {
-            e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, regs, bitRegs);
+        if (CrossTable[DataAddr].Types == BIT) {
+            e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
         } else if (regs == 1){
-            e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, uintRegs[0]);
+            e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, uintRegs[0]);
         } else {
-            e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataIndex].Address, regs, uintRegs);
+            e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
         }
         switch (e) {
-        case 0:
-            retval = NoError;
-            break;
-        case -1:
+        case -1: // OTHER_ERROR
             retval = CommError;
             break;
-        case -2:
+        case -2: // TIMEOUT_ERROR
             retval = TimeoutError;
             break;
         default:
-            retval = CommError;
+            retval = NoError;
         }
-    }   break;
-    case CAN: {
-        u_int16_t device = CrossTable[DataIndex].device;
+        break;
+    case CAN:
+        device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
-            u_int16_t server = theDevices[device].server;
+            server = theDevices[device].server;
             if (server != 0xffff) {
                 pthread_mutex_lock(&theServers[server].mutex);
                 {
                     for (i = 0; i < DataNumber; ++i) {
-                        u_int16_t offset = CrossTable[DataIndex + i].Address;
+                        u_int16_t offset = CrossTable[DataAddr + i].Offset;
                         uint8_t *p = (uint8_t *)&DataValue[i];
                         uint8_t a = p[0];
                         uint8_t b = p[1];
@@ -1962,12 +2097,47 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int
                         u_int16_t * p16 = (u_int16_t *)&theServers[server].can_buffer[offset];
                         u_int32_t * p32 = (u_int32_t *)&theServers[server].can_buffer[offset];
 
-                        switch (CrossTable[DataIndex + i].Types) {
+                        switch (CrossTable[DataAddr + i].Types) {
                         case       BIT:
-                            *p8 = a; break;
-                        case    UINT16:
-                        case     INT16:
+                                *p8 = a; break;
+                        case  BYTE_BIT:
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 8) {
+                                *p8 |= (a & (1 << (x - 1))) ? 1 : 0;
+                            } else {
+                                // FIXME: assert
+                            }
+                            break;
+                        case  WORD_BIT:
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 8) {
+                                *p16 |= (a & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 16) {
+                                *p16 |= (b & (1 << (x - 1))) ? 1 : 0;
+                            } else {
+                                // FIXME: assert
+                            }
+                            break;
+                        case DWORD_BIT:
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 8) {
+                                *p32 |= (a & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 16) {
+                                *p32 |= (b & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 24) {
+                                *p32 |= (c & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 32)  {
+                                *p32 |= (d & (1 << (x - 1))) ? 1 : 0;
+                            } else {
+                                // FIXME: assert
+                            }
+                            break;
+                        case    UINT16AB:
+                        case     INT16AB:
                             *p16 = a + (b << 8); break;
+                        case    UINT16BA:
+                        case     INT16BA:
+                            *p16 = b + (a << 8); break;
                         case UDINTABCD:
                         case  DINTABCD:
                         case FLOATABCD:
@@ -1993,11 +2163,11 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t QueueIndex, u_int
                 pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
-    }   break;
+        break;
     case RTUSRV:
     case TCPSRV:
     case TCPRTUSRV: {
-        u_int16_t device = CrossTable[DataIndex].device;
+        u_int16_t device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             u_int16_t server = theDevices[device].server;
             if (server != 0xffff) {
@@ -2423,20 +2593,42 @@ static void *clientThread(void *arg)
                 // is it there an immediate write requests from PLC to this device?
                 if (theDevices[d].PLCwriteRequestNumber > 0) {
                     // found
-                    u_int16_t n;
+                    u_int16_t addr, n, i;
 
                     QueueIndex = 0;
                     DataAddr = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Addr;
-                    DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
                     Operation = (DataNumber == 1) ? WRITE_SINGLE : WRITE_MULTIPLE;
-                    for (n = 0; n < DataNumber; ++n) {
-                        // data values from the local queue
-                        DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
+                    switch (CrossTable[DataAddr].Types) {
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
+                        // data values from both the local queue and from the current values
+                        n = 0;
+                        for (addr = CrossTable[DataAddr].BlockBase; addr < DataAddr && n < MAX_WRITES; ++addr) {
+                            DataValue[n++] = the_QdataRegisters[addr];
+                        }
+                        DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
+                        for (i = 0; i < DataNumber && n < MAX_WRITES; ++i) {
+                            DataValue[n++] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[i];
+                        }
+                        for (addr = DataAddr + 1; addr < (CrossTable[DataAddr].BlockBase + CrossTable[DataAddr].BlockSize) && n < MAX_WRITES; ++addr) {
+                            DataValue[n++] = the_QdataRegisters[addr];
+                        }
+                         // write single with multiple bits :)
+                        DataAddr = CrossTable[DataAddr].BlockBase;
+                        DataNumber = n;
+                        break;
+                    default:
+                        // data values from the local queue only
+                        DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
+                        for (n = 0; n < DataNumber; ++n) {
+                            DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
+                        }
                     }
                     // local queue management
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
-                    write_index = 1; // "FlagPrimoCiclo"
+                    write_index = 1; // FIXME: "FlagPrimoCiclo"
 
                 } else if (theDevices[d].writeOperations > 0) { // instead of "RichiestaScrittura"
                     u_int16_t indx, oper, addr;
@@ -2464,14 +2656,42 @@ static void *clientThread(void *arg)
                     if (found) {
                         u_int16_t n;
 
-                        QueueIndex = write_index = (indx == DimCrossTable) ? 1 : (indx + 1);
+                        QueueIndex = indx;
                         DataAddr = addr;
-                        DataNumber = CrossTable[addr].NReg;
                         Operation = oper;
-                        for (n = 0; n < DataNumber; ++n) {
-                            // data values from the data input
-                            DataValue[n] = the_IdataRegisters[DataAddr + n];
+                        if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
+                            switch (CrossTable[DataAddr].Types) {
+                            case BYTE_BIT:
+                            case WORD_BIT:
+                            case DWORD_BIT:
+                                // data values from both the udp input and from the current values
+                                n = 0;
+                                for (addr = CrossTable[DataAddr].BlockBase; addr < DataAddr && n < MAX_WRITES; ++addr) {
+                                    DataValue[n++] = the_QdataRegisters[addr];
+                                }
+                                if (n < MAX_WRITES) {
+                                    DataValue[n++] = the_IdataRegisters[DataAddr];
+                                }
+                                for (addr = DataAddr + 1; addr < (CrossTable[DataAddr].BlockBase + CrossTable[DataAddr].BlockSize) && n < MAX_WRITES; ++addr) {
+                                    DataValue[n++] = the_QdataRegisters[addr];
+                                }
+                                 // write single with multiple bits :)
+                                DataAddr = CrossTable[DataAddr].BlockBase;
+                                DataNumber = n;
+                                break;
+                            default:
+                                 // data values from the udp input
+                                DataNumber = 1;
+                                DataValue[0] = the_IdataRegisters[DataAddr];
+                            }
+                        } else { // oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE
+                            // data values from the udp input only
+                            DataNumber = CrossTable[DataAddr].BlockSize; // FIXME: assert this is the block start
+                            for (n = 0; n < DataNumber; ++n) {
+                                DataValue[n] = the_IdataRegisters[DataAddr + n];
+                            }
                         }
+                        write_index = (indx == DimCrossTable) ? 1 : (indx + 1);
                     } else {
                         // FIXME: assert
                     }
@@ -2500,6 +2720,7 @@ static void *clientThread(void *arg)
                                     indx = DimCrossTable;
                                 } else if (CrossTable[addr].device == d && oper == READ
                                         && CrossTable[addr].Enable == (prio + 1)) {
+                                    // NB: do not check Qsync for BUSY_READ
                                     found = TRUE;
                                     break;
                                 }
@@ -2507,15 +2728,16 @@ static void *clientThread(void *arg)
                             if (found) {
                                 u_int16_t n;
 
-                                QueueIndex = read_index[prio] = (indx == DimCrossTable) ? 1 : (indx + 1);
+                                QueueIndex = indx;
                                 DataAddr = addr;
-                                DataNumber = CrossTable[addr].NReg;
+                                DataNumber = CrossTable[addr].BlockSize; // FIXME: capoblocco?
                                 Operation = READ;
                                 for (n = 0; n < DataNumber; ++n) {
                                     // data values will be available after the fieldbus access
-                                    // let's default to the current values, just in case ...
+                                    // FIXME: let's default to the current values, just in case ...
                                     DataValue[n] = the_QdataRegisters[DataAddr + n];
                                 }
+                                read_index[prio] = (indx == DimCrossTable) ? 1 : (indx + 1);
                                 break;
                             } else {
                                 // compute next tic for this priority
@@ -2605,21 +2827,30 @@ static void *clientThread(void *arg)
             // the device is connected, so operate, without locking the mutex
             u_int16_t i;
 
-            for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
-               the_QdataStates[DataAddr + i] = STATO_RUN;
+            for (i = 0; i < DataNumber; ++i) {
+                // CrossTable[DataAddr + i].Error = 0;
+                the_QdataStates[DataAddr + i] = STATO_RUN;
             }
             switch (Operation) {
             case READ:
-                the_QsyncRegisters[QueueIndex] = STATO_BUSY_READ;
-                error = fieldbusRead(d, QueueIndex, DataAddr, DataValue, DataNumber);
+                if (QueueIndex > 0) {
+                    the_QsyncRegisters[QueueIndex] = STATO_BUSY_READ;
+                }
+                error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
                 // fieldbusWait afterwards
                 break;
             case WRITE_SINGLE:
             case WRITE_MULTIPLE:
             case WRITE_RIC_MULTIPLE:
             case WRITE_RIC_SINGLE:
-                the_QsyncRegisters[QueueIndex] = STATO_BUSY_WRITE;
-                error = fieldbusWrite(d, QueueIndex, DataAddr, DataValue, DataNumber);
+                if (QueueIndex > 0) {
+                    the_QsyncRegisters[QueueIndex] = STATO_BUSY_WRITE;
+                }
+                if (CrossTable[DataAddr].Output) {
+                    error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
+                } else {
+                    error = CommError;
+                }
                 // fieldbusWait afterwards
                 break;
             case WRITE_PREPARE:
@@ -2636,13 +2867,13 @@ static void *clientThread(void *arg)
                 // manage the data values
                 switch (error) {
                 case NoError:
-                    for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
+                    for (i = 0; i < DataNumber; ++i) {
                         CrossTable[DataAddr + i].Error = 0;
                         the_QdataStates[DataAddr + i] = STATO_OK;
                     }
                     switch (Operation) {
                     case READ:
-                        for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
+                        for (i = 0; i < DataNumber; ++i) {
                             the_QdataRegisters[DataAddr + i] = DataValue[i];
                         }
                         break;
@@ -2650,7 +2881,7 @@ static void *clientThread(void *arg)
                     case WRITE_MULTIPLE:
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
-                        for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
+                        for (i = 0; i < DataNumber; ++i) {
                             if (QueueIndex == 0) {
                                 the_QdataRegisters[DataAddr + i] = CrossTable[DataAddr + i].PLCWriteVal;
                             } else {
@@ -2669,7 +2900,7 @@ static void *clientThread(void *arg)
                     u_int32_t *retentive = (u_int32_t *)ptRetentive;
                     u_int16_t i;
 
-                    for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
+                    for (i = 0; i < DataNumber; ++i) {
                         retentive[(DataAddr - 1) + i ] = the_QdataRegisters[DataAddr + i];
                     }
                 }
@@ -2689,7 +2920,7 @@ static void *clientThread(void *arg)
                     }
                     // no break, continue with TimeoutError case
                 case TimeoutError:
-                    for (i = 0; i < CrossTable[DataAddr].NReg; ++i) {
+                    for (i = 0; i < DataNumber; ++i) {
                        CrossTable[DataAddr + i].Error = 1;
                        the_QdataStates[DataAddr + i] = STATO_ERR;
                     }
@@ -3163,7 +3394,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 #endif
 
     // iolayer init
-    // load retentive area in %I %M %Q
+    // load retentive area in %I %Q
 #if defined(RTS_CFG_MECT_RETAIN)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
     //void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
@@ -3291,10 +3522,37 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             } else {
                                 // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
                                 if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    flags[i] = 0; // zeroes the write flag only if can write in queue
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                    int addr, base, size, n;
+                                    int write_block = FALSE;
+                                    // either is a *_BIT or are there any other writes to the same block?
+                                    base = CrossTable[i].BlockBase;
+                                    size = CrossTable[i].BlockSize;
+                                    write_block = (CrossTable[i].Types == BYTE_BIT || CrossTable[i].Types == WORD_BIT || CrossTable[i].Types == DWORD_BIT);
+                                    if (!write_block) {
+                                        for (addr = i + 1; addr < (base + size); ++addr) {
+                                            if (flags[addr] != 0) {
+                                                write_block = TRUE;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (write_block) {
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = base;
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = size;
+                                        for (n = 0; n < size && n < MAX_WRITES; ++n) {
+                                            if (flags[base + n] != 0) {
+                                                flags[base + n] = 0;
+                                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[base + n];
+                                            } else {
+                                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = the_QdataRegisters[base + n];
+                                            }
+                                        }
+                                    } else {
+                                        flags[i] = 0; // zeroes the write flag only if can write in queue
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                    }
                                     // awake the device thread
                                     sem_post(&theDevices[d].newOperations);
                                     // manage local queue
@@ -3305,24 +3563,31 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             }
                          }
                     }
-
 #if defined(RTS_CFG_MECT_RETAIN)
                     // vedi clientThread (PLC)
 #endif
                 }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
                 uRes = ERR_WRITE_TO_INPUT;
-            } else if (pNotify->usBit != 0) {
-                uRes = ERR_INVALID_PARAM;
             } else {
                 // notify from others
                 IEC_UDINT ulStart = vmm_max(pNotify->ulOffset, pIO->Q.ulOffs);
                 IEC_UDINT ulStop = vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->Q.ulOffs + pIO->Q.ulSize);
-                if (ulStart < ulStop) {
-                    void * source = pIO->Q.pAdr + ulStart;
-                    void * dest = the_QdataRegisters;
-                    dest += ulStart - pIO->Q.ulOffs;
-                    OS_MEMCPY(dest, source, ulStop - ulStart);
+                void * source = pIO->Q.pAdr + ulStart;
+                void * dest = the_QdataRegisters;
+                dest += ulStart - pIO->Q.ulOffs;
+                if (pNotify->usBit == 0) {
+                    if (ulStart < ulStop) {
+                        OS_MEMCPY(dest, source, ulStop - ulStart);
+                    }
+                } else {
+                    IEC_UINT uM = (IEC_UINT)(1u << (pNotify->usBit - 1u));
+                    if ((*(IEC_DATA *)source) & uM) {
+                        *(IEC_DATA *)dest |= uM;
+                    } else {
+                        *(IEC_DATA *)dest &= ~uM;
+                    }
+                    // FIXME: create a write request
                 }
             }
         }
@@ -3358,45 +3623,32 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     IEC_UINT	r;
 
                     for (r = 0; uRes == OK && r < pIR->uRegionsRd; ++r) {
-                        // commented out for enabling %M forced update
-                        // if (pIR->pRegionRd[r].pGetQ[uIOLayer] == FALSE && pIR->pRegionRd[r].pGetI[uIOLayer] == FALSE) {
-                        //     continue;
-                        // }
+                        if (pIR->pRegionRd[r].pGetQ[uIOLayer] == FALSE && pIR->pRegionRd[r].pGetI[uIOLayer] == FALSE) {
+                             continue;
+                        }
                         IEC_UDINT	ulStart;
                         IEC_UDINT	ulStop;
                         void * source;
                         void * dest;
 
-                        if (pIR->pRegionRd[r].usSegment == SEG_GLOBAL) {
-                            ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->M.ulOffs);
-                            ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->M.ulOffs + pIO->M.ulSize);
-                            source = the_QdataRegisters; // i.e. forcing %M from %Q for retro compatibility
-                            source += ulStart - pIO->Q.ulOffs;
-                            dest = pIO->M.pAdr + ulStart;
-                        } else if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
+                        if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->Q.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->Q.ulOffs + pIO->Q.ulSize);
                             source = the_QdataRegisters;
                             source += ulStart - pIO->Q.ulOffs;
                             dest = pIO->Q.pAdr + ulStart;
-                        } else if (pIR->pRegionRd[r].usSegment == SEG_INPUT) {
+                        } else { // pIR->pRegionRd[r].usSegment == SEG_INPUT
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->I.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->I.ulOffs + pIO->I.ulSize);
-                            source = the_IdataRegisters;
+                            source = the_QdataRegisters; // never from the_IdataRegisters
                             source += ulStart - pIO->I.ulOffs;
                             dest = pIO->I.pAdr + ulStart;
-                        } else {
-                            // wrong data
-                            continue;
                         }
                         if (ulStart < ulStop) {
                             OS_MEMCPY(dest, source, ulStop - ulStart);
                         }
                     }
                 }
-            } else if (pNotify->usBit != 0) {
-                // no bit access
-                uRes = ERR_INVALID_PARAM;
             } else if (pNotify->usSegment != SEG_INPUT && pNotify->usSegment != SEG_OUTPUT){
                 uRes = ERR_INVALID_PARAM;
             } else {
@@ -3409,7 +3661,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                 if (pNotify->usSegment == SEG_INPUT) {
                     ulStart	= vmm_max(pNotify->ulOffset, pIO->I.ulOffs);
                     ulStop	= vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->I.ulOffs + pIO->I.ulSize);
-                    source = the_IdataRegisters;
+                    source = the_QdataRegisters; // never from the_IdataRegisters
                     source += ulStart - pIO->I.ulOffs;
                     dest = pIO->I.pAdr + ulStart;
                 } else { // pNotify->usSegment == SEG_OUTPUT
@@ -3419,8 +3671,15 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     source += ulStart - pIO->Q.ulOffs;
                     dest = pIO->Q.pAdr + ulStart;
                 }
-                if (ulStart < ulStop) {
-                    OS_MEMCPY(dest, source, ulStop - ulStart);
+                if (pNotify->usBit == 0) {
+                    if (ulStart < ulStop) {
+                        OS_MEMCPY(dest, source, ulStop - ulStart);
+                    }
+                } else {
+                    IEC_UINT uM = (IEC_UINT)(1u << (pNotify->usBit - 1u));
+                    IEC_DATA byte = *(IEC_DATA *)dest & ~uM;
+                    byte |= *(IEC_DATA *)source & uM;
+                    *(IEC_DATA *)dest = byte;
                 }
             }
         }
