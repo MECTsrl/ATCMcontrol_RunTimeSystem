@@ -281,7 +281,7 @@ static struct ServerStruct {
     pthread_mutex_t mutex;
     modbus_t * ctx;
     modbus_mapping_t *mb_mapping;
-    uint8_t *can_buffer;
+    u_int8_t *can_buffer;
 } theServers[MAX_SERVERS];
 static u_int16_t theServersNumber = 0;
 
@@ -355,7 +355,7 @@ struct  CrossTableRecord {
     enum FieldbusType Protocol;
     char IPAddress[MAX_IPADDR_LEN];
     u_int16_t Port;
-    uint8_t NodeId;
+    u_int8_t NodeId;
     u_int16_t Offset;
     u_int16_t Block;
     u_int16_t BlockBase;
@@ -401,7 +401,7 @@ struct CommParameters {
 };
 static struct  CommParameters CommParameters[1 + 4];
 static int16_t NumberOfFails;
-static uint8_t FailDivisor;
+static u_int8_t FailDivisor;
 static int32_t read_period_ms[MAX_PRIORITY];
 
 /* ----  Global Variables:	 -------------------------------------------------- */
@@ -1750,14 +1750,12 @@ static void *engineThread(void *statusAdr)
     return NULL;
 }
 
-static u_int16_t modbusRegistersNumber(u_int16_t DataIndex, u_int16_t DataNumber)
+static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
 {
-    u_int16_t retval = 0;
-#if 0
-    u_int16_t i;
+    u_int16_t retval = 0, i;
 
     for (i = 0; i < DataNumber; ++i) {
-        switch (CrossTable[DataIndex + i].Types) {
+        switch (CrossTable[DataAddr + i].Types) {
         case  DINTABCD: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
         case UDINTABCD: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
         case FLOATABCD: case FLOATDCBA: case FLOATCDAB: case FLOATBADC:
@@ -1768,41 +1766,23 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataIndex, u_int16_t DataNumber
             retval += 1;
             break;
         case BIT:
-            if (CrossTable[DataIndex + i].Decimal == 0) {
-                retval += 1;
-            } else {
-                retval += 1;
+            retval += 1;
+            break;
+        case BYTE_BIT:
+        case WORD_BIT:
+        case DWORD_BIT:
+            retval += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
+            // skip the other *_BIT variables of the same offset
+            while (i < DataNumber
+                && CrossTable[DataAddr + i + 1].Types == CrossTable[DataAddr + i].Types
+                && CrossTable[DataAddr + i + 1].Offset == CrossTable[DataAddr + i].Offset) {
+                ++i;
             }
             break;
         default:
-            // FIXME: assert
+            ; // FIXME: assert
         }
     }
-#else
-    switch (CrossTable[DataIndex].Types) {
-    case  DINTABCD: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
-    case UDINTABCD: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
-    case FLOATABCD: case FLOATDCBA: case FLOATCDAB: case FLOATBADC:
-        retval = 2 * DataNumber;
-        break;
-    case  INT16AB: case  INT16BA:
-    case UINT16AB: case UINT16BA:
-        retval = 1 * DataNumber;
-        break;
-    case BIT:
-        retval = 1 * DataNumber;
-        break;
-    case BYTE_BIT:
-    case WORD_BIT:
-        retval = 1;
-        break;
-    case DWORD_BIT:
-        retval = 2;
-        break;
-    default:
-        ; // FIXME: assert
-    }
-#endif
     return retval;
 }
 
@@ -1811,7 +1791,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
     enum fieldbusError retval = NoError;
     u_int16_t i, r, regs, device, server, x;
     int e = 0;
-    uint8_t bitRegs[MODBUS_MAX_READ_BITS];         // > MAX_READS
+    u_int8_t bitRegs[MODBUS_MAX_READ_BITS];         // > MAX_READS
     u_int16_t uintRegs[MODBUS_MAX_READ_REGISTERS];  // > MAX_READS
 
     switch (theDevices[d].Protocol) {
@@ -1847,11 +1827,11 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
         default:
             retval = NoError;
             for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
-                register uint8_t *p = (uint8_t *)&uintRegs[r];
-                register uint8_t a = p[0];
-                register uint8_t b = p[1];
-                register uint8_t c = p[2];
-                register uint8_t d = p[3];
+                register u_int8_t *p = (u_int8_t *)&uintRegs[r];
+                register u_int8_t a = p[0];
+                register u_int8_t b = p[1];
+                register u_int8_t c = p[2];
+                register u_int8_t d = p[3];
 
                 switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
@@ -1860,14 +1840,21 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 case  BYTE_BIT:
                 case  WORD_BIT:
                 case DWORD_BIT:
-                        x = CrossTable[DataAddr + i].Decimal; // 1..32
-                        if (x <= 16 && regs >= 1) {
-                            DataValue[i] = (uintRegs[0] & (1 << (x - 1))) ? 1 : 0;
-                        } else if (x <= 32 && regs == 2) {
-                            DataValue[i] = (uintRegs[1] & (1 << (x - 17))) ? 1 : 0;
-                        } else {
-                            // FIXME: assert
-                        }
+                        // manage this and the other *_BIT variables of the same offset
+                        do {
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 16 && regs >= 1) {
+                                DataValue[i] = (uintRegs[r] & (1 << (x - 1))) ? 1 : 0;
+                            } else if (x <= 32 && regs == 2) {
+                                DataValue[i] = (uintRegs[r + 1] & (1 << (x - 17))) ? 1 : 0;
+                            } else {
+                                // FIXME: assert
+                            }
+                        } while ((i + 1) < DataNumber
+                            && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
+                            && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset
+                            && ++i);
+                        r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
                         break;
                 case  UINT16AB:
                 case   INT16AB:
@@ -1882,6 +1869,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 case UDINTCDAB:
                 case  DINTCDAB:
                 case FLOATCDAB:
+
                     DataValue[i] = c + (d << 8) + (a << 16) + (b << 24); r += 2; break;
                 case UDINTDCBA:
                 case  DINTDCBA:
@@ -1906,11 +1894,11 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 {
                     for (i = 0; i < DataNumber; ++i) {
                         register u_int16_t offset = CrossTable[DataAddr + i].Offset;
-                        register uint8_t *p = (uint8_t *)&theServers[server].can_buffer[offset];
-                        register uint8_t a = p[0];
-                        register uint8_t b = p[1];
-                        register uint8_t c = p[2];
-                        register uint8_t d = p[3];
+                        register u_int8_t *p = (u_int8_t *)&theServers[server].can_buffer[offset];
+                        register u_int8_t a = p[0];
+                        register u_int8_t b = p[1];
+                        register u_int8_t c = p[2];
+                        register u_int8_t d = p[3];
 
                         switch (CrossTable[DataAddr + i].Types) {
                         case       BIT:
@@ -1992,7 +1980,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
     enum fieldbusError retval = NoError;
     u_int16_t i, r, regs, device, server, x;
     int e = 0;
-    uint8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
+    u_int8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
     u_int16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
 
     switch (theDevices[d].Protocol) {
@@ -2008,33 +1996,99 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             retval = CommError;
             break;
         }
+        // init values
         if (CrossTable[DataAddr].Types == BIT) {
             bzero(bitRegs, sizeof(bitRegs));
         } else {
             bzero(uintRegs, sizeof(uintRegs));
+            // *_BIT management
+            for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
+                switch (CrossTable[DataAddr + i].Types) {
+                case       BIT:
+                    r += 1; break;
+                case  BYTE_BIT:
+                case  WORD_BIT:
+                case DWORD_BIT:
+                    // init the buffer bits with ALL the actual bit values from the_QdataRegisters
+                    {
+                        register int addr, base, size;
+
+                        base = CrossTable[DataAddr + i].BlockBase;
+                        size = CrossTable[DataAddr + i].BlockSize;
+                        for (addr = base; addr < (base + size); ++addr) {
+                            if (CrossTable[addr].Types == CrossTable[DataAddr + i].Types
+                             && CrossTable[addr].Offset == CrossTable[DataAddr + i].Offset) {
+                                x = CrossTable[addr].Decimal; // 1..32
+                                if (x <= 16) {
+                                    uintRegs[r] |= ((the_QdataRegisters[addr] ? 1 : 0) << (x - 1));
+                                } else if (x <= 32) {
+                                     uintRegs[r + 1] |= ((the_QdataRegisters[addr] ? 1 : 0) << (x - 17));
+                                } else {
+                                     // FIXME: assert
+                                }
+                            }
+                        }
+                    }
+                    r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
+                    // skip the other *_BIT variables of the same offset
+                    while ((i + 1) < DataNumber
+                        && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
+                        && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset) {
+                        ++i;
+                    }
+                    break;
+                case  UINT16AB:
+                case   INT16AB:
+                case  UINT16BA:
+                case   INT16BA:
+                    r += 1; break;
+                case UDINTABCD:
+                case  DINTABCD:
+                case FLOATABCD:
+                case UDINTCDAB:
+                case  DINTCDAB:
+                case FLOATCDAB:
+                case UDINTDCBA:
+                case  DINTDCBA:
+                case FLOATDCBA:
+                case UDINTBADC:
+                case  DINTBADC:
+                case FLOATBADC:
+                    r += 2; break;
+                default:
+                    ;
+                }
+            }
         }
         for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
-            register uint8_t *p = (uint8_t *)&DataValue[i];
-            register uint8_t a = p[0];
-            register uint8_t b = p[1];
-            register uint8_t c = p[2];
-            register uint8_t d = p[3];
+            register u_int8_t *p = (u_int8_t *)&DataValue[i];
+            register u_int8_t a = p[0];
+            register u_int8_t b = p[1];
+            register u_int8_t c = p[2];
+            register u_int8_t d = p[3];
 
             switch (CrossTable[DataAddr + i].Types) {
             case       BIT:
-                     bitRegs[r] = DataValue[i]; r += 1; break;
-             case  BYTE_BIT:
-             case  WORD_BIT:
-             case DWORD_BIT:
-                 x = CrossTable[DataAddr + i].Decimal; // 1..32
-                 if (x <= 16 && regs >= 1) {
-                     uintRegs[0] |= ((DataValue[i] ? 1 : 0) << (x - 1));
-                 } else if (x <= 32 && regs == 2) {
-                     uintRegs[1] |= ((DataValue[i] ? 1 : 0) << (x - 17));
-                 } else {
-                     // FIXME: assert
-                 }
-                 break;
+                    bitRegs[r] = DataValue[i]; r += 1; break;
+            case  BYTE_BIT:
+            case  WORD_BIT:
+            case DWORD_BIT:
+                    // manage this and the other *_BIT variables of the same offset
+                    do {
+                        x = CrossTable[DataAddr + i].Decimal; // 1..32
+                        if (x <= 16 && regs >= 1) {
+                            uintRegs[r] |= ((DataValue[i] ? 1 : 0) << (x - 1));
+                        } else if (x <= 32 && regs == 2) {
+                            uintRegs[r + 1] |= ((DataValue[i] ? 1 : 0) << (x - 17));
+                        } else {
+                            // FIXME: assert
+                        }
+                    } while ((i + 1) < DataNumber
+                          && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
+                          && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset
+                          && ++i);
+                    r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
+                    break;
             case  UINT16AB:
             case   INT16AB:
                 uintRegs[r] = DataValue[i]; r += 1; break;
@@ -2088,12 +2142,12 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                 {
                     for (i = 0; i < DataNumber; ++i) {
                         u_int16_t offset = CrossTable[DataAddr + i].Offset;
-                        uint8_t *p = (uint8_t *)&DataValue[i];
-                        uint8_t a = p[0];
-                        uint8_t b = p[1];
-                        uint8_t c = p[2];
-                        uint8_t d = p[3];
-                        uint8_t * p8 = &theServers[server].can_buffer[offset];
+                        u_int8_t *p = (u_int8_t *)&DataValue[i];
+                        u_int8_t a = p[0];
+                        u_int8_t b = p[1];
+                        u_int8_t c = p[2];
+                        u_int8_t d = p[3];
+                        u_int8_t * p8 = &theServers[server].can_buffer[offset];
                         u_int16_t * p16 = (u_int16_t *)&theServers[server].can_buffer[offset];
                         u_int32_t * p32 = (u_int32_t *)&theServers[server].can_buffer[offset];
 
@@ -2193,7 +2247,7 @@ static void *serverThread(void *arg)
 {
     u_int32_t s = (u_int32_t)arg;
     modbus_t * modbus_ctx = NULL;
-    uint8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
+    u_int8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int master_socket;
     int rc;
     fd_set refset;
@@ -2592,38 +2646,15 @@ static void *clientThread(void *arg)
             {
                 // is it there an immediate write requests from PLC to this device?
                 if (theDevices[d].PLCwriteRequestNumber > 0) {
-                    // found
-                    u_int16_t addr, n, i;
+                    u_int16_t n;
 
                     QueueIndex = 0;
                     DataAddr = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Addr;
                     Operation = (DataNumber == 1) ? WRITE_SINGLE : WRITE_MULTIPLE;
-                    switch (CrossTable[DataAddr].Types) {
-                    case BYTE_BIT:
-                    case WORD_BIT:
-                    case DWORD_BIT:
-                        // data values from both the local queue and from the current values
-                        n = 0;
-                        for (addr = CrossTable[DataAddr].BlockBase; addr < DataAddr && n < MAX_WRITES; ++addr) {
-                            DataValue[n++] = the_QdataRegisters[addr];
-                        }
-                        DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
-                        for (i = 0; i < DataNumber && n < MAX_WRITES; ++i) {
-                            DataValue[n++] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[i];
-                        }
-                        for (addr = DataAddr + 1; addr < (CrossTable[DataAddr].BlockBase + CrossTable[DataAddr].BlockSize) && n < MAX_WRITES; ++addr) {
-                            DataValue[n++] = the_QdataRegisters[addr];
-                        }
-                         // write single with multiple bits :)
-                        DataAddr = CrossTable[DataAddr].BlockBase;
-                        DataNumber = n;
-                        break;
-                    default:
-                        // data values from the local queue only
-                        DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
-                        for (n = 0; n < DataNumber; ++n) {
-                            DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
-                        }
+                    // data values from the local queue only, the *_BIT management is in fieldWrite()
+                    DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
+                    for (n = 0; n < DataNumber; ++n) {
+                        DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
                     }
                     // local queue management
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
@@ -2659,33 +2690,12 @@ static void *clientThread(void *arg)
                         QueueIndex = indx;
                         DataAddr = addr;
                         Operation = oper;
+                        // data values from the the udp input, the *_BIT management is in fieldWrite()
                         if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
-                            switch (CrossTable[DataAddr].Types) {
-                            case BYTE_BIT:
-                            case WORD_BIT:
-                            case DWORD_BIT:
-                                // data values from both the udp input and from the current values
-                                n = 0;
-                                for (addr = CrossTable[DataAddr].BlockBase; addr < DataAddr && n < MAX_WRITES; ++addr) {
-                                    DataValue[n++] = the_QdataRegisters[addr];
-                                }
-                                if (n < MAX_WRITES) {
-                                    DataValue[n++] = the_IdataRegisters[DataAddr];
-                                }
-                                for (addr = DataAddr + 1; addr < (CrossTable[DataAddr].BlockBase + CrossTable[DataAddr].BlockSize) && n < MAX_WRITES; ++addr) {
-                                    DataValue[n++] = the_QdataRegisters[addr];
-                                }
-                                 // write single with multiple bits :)
-                                DataAddr = CrossTable[DataAddr].BlockBase;
-                                DataNumber = n;
-                                break;
-                            default:
-                                 // data values from the udp input
-                                DataNumber = 1;
-                                DataValue[0] = the_IdataRegisters[DataAddr];
-                            }
+                            DataNumber = 1;
+                            DataValue[0] = the_IdataRegisters[DataAddr];
                         } else { // oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE
-                            // data values from the udp input only
+                            // NB the HMI programmer must prepare the write for the whole block
                             DataNumber = CrossTable[DataAddr].BlockSize; // FIXME: assert this is the block start
                             for (n = 0; n < DataNumber; ++n) {
                                 DataValue[n] = the_IdataRegisters[DataAddr + n];
@@ -2838,6 +2848,7 @@ static void *clientThread(void *arg)
                 }
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
                 // fieldbusWait afterwards
+                fprintf(stderr, "(%u) @%u #%u = %d\n", d, DataAddr, DataNumber, error);
                 break;
             case WRITE_SINGLE:
             case WRITE_MULTIPLE:
@@ -3522,37 +3533,25 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             } else {
                                 // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
                                 if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    int addr, base, size, n;
-                                    int write_block = FALSE;
-                                    // either is a *_BIT or are there any other writes to the same block?
+                                    register int base, size, n, total;
+
+                                    flags[i] = 0; // zeroes the write flag only if can write in queue
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                    // are there any other consecutive writes to the same block?
                                     base = CrossTable[i].BlockBase;
                                     size = CrossTable[i].BlockSize;
-                                    write_block = (CrossTable[i].Types == BYTE_BIT || CrossTable[i].Types == WORD_BIT || CrossTable[i].Types == DWORD_BIT);
-                                    if (!write_block) {
-                                        for (addr = i + 1; addr < (base + size); ++addr) {
-                                            if (flags[addr] != 0) {
-                                                write_block = TRUE;
-                                                break;
-                                            }
+                                    for (n = 1, total = 1; (i + n) < (base + size) && total < MAX_WRITES; ++n) {
+                                        if (flags[i + n] != 0) {
+                                            total += 1; // will be WRITE_MULTIPLE
+                                            flags[i + n] = 0;
+                                            theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[i + n];
+                                        } else {
+                                            break; // only sequential writes
                                         }
                                     }
-                                    if (write_block) {
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = base;
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = size;
-                                        for (n = 0; n < size && n < MAX_WRITES; ++n) {
-                                            if (flags[base + n] != 0) {
-                                                flags[base + n] = 0;
-                                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[base + n];
-                                            } else {
-                                                theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = the_QdataRegisters[base + n];
-                                            }
-                                        }
-                                    } else {
-                                        flags[i] = 0; // zeroes the write flag only if can write in queue
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = 1;
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
-                                    }
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = total;
+                                    i += (total - 1);
                                     // awake the device thread
                                     sem_post(&theDevices[d].newOperations);
                                     // manage local queue
