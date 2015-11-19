@@ -33,8 +33,9 @@ ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = gcc-4.1.2-glibc-2.5-nptl-3/arm-none-linux-gnueabi
 #CC_VERSION       = gcc-4.3.3-glibc-2.8-cs2009q1-203
 #CC_VERSION       = gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi
-CC_DIRECTORY     = /opt/freescale/usr/local/$(CC_VERSION)/bin/
-CC_RADIX         = arm-none-linux-gnueabi-
+CC_DIRECTORY     = /opt/freescale/usr/local
+CC_BINDIR        = $(CC_DIRECTORY)/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi
 ARCH_INCLUDE     = \
   -I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
   -I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
@@ -49,12 +50,13 @@ else ifeq ($(SOURCERY_GCC), 1)
 
 ROOTFS = /imx_mect/trunk/imx28/ltib/rootfs
 CC_VERSION       = Sourcery_G++_Lite
-CC_DIRECTORY     = /home/imx28/CodeSourcery/$(CC_VERSION)/bin/
-CC_RADIX         = arm-none-linux-gnueabi-
+CC_DIRECTORY     = /home/imx28/CodeSourcery
+CC_BINDIR        = $(CC_DIRECTORY)/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi
 ARCH_INCLUDE     = \
-	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/include \
-	-I/imx_mect/trunk/imx28/ltib/rootfs/usr/src/linux/include \
-	-I/home/imx28/CodeSourcery/Sourcery_G++_Lite/arm-none-linux-gnueabi
+	-I$(ROOTFS)/usr/include \
+	-I$(ROOTFS)/usr/src/linux/include \
+	-I$(CC_DIRECTORY)/$(CC_VERSION)/$(CC_RADIX)
 XENO_CC = gcc
 XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
 XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
@@ -64,12 +66,13 @@ else
 
 ROOTFS = /home/imx_mect/ltib/rootfs
 CC_VERSION       =
-CC_DIRECTORY     = /opt/CodeSourcery/$(CC_VERSION)/bin/
-CC_RADIX         = arm-none-linux-gnueabi-
+CC_DIRECTORY     = /opt/CodeSourcery
+CC_BINDIR        = $(CC_DIRECTORY)/$(CC_VERSION)/bin/
+CC_RADIX         = arm-none-linux-gnueabi
 ARCH_INCLUDE     = \
         -I$(ROOTFS)/usr/include \
         -I$(ROOTFS)/usr/src/linux/include \
-        -I$(CC_DIRECTORY)/arm-none-linux-gnueabi
+        -I$(CC_DIRECTORY)/$(CC_VERSION)/$(CC_RADIX)
 XENO_CC = gcc
 XENO_CFLAGS = -I$(ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(ROOTFS)/usr/xenomai/include/posix
 XENO_LDFLAGS = -Wl,@$(ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
@@ -104,11 +107,19 @@ ARCH_DFLAGS      = -march=armv5te -mtune=arm926ej-s
 #ARCH_DFLAGS      =
 
 
-AR               = $(CC_DIRECTORY)$(CC_RADIX)ar
-AS               = $(CC_DIRECTORY)$(CC_RADIX)gcc
-##CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc -Wcast-align
-CC               = $(CC_DIRECTORY)$(CC_RADIX)gcc
-LD               = $(CC_DIRECTORY)$(CC_RADIX)gcc
+ifdef CC_RADIX
+AR               = $(CC_BINDIR)$(CC_RADIX)-ar
+AS               = $(CC_BINDIR)$(CC_RADIX)-gcc
+##CC               = $(CC_BINDIR)$(CC_RADIX)gcc -Wcast-align
+CC               = $(CC_BINDIR)$(CC_RADIX)-gcc
+LD               = $(CC_BINDIR)$(CC_RADIX)-gcc
+else
+AR               = $(CC_BINDIR)ar
+AS               = $(CC_BINDIR)gcc
+##CC               = $(CC_BINDIR)gcc -Wcast-align
+CC               = $(CC_BINDIR)gcc
+LD               = $(CC_BINDIR)gcc
+endif
 RM               = rm
 MD               = mkdir
 GD               = ../gnu_dep
