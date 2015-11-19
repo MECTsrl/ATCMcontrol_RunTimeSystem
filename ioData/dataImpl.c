@@ -190,7 +190,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
 
 // -------- RTU CLIENT ---------------------------------------------
-#define	THE_RTUC_BAUDRATE	 38400 // 230400 // 38400
+#define	THE_RTUC_BAUDRATE	 230400 // 38400
 #define	THE_RTUC_PARITY 	 'N'
 #define	THE_RTUC_DATABIT 	 8
 #define	THE_RTUC_STOPBIT 	 1
@@ -224,6 +224,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 enum TableType {Crosstable_csv = 0, Alarms_csv, Commpar_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV};
 enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
+enum EventAlarm { Event = 0, Alarm};
 static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CAN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
 
 enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
@@ -375,10 +376,13 @@ static struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono rie
 #define FRONTE_SALITA   1
 #define FRONTE_DISCESA  0
 struct  Alarms {
-    int ALType;
+    enum EventAlarm ALType;
     char ALTag[MAX_IDNAME_LEN];
     char ALSource[MAX_IDNAME_LEN];
     char ALCompareVar[MAX_IDNAME_LEN];
+    u_int16_t TagAddr;
+    u_int16_t SourceAddr;
+    u_int16_t CompareAddr;
     u_int32_t ALCompareVal;
     u_int16_t ALOperator;
     u_int16_t ALFilterTime;
@@ -419,6 +423,7 @@ static enum threadStatus theEngineThreadStatus = NOT_STARTED;
 static enum threadStatus theDataThreadStatus = NOT_STARTED;
 static enum threadStatus theSyncThreadStatus = NOT_STARTED;
 
+static STaskInfoVMM *pVMM = NULL;
 static u_int32_t ErrorsState;
 //  ErrorsState: Variabile di errore
 //  bit 0:	fallita lettura crosstable
@@ -451,8 +456,9 @@ static int ReadAlarmsFields(int16_t Index);
 static int ReadCommFields(int16_t Index);
 static int LoadXTable(enum TableType CTType);
 static void AlarmMngr(void);
-static void PLCsync(void);
 static void ErrorMNG(void);
+static void LocalIO(void);
+static void PLCsync(void);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -787,7 +793,12 @@ static int ReadAlarmsFields(int16_t Index)
     Field.MaxLen = 1;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
-        ALCrossTable[Index].ALType = atoi(Field.Contents);
+        switch (atoi(Field.Contents)) {
+        case 0: ALCrossTable[Index].ALType = Event; break;
+        case 1: ALCrossTable[Index].ALType = Alarm; break;
+        default:
+            ERR = TRUE;
+        }
     } else {
         ERR = TRUE;
     }
@@ -1037,6 +1048,9 @@ static int LoadXTable(enum TableType CTType)
             ALCrossTable[index].ALTag[0] = '\0';
             ALCrossTable[index].ALSource[0] = '\0';
             ALCrossTable[index].ALCompareVar[0] = '\0';
+            ALCrossTable[index].TagAddr = 0;
+            ALCrossTable[index].SourceAddr = 0;
+            ALCrossTable[index].CompareAddr = 0;
             ALCrossTable[index].ALCompareVal = 0;
             ALCrossTable[index].ALOperator = 0;
             ALCrossTable[index].ALFilterTime = 0;
@@ -1131,169 +1145,134 @@ exit_function:
     return ERR;
 }
 
+static inline void setEventAlarm(int i)
+{
+    the_QdataRegisters[ALCrossTable[i].TagAddr] = 1;
+    switch (ALCrossTable[i].ALType ) {
+    case Event:
+        vmmSetEvent(pVMM, EVT_RESERVED_10);
+        break;
+    case Alarm:
+        vmmSetEvent(pVMM, EVT_RESERVED_11);
+        break;
+    }
+}
+
+static inline void clrEventAlarm(int i)
+{
+    the_QdataRegisters[ALCrossTable[i].TagAddr] = 0;
+}
+
+static inline void checkThis(int i, int condition)
+{
+    if (condition) {
+        if (ALCrossTable[i].ALFilterCount == 0) {
+            setEventAlarm(i);
+        } else {
+            ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterCount - 1;
+        }
+    } else {
+        clrEventAlarm(i);
+        ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterTime;
+    }
+}
+
 // fb_HW119_AlarmsMngr.st
 static void AlarmMngr(void)
 {
-    // FIXME: TODO
-    u_int32_t Index = 0;
+    u_int32_t i, oper, bit;
     int16_t SourceAddr;
-    int16_t CompareAddr;
-    int16_t TagAddr;
-    u_int32_t  CompareVal;
-    u_int32_t  tmp, tmpOld;
-    int ERRFlag;
-    u_int32_t ERRORVAL = 0x00000001;
-    IEC_STRMAX varname;
+    u_int32_t CompareVal;
+    u_int32_t value, old_value;
 
-    for (Index = 1; Index < DimAlarmsCT; ++Index) {
+    // already in pthread_mutex_lock(&theCrosstableClientMutex)
+    for (i = 1; i < DimAlarmsCT; ++i) {
 
-        if (ALCrossTable[Index].ALTag[0] == '\0') {
+        if (ALCrossTable[i].TagAddr == 0) {
             // last alarm
             break;
         }
-        ERRFlag = FALSE;
-        varname.MaxLen = MAX_IDNAME_LEN;
-        varname.CurLen = strnlen(ALCrossTable[Index].ALSource, MAX_IDNAME_LEN);
-        strncpy(varname.Contents, ALCrossTable[Index].ALSource, MAX_IDNAME_LEN);
-        HW119_GET_ADDR param = {(IEC_STRING *)&varname, 0 };
-        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-        SourceAddr = param.ret_value;
-        if (SourceAddr == 0xFFFF || SourceAddr > DimCrossTable || SourceAddr == 0) {
-            ERRFlag  = TRUE;
-        } else {
-            if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
-                ERRFlag  = TRUE;
-            } else {
-                CompareAddr = -1;
-                if (ALCrossTable[Index].ALCompareVar[0] == '\0') {
-                    CompareVal = ALCrossTable[Index].ALCompareVal;
-                } else {
-                    varname.CurLen = strnlen(ALCrossTable[Index].ALCompareVar, MAX_IDNAME_LEN);
-                    strncpy(varname.Contents, ALCrossTable[Index].ALCompareVar, MAX_IDNAME_LEN);
-                    hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-                    CompareAddr = param.ret_value;
-                    if (CompareAddr == 0xffff || CompareAddr >DimCrossTable || CompareAddr == 0) {
-                        ERRFlag  = TRUE;
-                    } else {
-                        CompareVal = the_QdataRegisters[CompareAddr];
-                    }
+        SourceAddr = ALCrossTable[i].SourceAddr;
+        if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
+            // unreliable values
+            continue;
+        }
+        oper = ALCrossTable[i].ALOperator & 0xFF00;
+        bit = ALCrossTable[i].ALOperator & 0x00FF;
+        if (ALCrossTable[i].CompareAddr == SourceAddr) {
+            // checking rising and falling edges (only bit testing)
+            if (oper == 0 && 1 <= bit && bit <= 32) {
+                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
+                old_value = get_dword_bit(CrossTable[SourceAddr].OldVal, bit);
+                switch (ALCrossTable[i].ALCompareVal) {
+                case FRONTE_SALITA:
+                    checkThis(i, old_value == 0 && value == 1);
+                    break;
+                case FRONTE_DISCESA:
+                    checkThis(i, old_value == 1 && value == 0);
+                    break;
+                default:
+                    ; // FIXME: assert
                 }
+            } else {
+                ; // FIXME: assert
             }
-            varname.CurLen = strnlen(ALCrossTable[Index].ALTag, MAX_IDNAME_LEN);
-            strncpy(varname.Contents, ALCrossTable[Index].ALTag, MAX_IDNAME_LEN);
-            hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-            TagAddr  = param.ret_value;
-            if (TagAddr == 0xFFFF || TagAddr > DimCrossTable || TagAddr == 0) {
-                ERRFlag  = TRUE;
+        } else {
+            // checking against either fixed or variable values
+            if (ALCrossTable[i].CompareAddr == 0) {
+                CompareVal = ALCrossTable[i].ALCompareVal;
+            } else {
+                CompareVal = the_QdataRegisters[ALCrossTable[i].CompareAddr];
+            }
+            switch (oper) {
+            case 0x100: //  >
+                checkThis(i, the_QdataRegisters[SourceAddr] > CompareVal);
+                break;
+            case 0x200: //  >=
+                checkThis(i, the_QdataRegisters[SourceAddr] >= CompareVal);
+                break;
+            case 0x300: //  <
+                checkThis(i, the_QdataRegisters[SourceAddr] < CompareVal);
+                break;
+            case 0x400: //  <=
+                checkThis(i, the_QdataRegisters[SourceAddr] <= CompareVal);
+                break;
+            case 0x500: //  ==
+                checkThis(i, the_QdataRegisters[SourceAddr] == CompareVal);
+                break;
+            case 0x600: //  !=
+                checkThis(i, the_QdataRegisters[SourceAddr] != CompareVal);
+                break;
+            case 0x000: // bit test
+                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
+                checkThis(i, value == CompareVal);
+                break;
+            default:
+                ; // FIXME: assert
             }
         }
-        if (! ERRFlag) {
-            tmp = ALCrossTable[Index].ALOperator & 0xFF00;
-            switch (tmp) {
-            case 0x100: // >
-                if (the_QdataRegisters[SourceAddr] > CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            case 0x200: // >=
-                if (the_QdataRegisters[SourceAddr] >= CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            case 0x300: // <
-                if (the_QdataRegisters[SourceAddr] < CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            case 0x400: // <=
-                if (the_QdataRegisters[SourceAddr] <= CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            case 0x500: // ==
-                if (the_QdataRegisters[SourceAddr] == CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            case 0x600: // !=
-                if (the_QdataRegisters[SourceAddr] != CompareVal) {
-                    if (ALCrossTable[Index].ALFilterCount == 0) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else {
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterCount - 1;
-                    }
-                } else {
-                    the_QdataRegisters[TagAddr] = 0;
-                    ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                }
-                break;
-            default:    // bit
-                tmp = the_QdataRegisters[SourceAddr] >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
-                tmp &= 1;
-                if (CompareAddr == -1) {
-                    if (tmp == CompareVal) {
-                        if (ALCrossTable[Index].ALFilterCount == 0) {
-                            the_QdataRegisters[TagAddr] = ERRORVAL;
-                        } else {
-                            ALCrossTable[Index].ALFilterCount -= 1;
-                        }
-                    } else {
-                        the_QdataRegisters[TagAddr] = 0;
-                        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-                    }
-                } else if (CompareAddr == SourceAddr) {
-                    tmpOld = CrossTable[SourceAddr].OldVal >> ((ALCrossTable[Index].ALOperator & 0x00FF) - 1);
-                    tmpOld &= 1;
-                    if (tmp == 1 && tmpOld == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else if (tmp == 1 && tmpOld == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
-                        the_QdataRegisters[TagAddr] = ERRORVAL;
-                    } else if (tmp == 0 && ALCrossTable[Index].ALCompareVal == FRONTE_SALITA) {
-                        the_QdataRegisters[TagAddr] = 0;
-                    } else if (tmp == 1 && ALCrossTable[Index].ALCompareVal == FRONTE_DISCESA) {
-                        the_QdataRegisters[TagAddr] = 0;
-                    }
-                    if (tmp == 0) {
-                        CrossTable[SourceAddr].OldVal &= ~(2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
-                    } else {
-                        CrossTable[SourceAddr].OldVal |=  (2 ^ ((ALCrossTable[Index].ALOperator & 0x0020) - 1));
-                    }
-                }
+    }
+    // save current bit values ("future" old values)
+    for (i = 1; i < DimAlarmsCT; ++i) {
+
+        if (ALCrossTable[i].TagAddr == 0) {
+            // last alarm
+            break;
+        }
+        SourceAddr = ALCrossTable[i].SourceAddr;
+        if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
+            // unreliable values
+            continue;
+        }
+        oper = ALCrossTable[i].ALOperator & 0xFF00;
+        bit = ALCrossTable[i].ALOperator & 0x00FF;
+        if (ALCrossTable[i].CompareAddr == SourceAddr) {
+            // checking rising and falling edges (only bit testing)
+            if (oper == 0 && 1 <= bit && bit <= 32) {
+                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
+                set_dword_bit(&CrossTable[SourceAddr].OldVal, bit, value);
+            } else {
+                ; // FIXME: assert
             }
         }
     }
@@ -1396,6 +1375,8 @@ static void PLCsync(void)
 // fb_TPAC1007_LIOsync.st
 static void LocalIO(void)
 {
+    // already in pthread_mutex_lock(&theCrosstableClientMutex)
+
     // TICtimer
     float PLC_time, PLC_timeMin, PLC_timeMax;
     u_int32_t tic_ms;
@@ -1432,7 +1413,47 @@ static void LocalIO(void)
 // fb_HW119_ErrorMng.st
 static void ErrorMNG(void)
 {
+    // already in pthread_mutex_lock(&theCrosstableClientMutex)
     // empty
+}
+
+static int checkEventsandAlarms()
+{
+    int retval = 0, i;
+    IEC_STRMAX varname = { 0, MAX_IDNAME_LEN, ""};
+    HW119_GET_ADDR param = {(IEC_STRING *)&varname, 0 };
+
+    for (i = 1; i < DimAlarmsCT; ++i) {
+
+        if (ALCrossTable[i].ALTag[0] == '\0') {
+            // last alarm
+            break;
+        }
+        varname.CurLen = strnlen(ALCrossTable[i].ALTag, MAX_IDNAME_LEN);
+        strncpy(varname.Contents, ALCrossTable[i].ALTag, MAX_IDNAME_LEN);
+        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
+        ALCrossTable[i].TagAddr = param.ret_value;
+
+        varname.CurLen = strnlen(ALCrossTable[i].ALSource, MAX_IDNAME_LEN);
+        strncpy(varname.Contents, ALCrossTable[i].ALSource, MAX_IDNAME_LEN);
+        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
+        ALCrossTable[i].SourceAddr = param.ret_value;
+
+        if (ALCrossTable[i].ALCompareVar[0] == '\0') {
+            ALCrossTable[i].CompareAddr = 0;
+        } else {
+            varname.CurLen = strnlen(ALCrossTable[i].ALCompareVar, MAX_IDNAME_LEN);
+            strncpy(varname.Contents, ALCrossTable[i].ALCompareVar, MAX_IDNAME_LEN);
+            hw119_get_addr(NULL, NULL, (unsigned char *)&param);
+            ALCrossTable[i].CompareAddr = param.ret_value;
+        }
+
+        if (ALCrossTable[i].TagAddr == 0xffff || ALCrossTable[i].SourceAddr == 0xffff || ALCrossTable[i].CompareAddr == 0xffff) {
+            retval = -1;
+            break;
+        }
+    }
+    return retval;
 }
 
 static int checkServersDevicesAndNodes()
@@ -1729,6 +1750,7 @@ static void *engineThread(void *statusAdr)
 {
     // thread init
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
+    pVMM = get_pVMM();
 
     pthread_mutex_lock(&theCrosstableClientMutex);
     {
@@ -1758,6 +1780,10 @@ static void *engineThread(void *statusAdr)
 
         // 40: CREATE SERVER, DEVICES AND NODES TABLES
         if (checkServersDevicesAndNodes()) {
+            ERROR_FLAG |= ERROR_FLAG_COMMPAR;
+            goto exit_initialization;
+        }
+        if (checkEventsandAlarms()) {
             ERROR_FLAG |= ERROR_FLAG_COMMPAR;
             goto exit_initialization;
         }
@@ -3420,9 +3446,7 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyConfig() ...\n");
 #endif
-    if (pIO->I.ulSize < THE_DATA_SIZE
-     || pIO->Q.ulSize < THE_DATA_SIZE
-     || pIO->M.ulSize < THE_DATA_SIZE) {
+    if (pIO->I.ulSize < THE_DATA_SIZE || pIO->Q.ulSize < THE_DATA_SIZE) {
         uRes = ERR_INVALID_PARAM;
     }
     // read configuration file
@@ -3475,11 +3499,9 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
     // load retentive area in %I %Q
 #if defined(RTS_CFG_MECT_RETAIN)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
-    //void *pvMsegment = (void *)(((char *)(pIO->M.pAdr + pIO->M.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
     OS_MEMCPY(pvIsegment, ptRetentive, lenRetentive);
-    // OS_MEMCPY(pvMsegment, ptRetentive, lenRetentive);
 	OS_MEMCPY(pvQsegment, ptRetentive, lenRetentive);
     OS_MEMCPY(the_IdataRegisters, ptRetentive, lenRetentive);
     OS_MEMCPY(the_QdataRegisters, ptRetentive, lenRetentive);
