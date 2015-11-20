@@ -78,8 +78,8 @@ static IEC_DINT g_lMemObject = 0;
  * OUTPUTS:  0               ->  (XX_MAX_OUT_BIT - 1)
  * INPUTS:   XX_MAX_OUT_BIT  ->  (XX_MAX_OUT_BIT + XX_MAX_IN_BIT - 1)
  */
-#define XX_MAX_OUT_BIT 5
-#define XX_MAX_IN_BIT 1
+#define XX_MAX_OUT_BIT 6
+#define XX_MAX_IN_BIT 0
 
 static void *xx_base_ptr = NULL;
 static int xx_fd = -1;
@@ -141,7 +141,8 @@ static struct {
 	{ 0x0398, 0x00000030 },		//DRIVEx CLR(4mA), page 753, 756
 	{ 0x0628, 0x00000002 },		//PULLx CLR(no), page 789
 	{ 0x0728, 0x00000002 },		//DOUTx CLR, page 801
-	{ 0x0b28, 0x00000002 },		//DOEx CLR(en.), page 810
+//	{ 0x0b28, 0x00000002 },		//DOEx CLR(en.), page 810 (if input)
+    { 0x0b24, 0x00000002 },		//DOEx SET(en.), page 810 (if output)
 
 	// THE END
 	{ 0xffff, 0xffffffff }
@@ -174,7 +175,8 @@ static struct {
 
 	// [5] IN:  bank 2, pin  1 (pin 289, SSP0_DATA1)
 	// X 4 G 3 V 2 1 0
-	{ 0x0920, 0x00000002 },		//DINx, page 806
+    //{ 0x0920, 0x00000002 },		//DINx, page 806
+    { 0x0720, 0x00000002 },		//DOUTx, page 801
 
 	// THE END
 	{ 0xffff, 0xffffffff }

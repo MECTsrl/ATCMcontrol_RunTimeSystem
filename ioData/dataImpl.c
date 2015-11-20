@@ -41,6 +41,7 @@
 #include "mectCfgUtil.h"
 #include "dataMain.h"
 #include "iolDef.h"
+#include "fcDef.h"
 #if defined(RTS_CFG_MECT_RETAIN)
 #include "mectRetentive.h"
 #endif
@@ -1768,6 +1769,7 @@ static void *engineThread(void *statusAdr)
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
     pVMM = get_pVMM();
 
+    XX_GPIO_SET(3);
     pthread_mutex_lock(&theCrosstableClientMutex);
     {
         // case 0: init
@@ -1849,18 +1851,21 @@ static void *engineThread(void *statusAdr)
     pthread_mutex_unlock(&theCrosstableClientMutex);
 
     // run
+    osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM); // engineThread
     *threadStatusPtr = RUNNING;
     while (!g_bExiting) {
         do_sleep_ms(THE_ENGINE_DELAY_ms);
         if (g_bRunning) {
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
+                XX_GPIO_SET(3);
                 if (CommEnabled)  {
                     AlarmMngr();
                     LocalIO();
                 } else {
                     ErrorMNG();
                 }
+                XX_GPIO_CLR(3);
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
         }
@@ -2382,6 +2387,7 @@ static void *serverThread(void *arg)
     }
 
     // run
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // serverThread
     theServers[s].thread_status = RUNNING;
     while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
@@ -2666,12 +2672,16 @@ static void *clientThread(void *arg)
 
     // start the fieldbus operations loop
     DataAddr = 0;
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // clientThread
     theDevices[d].thread_status = RUNNING;
+    XX_GPIO_SET(5);
     while (!g_bExiting) {
 
         // trivial scenario
         if (!g_bRunning || theDevices[d].status == NO_HOPE) {
+            XX_GPIO_CLR(5);
             do_sleep_ms(THE_CONNECTION_DELAY_ms);
+            XX_GPIO_SET(5);
             continue;
         }
 
@@ -2692,7 +2702,9 @@ static void *clientThread(void *arg)
             abstime.tv_sec = (next_ms / 1000);
             abstime.tv_nsec += (next_ms % 1000) * 1000 * 1000; // ms -> ns
             do {
+                XX_GPIO_CLR(5);
                 rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
+                XX_GPIO_SET(5);
                 if (rc == -1 && errno == EINTR){
                     continue;
                 } else {
@@ -3611,6 +3623,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
     if (g_bRunning) {
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
+            XX_GPIO_SET(4);
 			if (pNotify->uTask != 0xffffu) {
                 // notify from a plc task
 
@@ -3692,6 +3705,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     // FIXME: create a write request
                 }
             }
+            XX_GPIO_CLR(4);
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
     }
@@ -3710,6 +3724,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
     if (g_bRunning) {
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
+            XX_GPIO_SET(4);
             if (pNotify->uTask != 0xffffu) {
                 // notify from a plc task
 
@@ -3784,6 +3799,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     *(IEC_DATA *)dest = byte;
                 }
             }
+            XX_GPIO_CLR(4);
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
     }
