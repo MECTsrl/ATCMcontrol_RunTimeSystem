@@ -395,7 +395,7 @@ struct CommParameters {
     char Device[MAX_DEVICE_LEN];
     char IPaddr[MAX_IPADDR_LEN];
     u_int16_t Port;
-    u_int16_t BaudRate; // FIXME (limit 65535)
+    u_int32_t BaudRate;
     char Parity;
     u_int16_t DataBit;
     u_int16_t StopBit;
@@ -948,8 +948,8 @@ static int ReadCommFields(int16_t Index)
         } else {
             ERR = TRUE;
         }
-        // Parity {text}
-        Field.MaxLen = 1;
+        // Parity {E,N,O}
+        Field.MaxLen = 1 + 1;
         hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
         if (param.ret_value == 0) {
             CommParameters[Index - 2].Parity = param.field->Contents[0];
@@ -1423,6 +1423,7 @@ static int checkEventsandAlarms()
     IEC_STRMAX varname = { 0, MAX_IDNAME_LEN, ""};
     HW119_GET_ADDR param = {(IEC_STRING *)&varname, 0 };
 
+    fprintf(stderr, "%s()\n", __func__);
     for (i = 1; i < DimAlarmsCT; ++i) {
 
         if (ALCrossTable[i].ALTag[0] == '\0') {
@@ -1631,6 +1632,7 @@ static int checkServersDevicesAndNodes()
                     case RTU:
                         theDevices[d].u.rtu.Port = CrossTable[i].Port;
                         switch (theDevices[d].u.rtu.Port) {
+#if 0
                         case 0:
                             theDevices[d].u.rtu.BaudRate = modbus0_cfg.serial_cfg.baud;
                             switch (modbus0_cfg.serial_cfg.parity) {
@@ -1667,6 +1669,20 @@ static int checkServersDevicesAndNodes()
                             theDevices[d].Tmin = THE_RTUC_TMIN_MS;
                             theDevices[d].TimeOut = THE_RTUC_TOUT_MS;
                             break;
+#else
+                        case 0:
+                        case 1:
+                        case 2:
+                        case 3:
+                            // FIXME: use System.conf
+                            theDevices[d].u.rtu.BaudRate = CommParameters[RTU].BaudRate;
+                            theDevices[d].u.rtu.Parity = CommParameters[RTU].Parity;
+                            theDevices[d].u.rtu.DataBit = CommParameters[RTU].DataBit;
+                            theDevices[d].u.rtu.StopBit = CommParameters[RTU].StopBit;
+                            theDevices[d].Tmin = CommParameters[RTU].Tmin;
+                            theDevices[d].TimeOut = CommParameters[RTU].TimeOut;
+                            break;
+#endif
                         default:
                             fprintf(stderr, "%s: bad RTU port %u for variable #%u", __func__, CrossTable[i].Port, i);
                             ; // FIXME: error
@@ -2617,20 +2633,6 @@ static void *clientThread(void *arg)
     }
 
     // ------------------------------------------ run
-    theDevices[d].thread_status = RUNNING;
-    response_timeout.tv_sec = 0;
-    response_timeout.tv_usec = theDevices[d].TimeOut * 1000;
-
-    clock_gettime(CLOCK_REALTIME, &abstime);
-    this_loop_start_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
-    write_index = 1;
-    for (prio = 0; prio < MAX_PRIORITY; ++prio) {
-        read_time_ms[prio] = this_loop_start_ms;
-        read_index[prio] = 1;
-    }
-    last_good_ms = this_loop_start_ms;
-
-    // start the fieldbus operations loop
     fprintf(stderr, "%s: ", theDevices[d].name);
     switch (theDevices[d].Protocol) {
     case PLC: // FIXME: assert
@@ -2651,8 +2653,20 @@ static void *clientThread(void *arg)
         ;
     }
     fprintf(stderr, "tmin=%ums, tout=%ums\n", theDevices[d].Tmin, theDevices[d].TimeOut);
+    response_timeout.tv_sec = 0;
+    response_timeout.tv_usec = theDevices[d].TimeOut * 1000;
+    clock_gettime(CLOCK_REALTIME, &abstime);
+    this_loop_start_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
+    write_index = 1;
+    for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+        read_time_ms[prio] = this_loop_start_ms;
+        read_index[prio] = 1;
+    }
+    last_good_ms = this_loop_start_ms;
 
+    // start the fieldbus operations loop
     DataAddr = 0;
+    theDevices[d].thread_status = RUNNING;
     while (!g_bExiting) {
 
         // trivial scenario
