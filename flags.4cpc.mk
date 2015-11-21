@@ -122,7 +122,7 @@ SFLAGS           =
 DFLAGS           = -D_SOF_4CPC_SRC_ $(ARCH_DFLAGS)
 ifeq ($(DEBUG), 1)
   DFLAGS += -DDEBUG
-  OFLAGS = -O0
+  OFLAGS = -O2
 else
   OFLAGS = -O2
 endif
