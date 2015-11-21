@@ -52,6 +52,8 @@
 #define REVISION_HI  7
 #define REVISION_LO  0
 
+#undef VERBOSE_DEBUG
+
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 #define MAX_SERVERS  5 // 3 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV (PLC in dataMain->dataNotifySet/Get)
@@ -178,9 +180,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define ERROR_FLAG_TCPRTUSRV_ON 0x00020000 // bit17: TCPRTUSRV_ON
 
 //
-#ifdef __GLIBC_HAVE_LONG_LONG
-#pragma message "using 64bit emulation from gcc"
-#else
+#ifndef __GLIBC_HAVE_LONG_LONG
 #error "we need 64bit emulation from gcc"
 #endif
 #define BlackListRTU       (*(u_int64_t *)&the_QsyncRegisters[5708])
@@ -189,14 +189,6 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define CommErrTCP         (*(u_int64_t *)&the_QsyncRegisters[5720])
 #define BlackListTCPRTU    (*(u_int64_t *)&the_QsyncRegisters[5724])
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
-
-// -------- RTU CLIENT ---------------------------------------------
-#define	THE_RTUC_BAUDRATE	 230400 // 38400
-#define	THE_RTUC_PARITY 	 'N'
-#define	THE_RTUC_DATABIT 	 8
-#define	THE_RTUC_STOPBIT 	 1
-#define	THE_RTUC_TMIN_MS 	 1
-#define	THE_RTUC_TOUT_MS 	 10
 
 // -------- RTU SERVER ---------------------------------------------
 #define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
@@ -469,9 +461,11 @@ static inline void do_sleep_ms(unsigned delay_ms)
     usleep(delay_ms * 1000);
 #else
     struct timespec rqtp, rmtp;
+    ldiv_t q;
 
-    rqtp.tv_sec = (delay_ms / 1000);
-    rqtp.tv_nsec += (delay_ms % 1000) * 1000 * 1000; // ms -> ns
+    q = ldiv(delay_ms, 1000);
+    rqtp.tv_sec = q.quot;
+    rqtp.tv_nsec = q.rem * 1E6; // ms -> ns
 
     while (clock_nanosleep(CLOCK_MONOTONIC, 0, &rqtp, &rmtp) == EINTR) {
         rqtp.tv_sec = rmtp.tv_sec;
@@ -582,7 +576,7 @@ static int ReadFields(int16_t Index)
     }
 
     // Plc {H,P,S,F}
-    Field.MaxLen = 1;
+    Field.MaxLen = 1 + 1;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         switch (Field.Contents[0]) {
@@ -791,7 +785,7 @@ static int ReadAlarmsFields(int16_t Index)
     HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
 
     // ALType {0,1}
-    Field.MaxLen = 1;
+    Field.MaxLen = 1 + 1;
     hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
     if (param.ret_value == 0) {
         switch (atoi(Field.Contents)) {
@@ -1004,7 +998,7 @@ static int LoadXTable(enum TableType CTType)
 {
     char *CTFile;
     int32_t CTDimension;
-    int32_t index;
+    int32_t addr;
     int ERR = FALSE;
     IEC_STRMAX filename;
     HW119_OPEN_CROSS_TABLE_PARAM open_param = {(IEC_STRING *)&filename, 0 };
@@ -1017,26 +1011,26 @@ static int LoadXTable(enum TableType CTType)
     case Crosstable_csv:
         CTFile = "/local/etc/sysconfig/Crosstable.csv";
         CTDimension = DimCrossTable;
-        for (index = 0; index <= DimCrossTable-1; ++index) {
-            CrossTable[index].Enable = 0;
-            CrossTable[index].Plc = FALSE;
-            CrossTable[index].Tag[0] = UNKNOWN;
-            CrossTable[index].Types = 0;
-            CrossTable[index].Decimal = 0;
-            CrossTable[index].Protocol = PLC;
-            CrossTable[index].IPAddress[0] = '\0';
-            CrossTable[index].Port = 0;
-            CrossTable[index].NodeId = 0;
-            CrossTable[index].Offset = 0;
-            CrossTable[index].Block = 0;
-            CrossTable[index].BlockSize = 0;
-            CrossTable[index].Output = FALSE;
-            CrossTable[index].OldVal = 0;
-            CrossTable[index].Error = 1;
-            CrossTable[index].device = 0xffff;
-            CrossTable[index].node = 0xffff;
-            the_QsyncRegisters[index + 1] = QUEUE_EMPTY;
-            the_QdataStates[index + 1] = DATA_OK;
+        for (addr = 1; addr <= DimCrossTable; ++addr) {
+            CrossTable[addr].Enable = 0;
+            CrossTable[addr].Plc = FALSE;
+            CrossTable[addr].Tag[0] = UNKNOWN;
+            CrossTable[addr].Types = 0;
+            CrossTable[addr].Decimal = 0;
+            CrossTable[addr].Protocol = PLC;
+            CrossTable[addr].IPAddress[0] = '\0';
+            CrossTable[addr].Port = 0;
+            CrossTable[addr].NodeId = 0;
+            CrossTable[addr].Offset = 0;
+            CrossTable[addr].Block = 0;
+            CrossTable[addr].BlockSize = 0;
+            CrossTable[addr].Output = FALSE;
+            CrossTable[addr].OldVal = 0;
+            CrossTable[addr].Error = 1;
+            CrossTable[addr].device = 0xffff;
+            CrossTable[addr].node = 0xffff;
+            the_QsyncRegisters[addr] = QUEUE_EMPTY;
+            the_QdataStates[addr] = DATA_OK;
         }
         CrossTableState = TRUE;
         CommEnabled = FALSE;
@@ -1044,17 +1038,17 @@ static int LoadXTable(enum TableType CTType)
     case Alarms_csv:
         CTFile = "/local/etc/sysconfig/Alarms.csv";
         CTDimension = DimAlarmsCT;
-        for (index = 0; index <= DimAlarmsCT; ++index) {
-            ALCrossTable[index].ALType = FALSE;
-            ALCrossTable[index].ALTag[0] = '\0';
-            ALCrossTable[index].ALSource[0] = '\0';
-            ALCrossTable[index].ALCompareVar[0] = '\0';
-            ALCrossTable[index].TagAddr = 0;
-            ALCrossTable[index].SourceAddr = 0;
-            ALCrossTable[index].CompareAddr = 0;
-            ALCrossTable[index].ALCompareVal = 0;
-            ALCrossTable[index].ALOperator = 0;
-            ALCrossTable[index].ALFilterTime = 0;
+        for (addr = 0; addr <= DimAlarmsCT; ++addr) {
+            ALCrossTable[addr].ALType = FALSE;
+            ALCrossTable[addr].ALTag[0] = '\0';
+            ALCrossTable[addr].ALSource[0] = '\0';
+            ALCrossTable[addr].ALCompareVar[0] = '\0';
+            ALCrossTable[addr].TagAddr = 0;
+            ALCrossTable[addr].SourceAddr = 0;
+            ALCrossTable[addr].CompareAddr = 0;
+            ALCrossTable[addr].ALCompareVal = 0;
+            ALCrossTable[addr].ALOperator = 0;
+            ALCrossTable[addr].ALFilterTime = 0;
         }
         ALCrossTableState = TRUE;
         break;
@@ -1080,7 +1074,7 @@ static int LoadXTable(enum TableType CTType)
     }
 
     // read loop
-    for (index = 1; index <= CTDimension; ++ index) {
+    for (addr = 1; addr <= CTDimension; ++ addr) {
 
         switch (CTType) {
         case Crosstable_csv:
@@ -1096,11 +1090,11 @@ static int LoadXTable(enum TableType CTType)
         if (read_param.ret_value) {
             switch (CTType) {
             case Crosstable_csv:
-                CrossTable[index].Error = 100;
+                CrossTable[addr].Error = 100;
                 ErrorsState |= 0x02;
                 break;
             case Alarms_csv:
-                ALCrossTable[index].ALError = 100;
+                ALCrossTable[addr].ALError = 100;
                 ErrorsState |= 0x04;
                 break;
             case 2:
@@ -1112,22 +1106,22 @@ static int LoadXTable(enum TableType CTType)
         }
         switch (CTType) {
         case Crosstable_csv:
-            if (ReadFields(index)) {
-                CrossTable[index].Error = 100;
+            if (ReadFields(addr)) {
+                CrossTable[addr].Error = 100;
                 ErrorsState |= 0x04;
             }
             break;
         case Alarms_csv:
-            if (ReadAlarmsFields(index)) {
-                ALCrossTable[index].ALError = 100;
+            if (ReadAlarmsFields(addr)) {
+                ALCrossTable[addr].ALError = 100;
                 ErrorsState |= 0x04;
             }
             break;
         case Commpar_csv:
-            if (ReadCommFields(index) && (index > 1)) {
-                CommParameters[index - 1].State = FALSE;
+            if (ReadCommFields(addr) && (addr > 1)) {
+                CommParameters[addr - 1].State = FALSE;
             } else {
-                CommParameters[index - 1].State = TRUE;
+                CommParameters[addr - 1].State = TRUE;
             }
             break;
         default:
@@ -1303,10 +1297,12 @@ static void PLCsync(void)
                 break;
             case READ:
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_READ) {
+                    the_QsyncRegisters[indx] = QUEUE_BUSY_READ;
                     switch (CrossTable[addr].Protocol) {
                     case PLC:
-                        // all PLC variables are always ready
-                        // the_QdataRegisters[addr] = the_QdataRegisters[addr]; :)
+                        // immediate read: no fieldbus
+                        // ready "by design" the_QdataRegisters[addr] = the_QdataRegisters[addr];
+                        // the_QdataStates[addr] = DATA_OK;
                         break;
                     case RTU:
                     case TCP:
@@ -1315,10 +1311,6 @@ static void PLCsync(void)
                     case RTUSRV:
                     case TCPSRV:
                     case TCPRTUSRV:
-                        the_QsyncRegisters[indx] = QUEUE_BUSY_READ;
-                        for (i = 1; i <= (CrossTable[addr].BlockSize - 1); ++i) { // FIXME: capoblocco?
-                            the_QsyncRegisters[indx + i] = QUEUE_BUSY_READ;
-                        }
                         if (CrossTable[addr].device != 0xffff) {
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
@@ -1333,14 +1325,16 @@ static void PLCsync(void)
             case WRITE_RIC_SINGLE:
             case WRITE_RIC_MULTIPLE:
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
+                    the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                     switch (CrossTable[addr].Protocol) {
                     case PLC:
-                        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
+                        // immediate write: no fieldbus
                         the_QdataRegisters[addr] = the_IdataRegisters[addr];
+                        the_QdataStates[addr] = DATA_OK;
                         if (RW == WRITE_MULTIPLE || RW == WRITE_RIC_MULTIPLE) {
-                            for (i = 1; i <= (CrossTable[addr].BlockSize - 1); ++i) { // FIXME: capoblocco?
-                                the_QsyncRegisters[indx + i] = QUEUE_BUSY_WRITE;
-                                the_QdataRegisters[addr + i] = the_IdataRegisters[addr + i];
+                            for (i = 0; i < CrossTable[addr].BlockSize; ++i) {
+                                the_QdataRegisters[CrossTable[addr].BlockBase + i] = the_IdataRegisters[CrossTable[addr].BlockBase + i];
+                                the_QdataStates[CrossTable[addr].BlockBase + i] = DATA_OK;
                             }
                         }
                         break;
@@ -1351,7 +1345,6 @@ static void PLCsync(void)
                     case RTUSRV:
                     case TCPSRV:
                     case TCPRTUSRV:
-                        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                         if (CrossTable[addr].device != 0xffff) {
                             theDevices[CrossTable[addr].device].writeOperations += 1;
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
@@ -2538,6 +2531,7 @@ static void *clientThread(void *arg)
     // device queue management by priority and periods
     u_int16_t prio;                         // priority of variables
     u_int16_t write_index;                  // current write index in queue
+    u_int16_t read_addr[MAX_PRIORITY];      // current read address in crosstable for each priority
     u_int16_t read_index[MAX_PRIORITY];     // current read indexes in queue for each priority
     u_int32_t read_time_ms[MAX_PRIORITY];   // next read time for each priority
 
@@ -2666,6 +2660,7 @@ static void *clientThread(void *arg)
     write_index = 1;
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
         read_time_ms[prio] = this_loop_start_ms;
+        read_addr[prio] = 1;
         read_index[prio] = 1;
     }
     last_good_ms = this_loop_start_ms;
@@ -2695,26 +2690,63 @@ static void *clientThread(void *arg)
             // wait for next operation or next programmed read
             next_ms = now_ms + THE_UDP_TIMEOUT_ms;
             for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+                if (read_time_ms[prio] < now_ms) {
+                    read_time_ms[prio] = now_ms;
+                }
                 if (read_time_ms[prio] < next_ms) {
                     next_ms = read_time_ms[prio];
                 }
             }
-            abstime.tv_sec = (next_ms / 1000);
-            abstime.tv_nsec += (next_ms % 1000) * 1000 * 1000; // ms -> ns
-            do {
-                XX_GPIO_CLR(5);
-                rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
-                XX_GPIO_SET(5);
-                if (rc == -1 && errno == EINTR){
-                    continue;
-                } else {
-                    break;
+            if (next_ms > now_ms) {
+                int timeout, invalid_timeout, invalid_permission, other_error;
+                ldiv_t q;
+                q = ldiv(next_ms, 1000);
+                abstime.tv_sec = q.quot;
+                abstime.tv_nsec += q.rem * 1E6; // ms -> ns
+                q = ldiv(abstime.tv_nsec, 1E9);
+                if (q.quot > 0) {
+                    abstime.tv_sec += q.quot;
+                    abstime.tv_nsec -= q.quot * 1E9;
                 }
-            } while (TRUE);
-
-            // what time is it please?
-            clock_gettime(CLOCK_REALTIME, &abstime);
-            now_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
+                do {
+                    XX_GPIO_CLR(5);
+                    rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
+                    XX_GPIO_SET(5);
+                    timeout = invalid_timeout = invalid_permission = other_error = FALSE;
+                    if (rc == 0) {
+                        break;
+                    }
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    if (errno ==  ETIMEDOUT) {
+                        timeout = TRUE;
+                        break;
+                    }
+                    if (errno ==  EINVAL) {
+                        invalid_timeout = TRUE;
+                        break;
+                    }
+                    if (errno ==  EPERM) {
+                        invalid_permission = TRUE;
+                        break;
+                    }
+                    other_error = TRUE;
+                    break;
+                } while (TRUE);
+                // what time is it please?
+                clock_gettime(CLOCK_REALTIME, &abstime);
+                now_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", now_ms,
+                    timeout?"timeout":(invalid_timeout?"invalid_timeout":(invalid_permission?"invalid_permission":(other_error?"other_error":"signal"))),
+                    next_ms, abstime.tv_sec, abstime.tv_nsec);
+#endif
+            } else {
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "%09u ms: immediate restart\n", now_ms);
+#endif
+            }
         }
 
         // manage the reset of the error flags
@@ -2789,9 +2821,11 @@ static void *clientThread(void *arg)
                     // local queue management
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
-                    write_index = 1; // FIXME: "FlagPrimoCiclo"
-
-                } else if (theDevices[d].writeOperations > 0) { // instead of "RichiestaScrittura"
+#ifdef VERBOSE_DEBUG
+                    fprintf(stderr, "%09u ms: write PLC [%u], there are still %u\n", now_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
+#endif
+                // is it there a write requests from PLC to this device?
+                } else if (theDevices[d].writeOperations > 0) {
                     u_int16_t indx, oper, addr;
 
                     // it should be there something to write from HMI to this device
@@ -2803,8 +2837,8 @@ static void *clientThread(void *arg)
                             // queue tail, jump to the array end
                             indx = DimCrossTable;
                         } else if (CrossTable[addr].device == d
-                         && (oper == WRITE_SINGLE || oper == WRITE_MULTIPLE
-                          || oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE)) {
+                               && (oper == WRITE_SINGLE || oper == WRITE_MULTIPLE
+                                || oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE)) {
                             found = TRUE;
                             break;
                         }
@@ -2813,37 +2847,80 @@ static void *clientThread(void *arg)
                         u_int16_t n;
 
                         QueueIndex = indx;
-                        DataAddr = addr;
                         Operation = oper;
                         // data values from the the udp input, the *_BIT management is in fieldWrite()
                         if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
+                            DataAddr = addr;
                             DataNumber = 1;
-                            DataValue[0] = the_IdataRegisters[DataAddr];
+                            DataValue[0] = the_IdataRegisters[addr];
                         } else { // oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE
                             // NB the HMI programmer must prepare the write for the whole block
-                            DataNumber = CrossTable[DataAddr].BlockSize; // FIXME: assert this is the block start
+                            DataAddr = CrossTable[addr].BlockBase;
+                            DataNumber = CrossTable[addr].BlockSize;
                             for (n = 0; n < DataNumber; ++n) {
                                 DataValue[n] = the_IdataRegisters[DataAddr + n];
                             }
                         }
                         // keep the index for the next loop
                         write_index = indx + 1; // may overlap DimCrossTable, it's ok
+#ifdef VERBOSE_DEBUG
+                        fprintf(stderr, "%09u ms: write [%u]@%u, will check @%u\n", now_ms, DataAddr, indx, write_index);
+#endif
                     } else {
-                        // next time we'll restart from the first
+                        // next time we'll restart from the first one
                         write_index = 1;
                     }
                     theDevices[d].writeOperations -= 1;
                 }
+
+                // if no write then is it there a read request for this device?
                 if (DataAddr == 0) {
                     u_int16_t indx, oper, addr;
 
-                    // periodic read requests (enabled from HMI)
-                    // check by priority if timer is over
+                    // periodic read requests:
+                    // -- {P,S,F} automatically enabled from Crosstable
+                    // -- {H} enabled from HMI when the page is displayed
                     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+                        // only when the timer expires
                         if (read_time_ms[prio] <= now_ms) {
 
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
+
+                            // {P,S,F} from Crosstable
+                            for (addr = read_addr[prio]; addr <= DimCrossTable; ++addr) {
+                                if (CrossTable[addr].device == d
+                                 && CrossTable[addr].Enable == (prio + 1)
+                                 && CrossTable[addr].Plc > Htype
+                                 && the_QdataStates[addr] != DATA_RUN) {
+                                    found = TRUE;
+                                    break;
+                                }
+                            }
+                            if (found) {
+                                u_int16_t n;
+
+                                QueueIndex = 0;
+                                DataAddr = CrossTable[addr].BlockBase;
+                                DataNumber = CrossTable[addr].BlockSize;
+                                Operation = READ;
+                                for (n = 0; n < DataNumber; ++n) {
+                                    // data values will be available after the fieldbus access
+                                    // FIXME: let's default to the current values, just in case ...
+                                    DataValue[n] = the_QdataRegisters[DataAddr + n];
+                                }
+                                // keep the index for the next loop
+                                read_addr[prio] = DataAddr + DataNumber + 1; // may overlap DimCrossTable, it's ok
+#ifdef VERBOSE_DEBUG
+                                fprintf(stderr, "%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", now_ms, prio, DataAddr, addr, read_addr[prio]);
+#endif
+                                break;
+                            } else {
+                                // read_time_ms[prio] only set if no H as well
+                                read_addr[prio] = 1;
+                            }
+
+                            // {H} from HMI
                             for (indx = read_index[prio]; indx <= DimCrossTable; ++indx) {
                                 oper = the_IsyncRegisters[indx] & QueueOperMask;
                                 addr = the_IsyncRegisters[indx] & QueueAddrMask;
@@ -2852,6 +2929,7 @@ static void *clientThread(void *arg)
                                     indx = DimCrossTable;
                                 } else if (CrossTable[addr].device == d && oper == READ
                                         && CrossTable[addr].Enable == (prio + 1)
+                                        && CrossTable[addr].Plc == Htype
                                         && the_QdataStates[addr] != DATA_RUN) {
                                     // NB: DATA_RUN is active while processing the read,
                                     //     while DATA_OK and DATA_ERR are the possible output when finished
@@ -2875,11 +2953,17 @@ static void *clientThread(void *arg)
                                 }
                                 // keep the index for the next loop
                                 read_index[prio] = indx + 1; // may overlap DimCrossTable, it's ok
+#ifdef VERBOSE_DEBUG
+                                fprintf(stderr, "%09u ms: read %uH [%u]@%u, will check @%u\n", now_ms, prio, DataAddr, indx, read_index[prio]);
+#endif
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
                                 read_time_ms[prio] = now_ms + read_period_ms[prio];
                                 read_index[prio] = 1;
+#ifdef VERBOSE_DEBUG
+                                fprintf(stderr, "%09u ms: no read %uHPSF will restart at %09u ms\n", now_ms, prio, read_time_ms[prio]);
+#endif
                             }
                         }
                     }
@@ -2971,9 +3055,6 @@ static void *clientThread(void *arg)
             }
             switch (Operation) {
             case READ:
-                if (QueueIndex > 0) {
-                    the_QsyncRegisters[QueueIndex] = QUEUE_BUSY_READ;
-                }
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
                 // fieldbusWait afterwards
                 break;
@@ -2981,9 +3062,6 @@ static void *clientThread(void *arg)
             case WRITE_MULTIPLE:
             case WRITE_RIC_MULTIPLE:
             case WRITE_RIC_SINGLE:
-                if (QueueIndex > 0) {
-                    the_QsyncRegisters[QueueIndex] = QUEUE_BUSY_WRITE;
-                }
                 if (CrossTable[DataAddr].Output) {
                     error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
                 } else {
