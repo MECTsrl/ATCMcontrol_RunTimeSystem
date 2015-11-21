@@ -60,7 +60,7 @@
 #define MAX_DEVICES 64 // 1 PLC + 3 RTU + n TCP + m TCPRTU + 2 CAN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
 #define MAX_NODES   64 //
 
-#define MAX_WRITES  16
+#define MAX_WRITES  64 // 16
 #define MAX_READS   64
 #define MAX_PRIORITY 3
 
@@ -128,6 +128,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define QueueOperMask       0xE000  // BIT 15 WR EN, BIT 14 RD EN
 #define QueueAddrMask       0x1FFF  // BIT 13..0 CROSSTABLE ADDRESS
 // Isync Operations
+#define NOP                 0x0000
 #define READ                0x4000
 #define WRITE_SINGLE        0x8000
 #define WRITE_MULTIPLE      0xA000
@@ -1277,17 +1278,17 @@ static void AlarmMngr(void)
 static void PLCsync(void)
 {
     u_int16_t indx;
-    u_int16_t RW;
-    int16_t addr;
+    u_int16_t oper;
+    u_int16_t addr;
     u_int16_t i;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
-        RW = the_IsyncRegisters[indx] & QueueOperMask;
+        oper = the_IsyncRegisters[indx] & QueueOperMask;
         addr = the_IsyncRegisters[indx] & QueueAddrMask;
         if (addr < DimCrossTable) {
-            switch (RW) {
-            case 0:
+            switch (oper) {
+            case NOP:
                 the_QsyncRegisters[indx] = QUEUE_EMPTY;
                 // span the whole queue each time a new udp packet arrives
                 // if (addr == 0) {
@@ -1331,7 +1332,7 @@ static void PLCsync(void)
                         // immediate write: no fieldbus
                         the_QdataRegisters[addr] = the_IdataRegisters[addr];
                         the_QdataStates[addr] = DATA_OK;
-                        if (RW == WRITE_MULTIPLE || RW == WRITE_RIC_MULTIPLE) {
+                        if (oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE) {
                             for (i = 0; i < CrossTable[addr].BlockSize; ++i) {
                                 the_QdataRegisters[CrossTable[addr].BlockBase + i] = the_IdataRegisters[CrossTable[addr].BlockBase + i];
                                 the_QdataStates[CrossTable[addr].BlockBase + i] = DATA_OK;
@@ -1346,6 +1347,9 @@ static void PLCsync(void)
                     case TCPSRV:
                     case TCPRTUSRV:
                         if (CrossTable[addr].device != 0xffff) {
+#ifdef VERBOSE_DEBUG
+                            fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u\n", oper, addr, indx, the_IdataRegisters[addr]);
+#endif
                             theDevices[CrossTable[addr].device].writeOperations += 1;
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
@@ -2134,7 +2138,8 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                         size = CrossTable[DataAddr + i].BlockSize;
                         for (addr = base; addr < (base + size); ++addr) {
                             if (CrossTable[addr].Types == CrossTable[DataAddr + i].Types
-                             && CrossTable[addr].Offset == CrossTable[DataAddr + i].Offset) {
+                             && CrossTable[addr].Offset == CrossTable[DataAddr + i].Offset
+                             && !(DataAddr <= addr && addr < (DataAddr + DataNumber))) {
                                 x = CrossTable[addr].Decimal; // 1..32
                                 if (x <= 16) {
                                     set_word_bit(&uintRegs[r], x, the_QdataRegisters[addr]);
@@ -2349,7 +2354,7 @@ static void *serverThread(void *arg)
     int rc;
     fd_set refset;
     fd_set rdset;
-    int fdmax;
+    int fdmax = 0;
     int server_socket = -1;
     int threadInitOK = FALSE;
 
@@ -2667,6 +2672,9 @@ static void *clientThread(void *arg)
 
     // start the fieldbus operations loop
     DataAddr = 0;
+    DataNumber = 0;
+    Operation = NOP;
+    error = NoError;
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // clientThread
     theDevices[d].thread_status = RUNNING;
     XX_GPIO_SET(5);
@@ -2862,15 +2870,15 @@ static void *clientThread(void *arg)
                             }
                         }
                         // keep the index for the next loop
+                        theDevices[d].writeOperations -= 1;
                         write_index = indx + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
-                        fprintf(stderr, "%09u ms: write [%u]@%u, will check @%u\n", now_ms, DataAddr, indx, write_index);
+                        fprintf(stderr, "%09u ms: write [%u]@%u value=%u, will check @%u\n", now_ms, DataAddr, indx, DataValue[0], write_index);
 #endif
                     } else {
                         // next time we'll restart from the first one
                         write_index = 1;
                     }
-                    theDevices[d].writeOperations -= 1;
                 }
 
                 // if no write then is it there a read request for this device?
@@ -3350,6 +3358,7 @@ static void *dataThread(void *statusAdr)
     }
 
     // run
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // dataThread
     *threadStatusPtr = RUNNING;
     while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
@@ -3435,6 +3444,7 @@ static void *syncroThread(void *statusAdr)
     }
 
     // run
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // syncroThread
     *threadStatusPtr = RUNNING;
     while (!g_bExiting) {
         if (g_bRunning && threadInitOK) {
