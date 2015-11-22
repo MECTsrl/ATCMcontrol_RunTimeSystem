@@ -44,10 +44,6 @@ void *IO_Layer_SYN(void *lpParam);
 void *IO_Layer_ModbusTCPS(void *lpParam);
 void *IO_Layer_ModbusRTUC(void *lpParam);
 
-extern int Can0InitDone;
-extern int Can1InitDone;
-extern int CanDone;
-
 #ifdef __cplusplus
 }
 #endif

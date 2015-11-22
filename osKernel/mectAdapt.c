@@ -63,9 +63,6 @@ CLOCK_REALTIME: the timer return the time in seconds and milliseconds since the 
 #define MAX_LINE_SIZE 81
 
 /* ----  Global Variables:	 -------------------------------------------------- */
-int Can0InitDone;
-int Can1InitDone;
-int CanDone;
 serial_cfg_s can0_cfg;
 serial_cfg_s can1_cfg;
 mbrtu_cfg_s modbus0_cfg;
