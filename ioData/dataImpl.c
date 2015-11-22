@@ -43,6 +43,7 @@
 #include "iolDef.h"
 #include "fcDef.h"
 #if defined(RTS_CFG_MECT_RETAIN)
+#include <sys/mman.h>
 #include "mectRetentive.h"
 #endif
 
@@ -93,7 +94,7 @@
 #define	THE_DATA_SEND_PORT	34902
 
 static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
-static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q -> %M
+static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
 static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 // Qdata states
@@ -405,6 +406,9 @@ static int32_t read_period_ms[MAX_PRIORITY];
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
+#if defined(RTS_CFG_MECT_RETAIN)
+static u_int32_t *retentive = NULL;
+#endif
 static IEC_BOOL g_bInitialized	= FALSE;
 static IEC_BOOL g_bConfigured	= FALSE;
 static IEC_BOOL g_bRunning	= FALSE;
@@ -455,6 +459,16 @@ static void LocalIO(void);
 static void PLCsync(void);
 
 /* ----  Implementations:	--------------------------------------------------- */
+
+static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
+{
+    the_QdataRegisters[addr] = value;
+#if defined(RTS_CFG_MECT_RETAIN)
+    if (retentive) {
+        retentive[addr -1] = value;
+    }
+#endif
+}
 
 static inline void do_sleep_ms(unsigned delay_ms)
 {
@@ -1143,7 +1157,7 @@ exit_function:
 
 static inline void setEventAlarm(int i)
 {
-    the_QdataRegisters[ALCrossTable[i].TagAddr] = 1;
+    writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
     switch (ALCrossTable[i].ALType ) {
     case Event:
         vmmSetEvent(pVMM, EVT_RESERVED_10);
@@ -1156,7 +1170,7 @@ static inline void setEventAlarm(int i)
 
 static inline void clrEventAlarm(int i)
 {
-    the_QdataRegisters[ALCrossTable[i].TagAddr] = 0;
+    writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
 }
 
 static inline void checkThis(int i, int condition)
@@ -1279,8 +1293,8 @@ static void PLCsync(void)
 {
     u_int16_t indx;
     u_int16_t oper;
-    u_int16_t addr;
-    u_int16_t i;
+    u_int16_t addr, DataAddr;
+    u_int16_t i, DataNumber;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
@@ -1328,17 +1342,20 @@ static void PLCsync(void)
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
                     the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                     switch (CrossTable[addr].Protocol) {
-                    case PLC:
+                    case PLC: {
                         // immediate write: no fieldbus
-                        the_QdataRegisters[addr] = the_IdataRegisters[addr];
-                        the_QdataStates[addr] = DATA_OK;
-                        if (oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE) {
-                            for (i = 0; i < CrossTable[addr].BlockSize; ++i) {
-                                the_QdataRegisters[CrossTable[addr].BlockBase + i] = the_IdataRegisters[CrossTable[addr].BlockBase + i];
-                                the_QdataStates[CrossTable[addr].BlockBase + i] = DATA_OK;
-                            }
+                        if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
+                            DataAddr = addr;
+                            DataNumber = 1;
+                        } else { // (oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE)
+                            DataAddr = CrossTable[addr].BlockBase;
+                            DataNumber = CrossTable[addr].BlockSize;
                         }
-                        break;
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, the_IdataRegisters[DataAddr + i]);
+                            the_QdataStates[DataAddr + i] = DATA_OK;
+                        }
+                    }   break;
                     case RTU:
                     case TCP:
                     case TCPRTU:
@@ -1396,7 +1413,14 @@ static void LocalIO(void)
     memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
     memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
     the_QdataRegisters[5393] = hardware_type;
-
+#if defined(RTS_CFG_MECT_RETAIN)
+    if (retentive) {
+        retentive[(5390 - 1)] = the_QdataRegisters[5390];
+        retentive[(5391 - 1)] = the_QdataRegisters[5391];
+        retentive[(5392 - 1)] = the_QdataRegisters[5392];
+        retentive[(5393 - 1)] = the_QdataRegisters[5393];
+    }
+#endif
     // TPAC1006, TPAC1008
     if (hardware_type & 0x000000FF) {
         // TPAC1006_LIOsync();
@@ -1872,6 +1896,8 @@ static void *engineThread(void *statusAdr)
     // see dataNotifyStop()
 
     // exit
+
+    fprintf(stderr, "EXITING: engineThread\n");
     *threadStatusPtr = EXITING;
     return NULL;
 }
@@ -2514,6 +2540,7 @@ static void *serverThread(void *arg)
     }
 
     // exit
+    fprintf(stderr, "EXITING: %s\n", theServers[s].name);
     theServers[s].thread_status = EXITING;
     return arg;
 }
@@ -3102,7 +3129,7 @@ static void *clientThread(void *arg)
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
                         for (i = 0; i < DataNumber; ++i) {
-                            the_QdataRegisters[DataAddr + i] = DataValue[i];
+                            writeQdataRegisters(DataAddr + i, DataValue[i]);
                         }
                         break;
                     case WRITE_PREPARE:
@@ -3110,17 +3137,6 @@ static void *clientThread(void *arg)
                     default:
                         ;
                     }
-#if defined(RTS_CFG_MECT_RETAIN)
-                {
-                    // retentive memory update
-                    u_int32_t *retentive = (u_int32_t *)ptRetentive;
-                    u_int16_t i;
-
-                    for (i = 0; i < DataNumber; ++i) {
-                        retentive[(DataAddr - 1) + i ] = the_QdataRegisters[DataAddr + i];
-                    }
-                }
-#endif
                     break;
                 case CommError:
                     switch (theDevices[d].Protocol) {
@@ -3319,6 +3335,7 @@ static void *clientThread(void *arg)
     }
 
     // exit
+    fprintf(stderr, "EXITING: %s\n", theDevices[d].name);
     theDevices[d].thread_status = EXITING;
     return arg;
 }
@@ -3405,6 +3422,7 @@ static void *dataThread(void *statusAdr)
      }
 
     // exit
+    fprintf(stderr, "EXITING: dataThread\n");
     *threadStatusPtr = EXITING;
     return NULL;
 }
@@ -3493,6 +3511,7 @@ static void *syncroThread(void *statusAdr)
      }
 
     // exit
+    fprintf(stderr, "EXITING: syncroThread\n");
     *threadStatusPtr = EXITING;
     return NULL;
 }
@@ -3591,6 +3610,13 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
     }
 #ifdef RTS_CFG_MECT_LIB // now undefined
 #endif
+#if defined(RTS_CFG_MECT_RETAIN)
+    if (ptRetentive == MAP_FAILED) {
+        retentive = NULL;
+    } else {
+        retentive = (u_int32_t *)ptRetentive;
+    }
+#endif
     g_bConfigured	= TRUE;
 	g_bRunning	= FALSE;
 	RETURN(uRes);
@@ -3615,10 +3641,12 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
-    OS_MEMCPY(pvIsegment, ptRetentive, lenRetentive);
-	OS_MEMCPY(pvQsegment, ptRetentive, lenRetentive);
-    OS_MEMCPY(the_IdataRegisters, ptRetentive, lenRetentive);
-    OS_MEMCPY(the_QdataRegisters, ptRetentive, lenRetentive);
+    if (retentive) {
+        OS_MEMCPY(pvIsegment, retentive, lenRetentive);
+        OS_MEMCPY(pvQsegment, retentive, lenRetentive);
+        OS_MEMCPY(the_IdataRegisters, retentive, lenRetentive);
+        OS_MEMCPY(the_QdataRegisters, retentive, lenRetentive);
+    }
 #endif
 
     // initialize array
@@ -3677,6 +3705,7 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
 	g_bRunning = FALSE;
     // stop the threads
     g_bExiting	= TRUE;
+#if 0
     int still_running;
     do {
         do_sleep_ms(1);
@@ -3696,6 +3725,25 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
           || theDataThreadStatus == RUNNING
           || theSyncThreadStatus == RUNNING
           || still_running);
+#else
+    void *retval;
+    int n;
+    for (n = 0; n < theDevicesNumber; ++n) {
+        pthread_join(theDevices[n].thread_id, &retval);
+        fprintf(stderr, "joined dev(%d)\n", n);
+    }
+    for (n = 0; n < theServersNumber; ++n) {
+        pthread_join(theServers[n].thread_id, &retval);
+        fprintf(stderr, "joined srv(%d)\n", n);
+    }
+    pthread_join(theDataThread_id, &retval);
+    fprintf(stderr, "joined data\n");
+    pthread_join(theSyncThread_id, &retval);
+    fprintf(stderr, "joined syncro\n");
+    pthread_join(theEngineThread_id, &retval);
+    fprintf(stderr, "joined engine\n");
+
+#endif
     RETURN(uRes);
 }
 
@@ -3732,7 +3780,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             if (d == 0xffff) {
                                 if (CrossTable[i].Protocol == PLC) {
                                     flags[i] = 0;
-                                    the_QdataRegisters[i] = values[i];
+                                    writeQdataRegisters(i, values[i]);
                                 }
                             } else {
                                 // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
@@ -3766,9 +3814,6 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                             }
                          }
                     }
-#if defined(RTS_CFG_MECT_RETAIN)
-                    // vedi clientThread (PLC)
-#endif
                 }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
                 uRes = ERR_WRITE_TO_INPUT;
