@@ -536,8 +536,15 @@ static void _sleep_response_timeout(modbus_t *ctx)
 	request.tv_sec = ctx->response_timeout.tv_sec;
 	request.tv_nsec = ((long int)ctx->response_timeout.tv_usec % 1000000)
 		* 1000;
+#ifndef __XENO__
 	while (nanosleep(&request, &remaining) == -1 && errno == EINTR)
 		request = remaining;
+#else
+    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &request, &remaining) == EINTR) {
+        request.tv_sec = remaining.tv_sec;
+        request.tv_nsec = remaining.tv_nsec;
+    }
+#endif
 #endif
 }
 
