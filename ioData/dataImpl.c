@@ -172,14 +172,16 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define ERROR_FLAG_TCP_ON       0x00000100 // bit08: TCP_ON
 #define ERROR_FLAG_TCPRTU_ON    0x00000200 // bit09: TCPRTU_ON
 // -------- new protocols
-#define ERROR_FLAG_CAN          0x00000400 // bit10: errore CAN
-#define ERROR_FLAG_RTUSRV       0x00000800 // bit11: errore RTUSRV
-#define ERROR_FLAG_TCPSRV       0x00001000 // bit12: errore TCPSRV
-#define ERROR_FLAG_TCPRTUSRV    0x00002000 // bit13: errore TCPRTUSRV
-#define ERROR_FLAG_CAN_ON       0x00004000 // bit14: CAN_ON
-#define ERROR_FLAG_RTUSRV_ON    0x00008000 // bit15: RTUSRV_ON
-#define ERROR_FLAG_TCPSRV_ON    0x00010000 // bit16: TCPSRV_ON
-#define ERROR_FLAG_TCPRTUSRV_ON 0x00020000 // bit17: TCPRTUSRV_ON
+#define ERROR_FLAG_CANOPEN      0x00000400 // bit10: errore CANOPEN
+#define ERROR_FLAG_MECT         0x00000800 // bit11: errore MECT
+#define ERROR_FLAG_RTUSRV       0x00001000 // bit12: errore RTUSRV
+#define ERROR_FLAG_TCPSRV       0x00002000 // bit13: errore TCPSRV
+#define ERROR_FLAG_TCPRTUSRV    0x00004000 // bit14: errore TCPRTUSRV
+#define ERROR_FLAG_CANOPEN_ON   0x00008000 // bit15: CANOPEN_ON
+#define ERROR_FLAG_MECT_ON      0x00010000 // bit16: MECT_ON
+#define ERROR_FLAG_RTUSRV_ON    0x00020000 // bit17: RTUSRV_ON
+#define ERROR_FLAG_TCPSRV_ON    0x00040000 // bit18: TCPSRV_ON
+#define ERROR_FLAG_TCPRTUSRV_ON 0x00080000 // bit19: TCPRTUSRV_ON
 
 //
 #ifndef __GLIBC_HAVE_LONG_LONG
@@ -217,10 +219,10 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv, Commpar_csv};
-enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV};
+enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV};
 enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
 enum EventAlarm { Event = 0, Alarm};
-static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CAN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
+static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
 
 enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
 enum DeviceStatus  {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
@@ -228,11 +230,11 @@ enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError = 0, CommError, TimeoutError};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
-               UINT16BA, UINT16AB,
-               INT16BA, INT16AB,
-               FLOATDCBA, FLOATCDAB, FLOATABCD, FLOATBADC,
-               UDINTDCBA, UDINTCDAB, UDINTABCD, UDINTBADC,
-               DINTDCBA, DINTCDAB, DINTABCD, DINTBADC,
+               UINT16, UINT16BA,
+               INT16, INT16BA,
+               REAL, REALDCBA, REALCDAB, REALBADC,
+               UDINT, UDINTDCBA, UDINTCDAB, UDINTBADC,
+               DINT, DINTDCBA, DINTCDAB, DINTBADC,
                UNKNOWN};
 
 // manageThread: Data + Syncro
@@ -636,45 +638,55 @@ static int ReadFields(int16_t Index)
         } else if (strncmp(Field.Contents, "DWORD_BIT", Field.CurLen) == 0) {
             CrossTable[Index].Types = DWORD_BIT;
         } else if (strncmp(Field.Contents, "UINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16AB; // backward compatibility
-        } else if (strncmp(Field.Contents, "UINTAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16AB;
+            CrossTable[Index].Types = UINT16;
         } else if (strncmp(Field.Contents, "UINTBA", Field.CurLen) == 0) {
             CrossTable[Index].Types = UINT16BA;
         } else if (strncmp(Field.Contents, "INT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16AB; // backward compatibility
-        } else if (strncmp(Field.Contents, "INTAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16AB;
+            CrossTable[Index].Types = INT16;
         } else if (strncmp(Field.Contents, "INTBA", Field.CurLen) == 0) {
             CrossTable[Index].Types = INT16BA;
         } else if (strncmp(Field.Contents, "UDINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINTABCD; // backward compatibility
-        } else if (strncmp(Field.Contents, "DINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINTABCD; // backward compatibility
-        } else if (strncmp(Field.Contents, "FDCBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = FLOATDCBA;
-        } else if (strncmp(Field.Contents, "FCDAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = FLOATCDAB;
-        } else if (strncmp(Field.Contents, "FABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = FLOATABCD;
-        } else if (strncmp(Field.Contents, "FBADC", Field.CurLen) == 0) {
-            CrossTable[Index].Types = FLOATBADC;
+            CrossTable[Index].Types = UDINT;
         } else if (strncmp(Field.Contents, "UDINTDCBA", Field.CurLen) == 0) {
             CrossTable[Index].Types = UDINTDCBA;
         } else if (strncmp(Field.Contents, "UDINTCDAB", Field.CurLen) == 0) {
             CrossTable[Index].Types = UDINTCDAB;
-        } else if (strncmp(Field.Contents, "UDINTABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINTABCD;
         } else if (strncmp(Field.Contents, "UDINTBADC", Field.CurLen) == 0) {
             CrossTable[Index].Types = UDINTBADC;
+        } else if (strncmp(Field.Contents, "DINT", Field.CurLen) == 0) {
+            CrossTable[Index].Types = DINT;
         } else if (strncmp(Field.Contents, "DINTDCBA", Field.CurLen) == 0) {
             CrossTable[Index].Types = DINTDCBA;
         } else if (strncmp(Field.Contents, "DINTCDAB", Field.CurLen) == 0) {
             CrossTable[Index].Types = DINTCDAB;
-        } else if (strncmp(Field.Contents, "DINTABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINTABCD;
         } else if (strncmp(Field.Contents, "DINTBADC", Field.CurLen) == 0) {
             CrossTable[Index].Types = DINTBADC;
+        } else if (strncmp(Field.Contents, "REAL", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REAL;
+        } else if (strncmp(Field.Contents, "REALDCBA", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALDCBA;
+        } else if (strncmp(Field.Contents, "REALCDAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALCDAB;
+        } else if (strncmp(Field.Contents, "REALBADC", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALBADC;
+
+        } else if (strncmp(Field.Contents, "UINTAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = UINT16; // backward compatibility
+        } else if (strncmp(Field.Contents, "INTAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = INT16; // backward compatibility
+        } else if (strncmp(Field.Contents, "UDINTABCD", Field.CurLen) == 0) {
+            CrossTable[Index].Types = UDINT; // backward compatibility
+        } else if (strncmp(Field.Contents, "DINTABCD", Field.CurLen) == 0) {
+            CrossTable[Index].Types = DINT; // backward compatibility
+        } else if (strncmp(Field.Contents, "FDCBA", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALDCBA; // backward compatibility
+        } else if (strncmp(Field.Contents, "FCDAB", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALCDAB; // backward compatibility
+        } else if (strncmp(Field.Contents, "FABCD", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REAL; // backward compatibility
+        } else if (strncmp(Field.Contents, "FBADC", Field.CurLen) == 0) {
+            CrossTable[Index].Types = REALBADC; // backward compatibility
+
         } else {
             if (CrossTable[Index].Enable > 0) {
                 CrossTable[Index].Types = UNKNOWN;
@@ -706,8 +718,10 @@ static int ReadFields(int16_t Index)
             CrossTable[Index].Protocol = TCP;
         } else if (strncmp(Field.Contents, "TCPRTU", Field.CurLen) == 0) {
             CrossTable[Index].Protocol = TCPRTU;
-        } else if (strncmp(Field.Contents, "CAN", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = CAN;
+        } else if (strncmp(Field.Contents, "CANOPEN", Field.CurLen) == 0) {
+            CrossTable[Index].Protocol = CANOPEN;
+        } else if (strncmp(Field.Contents, "MECT", Field.CurLen) == 0) {
+            CrossTable[Index].Protocol = MECT;
         } else if (strncmp(Field.Contents, "RTUSRV", Field.CurLen) == 0) {
             CrossTable[Index].Protocol = RTUSRV;
         } else if (strncmp(Field.Contents, "TCPSRV", Field.CurLen) == 0) {
@@ -1322,7 +1336,8 @@ static void PLCsync(void)
                     case RTU:
                     case TCP:
                     case TCPRTU:
-                    case CAN:
+                    case CANOPEN:
+                    case MECT:
                     case RTUSRV:
                     case TCPSRV:
                     case TCPRTUSRV:
@@ -1359,7 +1374,8 @@ static void PLCsync(void)
                     case RTU:
                     case TCP:
                     case TCPRTU:
-                    case CAN:
+                    case CANOPEN:
+                    case MECT:
                     case RTUSRV:
                     case TCPSRV:
                     case TCPRTUSRV:
@@ -1516,7 +1532,10 @@ static int checkServersDevicesAndNodes()
             case TCPRTU:
                 // nothing to do for client
                 break;
-            case CAN: // FIXME
+            case CANOPEN: // FIXME
+                break;
+            case MECT:
+                // FIXME: TODO
                 break;
             case RTUSRV:
             case TCPSRV:
@@ -1546,7 +1565,8 @@ static int checkServersDevicesAndNodes()
                     case RTU:
                     case TCP:
                     case TCPRTU:
-                    case CAN:
+                    case CANOPEN:
+                    case MECT:
                         // FIXME: assert
                         break;
                     case RTUSRV:
@@ -1620,7 +1640,8 @@ static int checkServersDevicesAndNodes()
             case RTU:
             case TCP:
             case TCPRTU:
-            case CAN:
+            case CANOPEN:
+            case MECT:
             case RTUSRV:
             case TCPSRV:
             case TCPRTUSRV: {
@@ -1718,9 +1739,12 @@ static int checkServersDevicesAndNodes()
                         strncpy(theDevices[d].u.tcprtu.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
                         theDevices[d].u.tcprtu.Port = CrossTable[i].Port;
                         break;
-                    case CAN:
+                    case CANOPEN:
                         theDevices[d].u.can.bus = CrossTable[i].Port;
                         // FIXME: baudrate
+                        break;
+                    case MECT:
+                        // FIXME: TODO
                         break;
                     case RTUSRV:
                     case TCPSRV:
@@ -1908,13 +1932,13 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
 
     for (i = 0; i < DataNumber; ++i) {
         switch (CrossTable[DataAddr + i].Types) {
-        case  DINTABCD: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
-        case UDINTABCD: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
-        case FLOATABCD: case FLOATDCBA: case FLOATCDAB: case FLOATBADC:
+        case  DINT: case  DINTDCBA: case  DINTCDAB: case  DINTBADC:
+        case UDINT: case UDINTDCBA: case UDINTCDAB: case UDINTBADC:
+        case REAL: case REALDCBA: case REALCDAB: case REALBADC:
             retval += 2;
             break;
-        case  INT16AB: case  INT16BA:
-        case UINT16AB: case UINT16BA:
+        case  INT16: case  INT16BA:
+        case UINT16: case UINT16BA:
             retval += 1;
             break;
         case BIT:
@@ -2008,28 +2032,28 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                             && ++i);
                         r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
                         break;
-                case  UINT16AB:
-                case   INT16AB:
+                case  UINT16:
+                case   INT16:
                     DataValue[i] = uintRegs[r]; r += 1; break;
                 case  UINT16BA:
                 case   INT16BA:
                     DataValue[i] = b + (a << 8); r += 1; break;
-                case UDINTABCD:
-                case  DINTABCD:
-                case FLOATABCD:
+                case UDINT:
+                case  DINT:
+                case REAL:
                     DataValue[i] = a + (b << 8) + (c << 16) + (d << 24); r += 2; break;
                 case UDINTCDAB:
                 case  DINTCDAB:
-                case FLOATCDAB:
+                case REALCDAB:
 
                     DataValue[i] = c + (d << 8) + (a << 16) + (b << 24); r += 2; break;
                 case UDINTDCBA:
                 case  DINTDCBA:
-                case FLOATDCBA:
+                case REALDCBA:
                     DataValue[i] = d + (c << 8) + (b << 16) + (a << 24); r += 2; break;
                 case UDINTBADC:
                 case  DINTBADC:
-                case FLOATBADC:
+                case REALBADC:
                     DataValue[i] = b + (a << 8) + (d << 16) + (c << 24); r += 2; break;
                 default:
                     ;
@@ -2037,7 +2061,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             }
         }
         break;
-    case CAN:
+    case CANOPEN:
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             server = theDevices[device].server;
@@ -2066,27 +2090,27 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                         case DWORD_BIT:
                             DataValue[i] = get_dword_bit(*p32, CrossTable[DataAddr + i].Decimal);
                             break;
-                        case  UINT16AB:
-                        case   INT16AB:
+                        case  UINT16:
+                        case   INT16:
                             DataValue[i] = a + (b << 8); break;
                         case  UINT16BA:
                         case   INT16BA:
                             DataValue[i] = b + (a << 8); break;
-                        case UDINTABCD:
-                        case  DINTABCD:
-                        case FLOATABCD:
+                        case UDINT:
+                        case  DINT:
+                        case REAL:
                             DataValue[i] = a + (b << 8) + (c << 16) + (d << 24); break;
                         case UDINTCDAB:
                         case  DINTCDAB:
-                        case FLOATCDAB:
+                        case REALCDAB:
                             DataValue[i] = c + (d << 8) + (a << 16) + (b << 24); break;
                         case UDINTDCBA:
                         case  DINTDCBA:
-                        case FLOATDCBA:
+                        case REALDCBA:
                             DataValue[i] = d + (c << 8) + (b << 16) + (a << 24); break;
                         case UDINTBADC:
                         case  DINTBADC:
-                        case FLOATBADC:
+                        case REALBADC:
                             DataValue[i] = b + (a << 8) + (d << 16) + (c << 24); break;
                         default:
                             ;
@@ -2096,6 +2120,9 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
+        break;
+    case MECT:
+        // FIXME: TODO
         break;
     case RTUSRV:
     case TCPSRV:
@@ -2185,23 +2212,23 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                         ++i;
                     }
                     break;
-                case  UINT16AB:
-                case   INT16AB:
+                case  UINT16:
+                case   INT16:
                 case  UINT16BA:
                 case   INT16BA:
                     r += 1; break;
-                case UDINTABCD:
-                case  DINTABCD:
-                case FLOATABCD:
+                case UDINT:
+                case  DINT:
+                case REAL:
                 case UDINTCDAB:
                 case  DINTCDAB:
-                case FLOATCDAB:
+                case REALCDAB:
                 case UDINTDCBA:
                 case  DINTDCBA:
-                case FLOATDCBA:
+                case REALDCBA:
                 case UDINTBADC:
                 case  DINTBADC:
-                case FLOATBADC:
+                case REALBADC:
                     r += 2; break;
                 default:
                     ;
@@ -2237,27 +2264,27 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                           && ++i);
                     r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
                     break;
-            case  UINT16AB:
-            case   INT16AB:
+            case  UINT16:
+            case   INT16:
                 uintRegs[r] = DataValue[i]; r += 1; break;
             case  UINT16BA:
             case   INT16BA:
                 uintRegs[r] = b + (a << 8); r += 1; break;
-            case UDINTABCD:
-            case  DINTABCD:
-            case FLOATABCD:
+            case UDINT:
+            case  DINT:
+            case REAL:
                 uintRegs[r] = a + (b << 8); uintRegs[r + 1] = c + (d << 8); r += 2; break;
             case UDINTCDAB:
             case  DINTCDAB:
-            case FLOATCDAB:
+            case REALCDAB:
                 uintRegs[r] = c + (d << 8); uintRegs[r + 1] = a + (b << 8); r += 2; break;
             case UDINTDCBA:
             case  DINTDCBA:
-            case FLOATDCBA:
+            case REALDCBA:
                 uintRegs[r] = d + (c << 8); uintRegs[r + 1] = b + (a << 8); r += 2; break;
             case UDINTBADC:
             case  DINTBADC:
-            case FLOATBADC:
+            case REALBADC:
                 uintRegs[r] = b + (a << 8); uintRegs[r + 1] = d + (c << 8); r += 2; break;
             default:
                 ;
@@ -2281,7 +2308,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             retval = NoError;
         }
         break;
-    case CAN:
+    case CANOPEN:
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             server = theDevices[device].server;
@@ -2314,27 +2341,27 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                             x = CrossTable[DataAddr + i].Decimal; // 1..32
                             set_dword_bit(p32, x, DataValue[i]);
                             break;
-                        case    UINT16AB:
-                        case     INT16AB:
+                        case    UINT16:
+                        case     INT16:
                             *p16 = a + (b << 8); break;
                         case    UINT16BA:
                         case     INT16BA:
                             *p16 = b + (a << 8); break;
-                        case UDINTABCD:
-                        case  DINTABCD:
-                        case FLOATABCD:
+                        case UDINT:
+                        case  DINT:
+                        case REAL:
                             *p32 = a + (b << 8) + (c << 16) + (d << 24); break;
                         case UDINTCDAB:
                         case  DINTCDAB:
-                        case FLOATCDAB:
+                        case REALCDAB:
                             *p32 = c + (d << 8) + (a << 16) + (b << 24); break;
                         case UDINTDCBA:
                         case  DINTDCBA:
-                        case FLOATDCBA:
+                        case REALDCBA:
                             *p32 = d + (c << 8) + (b << 16) + (a << 24); break;
                         case UDINTBADC:
                         case  DINTBADC:
-                        case FLOATBADC:
+                        case REALBADC:
                             *p32 = b + (a << 8) + (d << 16) + (c << 24); break;
                         default:
                             ;
@@ -2345,6 +2372,9 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                 pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
+        break;
+    case MECT:
+        // FIXME: TODO
         break;
     case RTUSRV:
     case TCPSRV:
@@ -2600,7 +2630,9 @@ static void *clientThread(void *arg)
     case TCPRTU:
         theDevices[d].modbus_ctx = modbus_new_tcprtu(theDevices[d].u.tcprtu.IPaddr, theDevices[d].u.tcprtu.Port);
         break;
-    case CAN:
+    case CANOPEN:
+        break; // FIXME: check can state
+    case MECT:
         break; // FIXME: check can state
     case RTUSRV:
     case TCPSRV:
@@ -2622,7 +2654,10 @@ static void *clientThread(void *arg)
             theDevices[d].status = NOT_CONNECTED;
         }
         break;
-    case CAN:
+    case CANOPEN:
+        theDevices[d].status = NOT_CONNECTED; // FIXME: check can state
+        break;
+    case MECT:
         theDevices[d].status = NOT_CONNECTED; // FIXME: check can state
         break;
     case RTUSRV:
@@ -2647,8 +2682,11 @@ static void *clientThread(void *arg)
         case TCPRTU:
             ERROR_FLAG |= ERROR_FLAG_TCPRTU_ON;
             break;
-        case CAN:
-            ERROR_FLAG |= ERROR_FLAG_CAN_ON;
+        case CANOPEN:
+            ERROR_FLAG |= ERROR_FLAG_CANOPEN_ON;
+            break;
+        case MECT:
+            ERROR_FLAG |= ERROR_FLAG_MECT_ON;
             break;
         case RTUSRV:
             ERROR_FLAG |= ERROR_FLAG_RTUSRV_ON;
@@ -2675,7 +2713,9 @@ static void *clientThread(void *arg)
     case TCP:
     case TCPRTU:
         break;
-    case CAN:
+    case CANOPEN:
+        break;
+    case MECT:
         break;
     case RTUSRV:
     case TCPSRV:
@@ -2827,7 +2867,8 @@ static void *clientThread(void *arg)
                 ERROR_FLAG &= ~ERROR_FLAG_TCPRTU;
             }
             break;
-        case CAN:
+        case CANOPEN:
+        case MECT:
         case RTUSRV:
         case TCPSRV:
         case TCPRTUSRV:
@@ -3043,7 +3084,10 @@ static void *clientThread(void *arg)
                     theDevices[d].status = DEVICE_BLACKLIST;
                 }
                 break;
-            case CAN:
+            case CANOPEN:
+                theDevices[d].status = CONNECTED; // FIXME: check bus status
+                break;
+            case MECT:
                 theDevices[d].status = CONNECTED; // FIXME: check bus status
                 break;
             case RTUSRV:
@@ -3144,7 +3188,8 @@ static void *clientThread(void *arg)
                     case RTU:       RTUComm_ERROR_WORD = 1;     CommErrRTU |= (2 ^ DataNodeId); break;
                     case TCP:       TCPComm_ERROR_WORD = 1;     CommErrTCP |= (2 ^ DataNodeId); break;
                     case TCPRTU:    TCPRTUComm_ERROR_WORD = 1;  CommErrTCPRTU |= (2 ^ DataNodeId); break;
-                    case CAN:       break; // FIXME: add error flags
+                    case CANOPEN:   break; // FIXME: add error flags
+                    case MECT:      break; // FIXME: add error flags
                     case RTUSRV:    break; // FIXME: add error flags
                     case TCPSRV:    break; // FIXME: add error flags
                     case TCPRTUSRV: break; // FIXME: add error flags
@@ -3161,7 +3206,8 @@ static void *clientThread(void *arg)
                     case RTU:       ERROR_FLAG |= ERROR_FLAG_RTU;       CounterRTU(DataNodeId) += 1; break;
                     case TCP:       ERROR_FLAG |= ERROR_FLAG_TCP;       CounterTCP(DataNodeId) += 1; break;
                     case TCPRTU:    ERROR_FLAG |= ERROR_FLAG_TCPRTU;    CounterTCPRTU(DataNodeId) += 1; break;
-                    case CAN:       ERROR_FLAG |= ERROR_FLAG_CAN;       break; // FIXME: add error flags
+                    case CANOPEN:   ERROR_FLAG |= ERROR_FLAG_CANOPEN;   break; // FIXME: add error flags
+                    case MECT:      ERROR_FLAG |= ERROR_FLAG_MECT;      break; // FIXME: add error flags
                     case RTUSRV:    ERROR_FLAG |= ERROR_FLAG_RTUSRV;    break; // FIXME: add error flags
                     case TCPSRV:    ERROR_FLAG |= ERROR_FLAG_TCPSRV;    break; // FIXME: add error flags
                     case TCPRTUSRV: ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV; break; // FIXME: add error flags
@@ -3265,8 +3311,11 @@ static void *clientThread(void *arg)
                     case TCPRTU:
                         modbus_close(theDevices[d].modbus_ctx);
                         break;
-                    case CAN:
+                    case CANOPEN:
                         // FIXME: check can state
+                        break;
+                    case MECT:
+                        // FIXME: check state
                         break;
                     case RTUSRV:
                     case TCPSRV:
@@ -3291,14 +3340,17 @@ static void *clientThread(void *arg)
             // FIXME: assert
             break;
         case RTU:
-            do_sleep_ms(CommParameters[0].Tmin);
+            do_sleep_ms(theDevices[d].Tmin);
             break;
         case TCP:
         case TCPRTU:
             // nothing to do
             break;
-        case CAN:
+        case CANOPEN:
             // FIXME: check can state
+            break;
+        case MECT:
+            // FIXME: check state
             break;
         case RTUSRV:
         case TCPSRV:
@@ -3323,8 +3375,11 @@ static void *clientThread(void *arg)
             theDevices[d].modbus_ctx = NULL;
         }
         break;
-    case CAN:
+    case CANOPEN:
         // FIXME: check can state
+        break;
+    case MECT:
+        // FIXME: check state
         break;
     case RTUSRV:
     case TCPSRV:
