@@ -58,7 +58,7 @@
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 #define MAX_SERVERS  5 // 3 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV (PLC in dataMain->dataNotifySet/Get)
-#define MAX_DEVICES 64 // 1 PLC + 3 RTU + n TCP + m TCPRTU + 2 CAN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
+#define MAX_DEVICES 64 // 1 PLC + 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
 #define MAX_NODES   64 //
 
 #define MAX_WRITES  64 // 16
@@ -66,9 +66,7 @@
 #define MAX_PRIORITY 3
 
 #define THE_CONFIG_DELAY_ms     1
-#define THE_ENGINE_DELAY_ms     10
-#define THE_CLIENT_DELAY_ms     10
-#define THE_CLIENT_uDELAY_ms    1
+#define THE_ENGINE_DELAY_ms     5
 #define THE_SERVER_DELAY_ms     10
 #define THE_CONNECTION_DELAY_ms 1000
 #define THE_DEVICE_BLACKLIST_ms 4000
@@ -239,7 +237,7 @@ enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
 
 // manageThread: Data + Syncro
 // serverThread: "RTUSRV", "TCPSRV", "TCPRTUSRV"
-// clientThread: "PLC", "RTU", "TCP", "TCPRTU", "CAN","RTUSRV", "TCPSRV", "TCPRTUSRV"
+// clientThread: "PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "MECT", "RTUSRV", "TCPSRV", "TCPRTUSRV"
 
 static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -2725,8 +2723,8 @@ static void *clientThread(void *arg)
         ;
     }
     fprintf(stderr, "tmin=%ums, tout=%ums\n", theDevices[d].Tmin, theDevices[d].TimeOut);
-    response_timeout.tv_sec = 0;
-    response_timeout.tv_usec = theDevices[d].TimeOut * 1000;
+    response_timeout.tv_sec = theDevices[d].TimeOut / 1000;
+    response_timeout.tv_usec = (theDevices[d].TimeOut % 1000) * 1000;
     clock_gettime(CLOCK_REALTIME, &abstime);
     this_loop_start_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
     write_index = 1;
@@ -2777,12 +2775,7 @@ static void *clientThread(void *arg)
                 ldiv_t q;
                 q = ldiv(next_ms, 1000);
                 abstime.tv_sec = q.quot;
-                abstime.tv_nsec += q.rem * 1E6; // ms -> ns
-                q = ldiv(abstime.tv_nsec, 1E9);
-                if (q.quot > 0) {
-                    abstime.tv_sec += q.quot;
-                    abstime.tv_nsec -= q.quot * 1E9;
-                }
+                abstime.tv_nsec = q.rem * 1E6; // ms -> ns
                 do {
                     XX_GPIO_CLR(5);
                     rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
@@ -2974,17 +2967,11 @@ static void *clientThread(void *arg)
                                 }
                             }
                             if (found) {
-                                u_int16_t n;
-
                                 QueueIndex = 0;
                                 DataAddr = CrossTable[addr].BlockBase;
                                 DataNumber = CrossTable[addr].BlockSize;
                                 Operation = READ;
-                                for (n = 0; n < DataNumber; ++n) {
-                                    // data values will be available after the fieldbus access
-                                    // FIXME: let's default to the current values, just in case ...
-                                    DataValue[n] = the_QdataRegisters[DataAddr + n];
-                                }
+                                // data values will be available after the fieldbus access
                                 // keep the index for the next loop
                                 read_addr[prio] = DataAddr + DataNumber + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
@@ -3016,17 +3003,11 @@ static void *clientThread(void *arg)
                                 }
                             }
                             if (found) {
-                                u_int16_t n;
-
                                 QueueIndex = indx;
-                                DataAddr = addr;
-                                DataNumber = CrossTable[addr].BlockSize; // FIXME: capoblocco?
+                                DataAddr = CrossTable[addr].BlockBase;
+                                DataNumber = CrossTable[addr].BlockSize;
                                 Operation = READ;
-                                for (n = 0; n < DataNumber; ++n) {
-                                    // data values will be available after the fieldbus access
-                                    // FIXME: let's default to the current values, just in case ...
-                                    DataValue[n] = the_QdataRegisters[DataAddr + n];
-                                }
+                                // data values will be available after the fieldbus access
                                 // keep the index for the next loop
                                 read_index[prio] = indx + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
@@ -3035,7 +3016,7 @@ static void *clientThread(void *arg)
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
-                                read_time_ms[prio] = now_ms + read_period_ms[prio];
+                                read_time_ms[prio] += read_period_ms[prio];
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%09u ms: no read %uHPSF will restart at %09u ms\n", now_ms, prio, read_time_ms[prio]);
@@ -3132,6 +3113,7 @@ static void *clientThread(void *arg)
                 // CrossTable[DataAddr + i].Error = 0;
                 the_QdataStates[DataAddr + i] = DATA_RUN;
             }
+            XX_GPIO_CLR(5);
             switch (Operation) {
             case READ:
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
@@ -3154,6 +3136,7 @@ static void *clientThread(void *arg)
             default:
                 ;
             }
+            XX_GPIO_SET(5);
             // check error and set values and flags
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
@@ -3340,7 +3323,11 @@ static void *clientThread(void *arg)
             // FIXME: assert
             break;
         case RTU:
-            do_sleep_ms(theDevices[d].Tmin);
+            if (theDevices[d].Tmin > 0) {
+                XX_GPIO_CLR(5);
+                do_sleep_ms(theDevices[d].Tmin);
+                XX_GPIO_SET(5);
+            }
             break;
         case TCP:
         case TCPRTU:
@@ -3838,7 +3825,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                     writeQdataRegisters(i, values[i]);
                                 }
                             } else {
-                                // RTU, TCP, TCPRTU, CAN, RTUSRV, TCPSRV, TCPRTUSRV
+                                // RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV
                                 if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
                                     register int base, size, n, total;
 
