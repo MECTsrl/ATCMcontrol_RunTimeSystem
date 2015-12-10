@@ -2461,7 +2461,7 @@ static void *clientThread(void *arg)
     default:
         ;
     }
-    fprintf(stderr, "tmin=%ums, tout=%ums\n", theDevices[d].silence_ms, theDevices[d].timeout_ms);
+    fprintf(stderr, "silence_ms=%u, timeout_ms=%u\n", theDevices[d].silence_ms, theDevices[d].timeout_ms);
     response_timeout.tv_sec = theDevices[d].timeout_ms / 1000;
     response_timeout.tv_usec = (theDevices[d].timeout_ms % 1000) * 1000;
     clock_gettime(CLOCK_REALTIME, &abstime);

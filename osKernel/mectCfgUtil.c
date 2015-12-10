@@ -205,7 +205,7 @@ int get_system_conf(char *ptr, struct system_conf *system, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "trace_window_s", &system->trace_window_s, line_num, filename);
     if (r) { return r; }
-    if (ptr != NULL) {
+    if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_SYSTEM);
         return -1;
     }
@@ -228,7 +228,7 @@ int get_serial_conf(char *ptr, struct serial_conf *serial, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "timeout_ms", &serial->timeout_ms, line_num, filename);
     if (r) { return r; }
-    if (ptr != NULL) {
+    if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_SERIAL_PORT_n);
         return -1;
     }
@@ -243,7 +243,7 @@ int get_tcp_ip_conf(char *ptr, struct tcp_ip_conf *tcp_ip, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "timeout_ms", &tcp_ip->timeout_ms, line_num, filename);
     if (r) { return r; }
-    if (ptr != NULL) {
+    if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_TCP_IP_PORT);
         return -1;
     }
@@ -256,7 +256,7 @@ int get_canopen_conf(char *ptr, struct canopen_conf *canopen, unsigned line_num,
 
     r = get_u_int32(ptr, "baudrate", &canopen->baudrate, line_num, filename);
     if (r) { return r; }
-    if (ptr != NULL) {
+    if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_CANOPEN_n);
         return -1;
     }
