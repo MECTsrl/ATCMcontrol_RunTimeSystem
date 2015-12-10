@@ -26,76 +26,63 @@
 #include "stdInc.h"
 
 #define APP_CONFIG_DIR                  "/local/etc/sysconfig/"
-#define APP_CONFIG_FILE                 APP_CONFIG_DIR "application.conf"
+#define APP_CONFIG_FILE                 APP_CONFIG_DIR "system.ini"
 
-#define APP_CONFIG_BUILD_ID_FILE        APP_CONFIG_DIR ".fw_versions"
-#define APP_CONFIG_MAC_FILE             "/etc/mac.conf"
-#define APP_CONFIG_SERIAL_FILE          "/etc/serial.conf"
-#define APP_CONFIG_IPADDR_FILE          APP_CONFIG_DIR "net.info"
-
-#define MAX_LINE_SIZE       81
+#define MAX_LINE_SIZE   81
+#define MAX_SERIAL_PORT  4
+#define MAX_CANOPEN      2
+#define MAX_NAMELEN     17
+#define MAX_PRIORITY     3
 
 /**
  *
  * Local Defines
  *
  */
-typedef struct serial_cfg_s {
-	int enabled;            /* Is enabled? */
-	int baud;               /* Baud rate configuration*/
-	int databits;           /* Databits bit configuration*/
-	int parity;             /* Parity bit configuration*/
-	int stopbits;           /* Stop bit configuration*/
-	int ignore_echo;        /* if 1, ignore the command echo */
-} serial_cfg_s;
-
-typedef struct mbrtu_cfg_s {      /* MODBUS stack settings */
-	serial_cfg_s serial_cfg; 
-	int ascii;              /* Use ASCII protocol */
-	int rtu;                /* Use RTU protocol */
-} mbrtu_cfg_s;
-
-#ifdef RTS_CFG_MECT_LIB
-extern serial_cfg_s mect_cfg;
-#endif
-extern serial_cfg_s can0_cfg;
-extern serial_cfg_s can1_cfg;
-extern mbrtu_cfg_s modbus0_cfg;
-extern mbrtu_cfg_s modbus1_cfg;
-
-enum app_conf_section_e {
-	APP_CONF_NONE = 0,
-	APP_CONF_IRQ0,              /* IRQ0 section */
-	APP_CONF_IRQ1,              /* IRQ1 section */
-	APP_CONF_PLC0,              /* PLC0 section */
-	APP_CONF_PLC1,              /* PLC1 section */
-	APP_CONF_PLC2,              /* PLC2 section */
-	APP_CONF_ST,                /* MECT serial test protocol (slave) section */
-	APP_CONF_MECT,              /* MECT serial protocol (master) section */
-    APP_CONF_MB,                /* MODBUS protocol section */
-    APP_CONF_MB0,               /* MODBUS0 protocol section */
-    APP_CONF_MB1,               /* MODBUS1 protocol section */
-    APP_CONF_WD,                /* Watch dog section */
-	APP_CONF_CAN0,              /* Can0 section */
-	APP_CONF_CAN1,              /* Can1 section */
-	APP_CONF_LAST_ELEM          /* PLC2 section */
+struct serial_conf {
+	u_int32_t baudrate;     // baudrate = 38400
+	u_int16_t databits;      // databits = 8
+	char parity;            // parity = N
+	u_int16_t stopbits;     // stopbits = 1
+    u_int16_t silence_ms;   // silence_ms = 30
+    u_int16_t timeout_ms;   // timeout_ms = 130
 };
 
-#define TAG_CONF_IRQ0 "[IRQ0]"
-#define TAG_CONF_IRQ1 "[IRQ1]"
-#define TAG_CONF_PLC0 "[PLC0]"
-#define TAG_CONF_PLC1 "[PLC1]"
-#define TAG_CONF_PLC2 "[PLC2]"
-#define TAG_CONF_ST   "[ST]"
-#define TAG_CONF_MECT "[MECT]"
-#define TAG_CONF_MB   "[MODBUS]"
-#define TAG_CONF_MB0  "[MODBUS0]"
-#define TAG_CONF_MB1  "[MODBUS1]"
-#define TAG_CONF_WD   "[WD]"
-#define TAG_CONF_CAN0 "[CAN0]"
-#define TAG_CONF_CAN1 "[CAN1]"
+struct tcp_ip_conf {
+    u_int16_t silence_ms;   // silence_ms = 30
+    u_int16_t timeout_ms;   // timeout_ms = 130
+};
 
-int app_config_load(enum app_conf_section_e section);
+struct canopen_conf {
+    u_int32_t baudrate;     // baudrate = 125000
+};
+
+struct system_conf {
+    u_int16_t retries;                      // retries = 5
+    u_int16_t blacklist;                    // blacklist = 10
+    u_int16_t read_period_ms[MAX_PRIORITY]; // read_period_ms_1 = 10 read_period_ms_2 = 100 read_period_ms_3 = 1000
+    char home_page[MAX_NAMELEN];            // home_page = page100
+    char start_page[MAX_NAMELEN];           // start_page = page100
+    u_int16_t buzzer_touch;                 // buzzer_touch = 1
+    u_int16_t buzzer_alarm;                 // buzzer_alarm = 1
+    u_int16_t pwd_timeout_s;                // pwd_timeout_s = 0
+    char pwd_logout_page[MAX_NAMELEN];      // pwd_logout_page =
+    u_int16_t screen_saver_s;               // screen_saver_s = 0
+    u_int16_t slow_log_period_s;            // slow_log_period_ms = 10
+    u_int16_t fast_log_period_s;            // fast_log_period_s = 1
+    u_int16_t max_log_space_MB;             // max_log_space_MB = 5
+    u_int16_t trace_window_s;               // trace_window_s = 60
+};
+
+struct system_ini {
+    struct system_conf system;
+    struct serial_conf serial_port[MAX_SERIAL_PORT];
+    struct tcp_ip_conf tcp_ip_port;
+    struct canopen_conf canopen[MAX_CANOPEN];
+};
+
+int app_config_load(struct system_ini * system_ini);
+void app_config_dump(struct system_ini * system_ini);
 
 #endif
 

@@ -59,11 +59,11 @@ static struct termios oldtty;           /* Serial port old settings */
  * Stop:           1 bit
  * Parity:         No
  */
-int app_s_serial_init(serial_cfg_s * config)
+int app_s_serial_init(struct serial_conf * config)
 {
 	int fd = 0;
 
-	if (config->enabled == 0)
+	if (config == NULL)
 	{
 		return 0;
 	}
@@ -84,7 +84,7 @@ int app_s_serial_init(serial_cfg_s * config)
 #ifdef DBG_PRIV_UTY_MECT
 	printf("%s - setting baudrate %d\n", __func__, config->baud);
 #endif
-	switch (config->baud) {
+	switch (config->baudrate) {
 		case 0:
 			tty.c_cflag |= B0;
 			break;

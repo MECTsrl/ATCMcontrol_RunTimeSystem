@@ -35,7 +35,7 @@
  * Function prototypes
  */
 
-int app_s_serial_init(serial_cfg_s * config);
+int app_s_serial_init(struct serial_conf * config);
 void app_s_serial_close(int fdsio);
 int app_s_str_to_int(char *string);
 void app_s_int_to_hex(unsigned int integer, char *hex);

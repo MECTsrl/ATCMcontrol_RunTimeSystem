@@ -41,7 +41,7 @@
 unsigned char app_mect_flag;
 short app_mect_status;
 float app_mect_enquiry;
-serial_cfg_s mect_cfg;
+struct serial_conf mect_cfg;
 
 /*
  * Local type definitions
@@ -148,18 +148,20 @@ app_mect_init(void)
 	printf ("[%s] - Serial init\n", __func__);
 #endif
 
-	if (app_config_load(APP_CONF_MECT))
+    struct system_ini system_ini;
+
+	if (app_config_load(&system_ini))
 	{
 		fprintf(stderr, "[%s]: Error Mect module configuration file is wrong: abort initialization.\n", __func__);
 	}
 
-	if (mect_cfg.enabled == 0)
+	if (TRUE)
 	{
 		fprintf(stderr, "[%s]: Warning Mect module is build but is not used: abort initialization.\n", __func__);
 		return 0;
 	}
 
-	fdsio = app_s_serial_init(&mect_cfg);
+	fdsio = app_s_serial_init(&system_ini.serial_port[0]);
 	if (fdsio < 0) {
 		perror("app_mect_setup: error opening serial port");
 

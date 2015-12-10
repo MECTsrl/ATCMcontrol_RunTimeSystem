@@ -83,6 +83,7 @@
 #define DimCrossTable_4 (DimCrossTable_3 + 2 * DimCrossTable + 2 + 2)
 #define DimAlarmsCT     1152
 
+static struct system_ini system_ini;
 
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
 #define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
@@ -99,20 +100,6 @@ static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 #define DATA_OK            0    // read and ok
 #define DATA_ERR           1    // read and failure
 #define DATA_RUN           2    // still reading
-
-static u_int32_t hardware_type = 0x00000000;
-// Inizializzazione dal IO layer sync
-// Byte 0 can0:
-//        0 no can,
-//        1 tpac1006 Base
-//        2 tpac1006 u315
-//        3 ..
-// Byte 1	can 1:
-// Byte 2 modbus 0
-//        0: NO modbus
-//        1: tpac1007
-// byte 3 modbus 1
-
 
 // -------- SYNC MANAGE FROM HMI ---------------------------------------------
 #define REG_SYNC_NUMBER 	6144 // 1+5472+...
@@ -216,7 +203,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define	THE_TCRS_MAX_WORK	 10 // MAX CLIENTS
 
 //#define RTS_CFG_DEBUG_OUTPUT
-enum TableType {Crosstable_csv = 0, Alarms_csv, Commpar_csv};
+enum TableType {Crosstable_csv = 0, Alarms_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV};
 enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
 enum EventAlarm { Event = 0, Alarm};
@@ -251,26 +238,22 @@ static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
 
 static struct ServerStruct {
     // for serverThread
-    enum FieldbusType Protocol;
-    char IPAddr[MAX_IPADDR_LEN];
-    u_int16_t Port;
+    enum FieldbusType protocol;
+    char IPaddress[MAX_IPADDR_LEN];
+    u_int16_t port;
     //
     union ServerData {
         struct {
-            u_int16_t Port;
-            u_int32_t BaudRate;
-            char Parity;
-            u_int16_t DataBit;
-            u_int16_t StopBit;
-        } rtusrv;
+            u_int16_t port;
+            u_int32_t baudrate;
+            char parity;
+            u_int16_t databits;
+            u_int16_t stopbits;
+        } serial;
         struct {
             char IPaddr[MAX_IPADDR_LEN];
-            u_int16_t Port;
-        } tcpsrv;
-        struct {
-            char IPaddr[MAX_IPADDR_LEN];
-            u_int16_t Port;
-        } tcprtusrv;
+            u_int16_t port;
+        } tcp_ip;
     } u;
     //
     char name[MAX_THREADNAME_LEN]; // "(64)TCPRTUSRV_123.567.901.345_65535"
@@ -286,33 +269,30 @@ static u_int16_t theServersNumber = 0;
 #define MaxLocalQueue 15
 static struct ClientStruct {
     // for clientThread
-    enum FieldbusType Protocol;
-    char IPAddr[MAX_IPADDR_LEN];
-    u_int16_t Port;
+    enum FieldbusType protocol;
+    char IPaddress[MAX_IPADDR_LEN];
+    u_int16_t port;
     //
     union ClientData {
         // no plc client
         struct {
-            u_int16_t Port;
-            u_int32_t BaudRate;
-            char Parity;
-            u_int16_t DataBit;
-            u_int16_t StopBit;
-        } rtu;
+            u_int16_t port;
+            u_int32_t baudrate;
+            char parity;
+            u_int16_t databits;
+            u_int16_t stopbits;
+        } serial; // RTU, MECT
         struct {
             char IPaddr[MAX_IPADDR_LEN];
-            u_int16_t Port;
-        } tcp;
-        struct {
-            char IPaddr[MAX_IPADDR_LEN];
-            u_int16_t Port;
-        } tcprtu;
+            u_int16_t port;
+        } tcp_ip; // TCP, TCPRTU
         struct {
             u_int16_t bus;
+            u_int32_t baudrate;
         } can;
     } u;
-    int16_t Tmin;
-    u_int16_t TimeOut;
+    int16_t silence_ms;
+    u_int16_t timeout_ms;
     //
     char name[MAX_THREADNAME_LEN]; // "(64)TCPRTUSRV_123.567.901.345_65535"
     enum DeviceStatus status;
@@ -386,24 +366,6 @@ struct  Alarms {
 };
 static struct Alarms ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
 
-struct CommParameters {
-    char Device[MAX_DEVICE_LEN];
-    char IPaddr[MAX_IPADDR_LEN];
-    u_int16_t Port;
-    u_int32_t BaudRate;
-    char Parity;
-    u_int16_t DataBit;
-    u_int16_t StopBit;
-    int16_t Tmin;
-    u_int16_t TimeOut;
-    int State;
-    u_int16_t Retry;
-};
-static struct  CommParameters CommParameters[1 + 4];
-static int16_t NumberOfFails;
-static u_int8_t FailDivisor;
-static int32_t read_period_ms[MAX_PRIORITY];
-
 /* ----  Global Variables:	 -------------------------------------------------- */
 
 #if defined(RTS_CFG_MECT_RETAIN)
@@ -451,7 +413,6 @@ static int do_recv(int s, void *buffer, ssize_t len);
 static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *address);
 static int ReadFields(int16_t Index);
 static int ReadAlarmsFields(int16_t Index);
-static int ReadCommFields(int16_t Index);
 static int LoadXTable(enum TableType CTType);
 static void AlarmMngr(void);
 static void ErrorMNG(void);
@@ -883,142 +844,6 @@ static int ReadAlarmsFields(int16_t Index)
     return ERR;
 }
 
-// fb_HW119_ReadCommFields.st
-static int ReadCommFields(int16_t Index)
-{
-    int ERR = FALSE;
-    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
-    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
-
-    switch (Index) {
-    case 1: // retries
-        // NumberOfFails {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            NumberOfFails = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // FailDivisor {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            FailDivisor = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        break;
-    case 2: // priorities
-        // Talta {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            read_period_ms[0] = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // Tmedia {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            read_period_ms[1] = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // Tbassa {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            read_period_ms[2] = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        break;
-    case 3: // rtu
-    case 4: // tcp
-    case 5: // tcprtu
-        // Device {text}
-        Field.MaxLen = MAX_DEVICE_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            strncpy(CommParameters[Index - 2].Device, param.field->Contents, MAX_DEVICE_LEN);
-        } else {
-            ERR = TRUE;
-        }
-        // IPaddr {text}
-        Field.MaxLen = MAX_IPADDR_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            strncpy(CommParameters[Index - 2].IPaddr, param.field->Contents, MAX_IPADDR_LEN);
-        } else {
-            ERR = TRUE;
-        }
-        // Port {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].Port = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // BaudRate {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].BaudRate = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // Parity {E,N,O}
-        Field.MaxLen = 1 + 1;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].Parity = param.field->Contents[0];
-        } else {
-            ERR = TRUE;
-        }
-        // DataBit {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].DataBit = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // StopBit {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].StopBit = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // Tmin {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].Tmin = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        // TimeOut {number}
-        Field.MaxLen = MAX_NUMBER_LEN;
-        hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-        if (param.ret_value == 0) {
-            CommParameters[Index - 2].TimeOut = atoi(Field.Contents);
-        } else {
-            ERR = TRUE;
-        }
-        break;
-
-    default:
-        ;
-    }
-
-    return ERR;
-}
-
 // fb_HW119_Init.st
 // fb_HW119_LoadCrossTab.st
 static int LoadXTable(enum TableType CTType)
@@ -1079,10 +904,6 @@ static int LoadXTable(enum TableType CTType)
         }
         ALCrossTableState = TRUE;
         break;
-    case Commpar_csv:
-        CTFile = "/local/etc/sysconfig/Commpar.csv";
-        CTDimension = 5;
-        break;
     default:
         CTFile = "(unknown)";
         CTDimension = -1;
@@ -1108,7 +929,6 @@ static int LoadXTable(enum TableType CTType)
             read_param.error = FALSE;
             break;
         case Alarms_csv:
-        case Commpar_csv:
             read_param.error = TRUE;
             break;
         default:
@@ -1124,7 +944,6 @@ static int LoadXTable(enum TableType CTType)
                 ALCrossTable[addr].ALError = 100;
                 ErrorsState |= 0x04;
                 break;
-            case 2:
             default:
                 ;
             }
@@ -1142,13 +961,6 @@ static int LoadXTable(enum TableType CTType)
             if (ReadAlarmsFields(addr)) {
                 ALCrossTable[addr].ALError = 100;
                 ErrorsState |= 0x04;
-            }
-            break;
-        case Commpar_csv:
-            if (ReadCommFields(addr) && (addr > 1)) {
-                CommParameters[addr - 1].State = FALSE;
-            } else {
-                CommParameters[addr - 1].State = TRUE;
             }
             break;
         default:
@@ -1426,7 +1238,7 @@ static void LocalIO(void)
     memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
     memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
     memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
-    the_QdataRegisters[5393] = hardware_type;
+    // the_QdataRegisters[5393] = hardware_type;
 #if defined(RTS_CFG_MECT_RETAIN)
     if (retentive) {
         retentive[(5390 - 1)] = the_QdataRegisters[5390];
@@ -1435,15 +1247,7 @@ static void LocalIO(void)
         retentive[(5393 - 1)] = the_QdataRegisters[5393];
     }
 #endif
-    // TPAC1006, TPAC1008
-    if (hardware_type & 0x000000FF) {
-        // TPAC1006_LIOsync();
-    }
-    // TPAC1007
-    if (hardware_type & 0x00FF0000) {
-        // TPAC1007_LIOsync();
-    }
-
+    // no more LIOSync in any TPAC (its in the Crosstable now)
 }
 
 // fb_HW119_ErrorMng.st
@@ -1541,9 +1345,9 @@ static int checkServersDevicesAndNodes()
                 u_int16_t s;
                 // add unique variable's server
                 for (s = 0; s < theServersNumber; ++s) {
-                    if (CrossTable[i].Protocol == theServers[s].Protocol
-                     && strncmp(CrossTable[i].IPAddress, theServers[s].IPAddr, MAX_IPADDR_LEN) == 0
-                     && CrossTable[i].Port == theServers[s].Port) {
+                    if (CrossTable[i].Protocol == theServers[s].protocol
+                     && strncmp(CrossTable[i].IPAddress, theServers[s].IPaddress, MAX_IPADDR_LEN) == 0
+                     && CrossTable[i].Port == theServers[s].port) {
                         // already present
                         break;
                     }
@@ -1555,10 +1359,10 @@ static int checkServersDevicesAndNodes()
                 } else {
                     // new server entry
                     ++theServersNumber;
-                    theServers[s].Protocol = CrossTable[i].Protocol;
-                    strncpy(theServers[s].IPAddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                    theServers[s].Port = CrossTable[i].Port;
-                    switch (theServers[s].Protocol) {
+                    theServers[s].protocol = CrossTable[i].Protocol;
+                    strncpy(theServers[s].IPaddress, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                    theServers[s].port = CrossTable[i].Port;
+                    switch (theServers[s].protocol) {
                     case PLC:
                     case RTU:
                     case TCP:
@@ -1567,52 +1371,33 @@ static int checkServersDevicesAndNodes()
                     case MECT:
                         // FIXME: assert
                         break;
-                    case RTUSRV:
-                        theServers[s].u.rtusrv.Port = CrossTable[i].Port;
-                        switch (theServers[s].u.rtusrv.Port) {
+                    case RTUSRV: {
+                        u_int16_t port = CrossTable[i].Port;
+                        switch (port) {
                         case 0:
-                            theServers[s].u.rtusrv.BaudRate = modbus0_cfg.serial_cfg.baud;
-                            switch (modbus0_cfg.serial_cfg.parity) {
-                            case 0: theServers[s].u.rtusrv.Parity = 'N'; break;
-                            case 1: theServers[s].u.rtusrv.Parity = 'O'; break;
-                            case 2: theServers[s].u.rtusrv.Parity = 'E'; break;
-                            default:
-                                ;
-                            }
-                            theServers[s].u.rtusrv.DataBit = modbus0_cfg.serial_cfg.databits;
-                            theServers[s].u.rtusrv.StopBit = modbus0_cfg.serial_cfg.stopbits;
-                            break;
                         case 1:
-                            theServers[s].u.rtusrv.BaudRate = modbus1_cfg.serial_cfg.baud;
-                            switch (modbus1_cfg.serial_cfg.parity) {
-                            case 0: theServers[s].u.rtusrv.Parity = 'N'; break;
-                            case 1: theServers[s].u.rtusrv.Parity = 'O'; break;
-                            case 2: theServers[s].u.rtusrv.Parity = 'E'; break;
-                            default:
-                                ;
-                            }
-                            theServers[s].u.rtusrv.DataBit = modbus1_cfg.serial_cfg.databits;
-                            theServers[s].u.rtusrv.StopBit = modbus1_cfg.serial_cfg.stopbits;
-                            break;
+                        case 2:
                         case 3:
-                            theServers[s].u.rtusrv.BaudRate = THE_RTUS_BAUDRATE;
-                            theServers[s].u.rtusrv.Parity = THE_RTUS_PARITY;
-                            theServers[s].u.rtusrv.DataBit = THE_RTUS_DATABIT;
-                            theServers[s].u.rtusrv.StopBit = THE_RTUS_STOPBIT;
+                            theServers[s].u.serial.port = port;
+                            theServers[s].u.serial.baudrate = system_ini.serial_port[port].baudrate;
+                            theServers[s].u.serial.parity = system_ini.serial_port[port].parity;
+                            theServers[s].u.serial.databits = system_ini.serial_port[port].databits;
+                            theServers[s].u.serial.stopbits = system_ini.serial_port[port].stopbits;
                             break;
                         default:
-                            ;
+                            fprintf(stderr, "%s: bad RTU_SRV port %u for variable #%u", __func__, port, i);
+                            ; // FIXME: error
                         }
                         theServers[s].ctx = NULL;
-                        break;
+                    }   break;
                     case TCPSRV:
-                        strncpy(theServers[s].u.tcpsrv.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                        theServers[s].u.tcpsrv.Port = CrossTable[i].Port;
+                        strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
                         break;
                     case TCPRTUSRV:
-                        strncpy(theServers[s].u.tcprtusrv.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                        theServers[s].u.tcprtusrv.Port = CrossTable[i].Port;
+                        strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
                         break;
                     default:
@@ -1621,7 +1406,7 @@ static int checkServersDevicesAndNodes()
                     theServers[s].thread_id = 0;
                     theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
-                    snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_%s_%d", s, fieldbusName[theServers[s].Protocol], theServers[s].IPAddr, theServers[s].Port);
+                    snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_%s_%d", s, fieldbusName[theServers[s].protocol], theServers[s].IPaddress, theServers[s].port);
                 }
             }   break;
             default:
@@ -1646,11 +1431,12 @@ static int checkServersDevicesAndNodes()
                 u_int16_t d;
                 u_int16_t n;
                 u_int16_t s;
+                u_int16_t p;
                 // add unique variable's device
                 for (d = 0; d < theDevicesNumber; ++d) {
-                    if (CrossTable[i].Protocol == theDevices[d].Protocol
-                     && strncmp(CrossTable[i].IPAddress, theDevices[d].IPAddr, MAX_IPADDR_LEN) == 0
-                     && CrossTable[i].Port == theDevices[d].Port) {
+                    if (CrossTable[i].Protocol == theDevices[d].protocol
+                     && strncmp(CrossTable[i].IPAddress, theDevices[d].IPaddress, MAX_IPADDR_LEN) == 0
+                     && CrossTable[i].Port == theDevices[d].port) {
                         // already present
                         break;
                     }
@@ -1663,109 +1449,82 @@ static int checkServersDevicesAndNodes()
                     // new device entry
                     CrossTable[i].device = theDevicesNumber;
                     ++theDevicesNumber;
-                    theDevices[d].Protocol = CrossTable[i].Protocol;
-                    strncpy(theDevices[d].IPAddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                    theDevices[d].Port = CrossTable[i].Port;
-                    switch (theDevices[d].Protocol) {
+                    theDevices[d].protocol = CrossTable[i].Protocol;
+                    strncpy(theDevices[d].IPaddress, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                    theDevices[d].port = p = CrossTable[i].Port;
+                    switch (theDevices[d].protocol) {
                     case PLC:
                         // FIXME: assert
                         break;
                     case RTU:
-                        theDevices[d].u.rtu.Port = CrossTable[i].Port;
-                        switch (theDevices[d].u.rtu.Port) {
-#if 0
-                        case 0:
-                            theDevices[d].u.rtu.BaudRate = modbus0_cfg.serial_cfg.baud;
-                            switch (modbus0_cfg.serial_cfg.parity) {
-                            case 0: theDevices[d].u.rtu.Parity = 'N'; break;
-                            case 1: theDevices[d].u.rtu.Parity = 'O'; break;
-                            case 2: theDevices[d].u.rtu.Parity = 'E'; break;
-                            default:
-                                ;
-                            }
-                            theDevices[d].u.rtu.DataBit = modbus0_cfg.serial_cfg.databits;
-                            theDevices[d].u.rtu.StopBit = modbus0_cfg.serial_cfg.stopbits;
-                            theDevices[d].Tmin = CommParameters[RTU].Tmin; // FIXME
-                            theDevices[d].TimeOut = CommParameters[RTU].TimeOut; // FIXME
-                            break;
-                        case 1:
-                            theDevices[d].u.rtu.BaudRate = modbus1_cfg.serial_cfg.baud;
-                            switch (modbus1_cfg.serial_cfg.parity) {
-                            case 0: theDevices[d].u.rtu.Parity = 'N'; break;
-                            case 1: theDevices[d].u.rtu.Parity = 'O'; break;
-                            case 2: theDevices[d].u.rtu.Parity = 'E'; break;
-                            default:
-                                ;
-                            }
-                            theDevices[d].u.rtu.DataBit = modbus1_cfg.serial_cfg.databits;
-                            theDevices[d].u.rtu.StopBit = modbus1_cfg.serial_cfg.stopbits;
-                            theDevices[d].Tmin = CommParameters[RTU].Tmin; // FIXME
-                            theDevices[d].TimeOut = CommParameters[RTU].TimeOut; // FIXME
-                            break;
-                        case 3:
-                            theDevices[d].u.rtu.BaudRate = THE_RTUC_BAUDRATE;
-                            theDevices[d].u.rtu.Parity = THE_RTUC_PARITY;
-                            theDevices[d].u.rtu.DataBit = THE_RTUC_DATABIT;
-                            theDevices[d].u.rtu.StopBit = THE_RTUC_STOPBIT;
-                            theDevices[d].Tmin = THE_RTUC_TMIN_MS;
-                            theDevices[d].TimeOut = THE_RTUC_TOUT_MS;
-                            break;
-#else
+                    case MECT:
+                        switch (p) {
                         case 0:
                         case 1:
                         case 2:
                         case 3:
-                            // FIXME: use System.conf
-                            theDevices[d].u.rtu.BaudRate = CommParameters[RTU].BaudRate;
-                            theDevices[d].u.rtu.Parity = CommParameters[RTU].Parity;
-                            theDevices[d].u.rtu.DataBit = CommParameters[RTU].DataBit;
-                            theDevices[d].u.rtu.StopBit = CommParameters[RTU].StopBit;
-                            theDevices[d].Tmin = CommParameters[RTU].Tmin;
-                            theDevices[d].TimeOut = CommParameters[RTU].TimeOut;
+                            theDevices[d].u.serial.port = p;
+                            theDevices[d].u.serial.baudrate = system_ini.serial_port[p].baudrate;
+                            theDevices[d].u.serial.parity = system_ini.serial_port[p].parity;
+                            theDevices[d].u.serial.databits = system_ini.serial_port[p].databits;
+                            theDevices[d].u.serial.stopbits = system_ini.serial_port[p].stopbits;
+                            theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
+                            theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
                             break;
-#endif
                         default:
-                            fprintf(stderr, "%s: bad RTU port %u for variable #%u", __func__, CrossTable[i].Port, i);
+                            fprintf(stderr, "%s: bad %s port %u for variable #%u", __func__,
+                                    (theDevices[d].protocol == RTU ? "RTU" : "MECT"), p, i);
                             ; // FIXME: error
                         }
                         break;
                     case TCP:
-                        strncpy(theDevices[d].u.tcp.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                        theDevices[d].u.tcp.Port = CrossTable[i].Port;
+                        strncpy(theDevices[d].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
+                        theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
+                        theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
                         break;
                     case TCPRTU:
-                        strncpy(theDevices[d].u.tcprtu.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
-                        theDevices[d].u.tcprtu.Port = CrossTable[i].Port;
+                        strncpy(theDevices[d].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
+                        theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
+                        theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
                         break;
                     case CANOPEN:
-                        theDevices[d].u.can.bus = CrossTable[i].Port;
-                        // FIXME: baudrate
-                        break;
-                    case MECT:
-                        // FIXME: TODO
+                        switch (p) {
+                        case 0:
+                        case 1:
+                            theDevices[d].u.can.bus = p;
+                            theDevices[d].u.can.baudrate = system_ini.canopen[p].baudrate;
+                            theDevices[d].silence_ms = 0;
+                            theDevices[d].timeout_ms = 0;
+                            break;
+                        default:
+                            fprintf(stderr, "%s: bad CANOPEN port %u for variable #%u", __func__, p, i);
+                            ; // FIXME: error
+                        }
                         break;
                     case RTUSRV:
                     case TCPSRV:
                     case TCPRTUSRV:
                         for (s = 0; s < theServersNumber; ++s) {
-                            if (theServers[s].Protocol == theDevices[d].Protocol
-                             && strncmp(theServers[s].IPAddr, theDevices[d].IPAddr, MAX_IPADDR_LEN) == 0
-                             && theServers[s].Port == theDevices[d].Port) {
+                            if (theServers[s].protocol == theDevices[d].protocol
+                             && strncmp(theServers[s].IPaddress, theDevices[d].IPaddress, MAX_IPADDR_LEN) == 0
+                             && theServers[s].port == theDevices[d].port) {
                                 theDevices[d].server = s;
                                 break;
                             }
                         }
                         if (theDevices[d].server == 0xffff) {
-                            // FIXME
+                            // FIXME: error
                         }
                         break;
                     default:
                         ;
                     }
-                    snprintf(theDevices[d].name, MAX_THREADNAME_LEN, "dev(%d)%s_%s_%u", d, fieldbusName[theDevices[d].Protocol], theDevices[d].IPAddr, theDevices[d].Port);
-                    if (theDevices[d].TimeOut == 0) {
-                        theDevices[d].TimeOut = 300;
-                        fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].TimeOut);
+                    snprintf(theDevices[d].name, MAX_THREADNAME_LEN, "dev(%d)%s_%s_%u", d, fieldbusName[theDevices[d].protocol], theDevices[d].IPaddress, theDevices[d].port);
+                    if (theDevices[d].timeout_ms == 0) {
+                        theDevices[d].timeout_ms = 300;
+                        fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].timeout_ms);
                     }
                     theDevices[d].status = ZERO;
                     // theDevices[d].thread_id = 0;
@@ -1815,31 +1574,21 @@ static void *engineThread(void *statusAdr)
     XX_GPIO_SET(3);
     pthread_mutex_lock(&theCrosstableClientMutex);
     {
-        // case 0: init
+        int s;
+        int d;
         ErrorsState = 0;
         ERROR_FLAG = 0;
 
-        // 10: READ ALARMS FILE
         if (LoadXTable(Alarms_csv)) {
             ALCrossTableState = FALSE;
             ERROR_FLAG |= ERROR_FLAG_ALARMS;
             // continue anyway
         }
-
-        // 20: READ CROSSTABLE FILE
         if (LoadXTable(Crosstable_csv)) {
             CrossTableState = FALSE;
             ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
             goto exit_initialization;
         }
-
-        // 30: READ DEVICES FILE
-        if (LoadXTable(Commpar_csv)) {
-            ERROR_FLAG |= ERROR_FLAG_COMMPAR;
-            goto exit_initialization;
-         }
-
-        // 40: CREATE SERVER, DEVICES AND NODES TABLES
         if (checkServersDevicesAndNodes()) {
             ERROR_FLAG |= ERROR_FLAG_COMMPAR;
             goto exit_initialization;
@@ -1848,42 +1597,32 @@ static void *engineThread(void *statusAdr)
             ERROR_FLAG |= ERROR_FLAG_COMMPAR;
             goto exit_initialization;
         }
-
-        // 50: CREATE SERVER THREADS
-        {
-            int s;
-            for (s = 0; s < theServersNumber; ++s) {
-                theServers[s].thread_status = NOT_STARTED;
-                if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
-                    do {
-                        do_sleep_ms(1);
-                    } while (theServers[s].thread_status != RUNNING);
-                } else {
-            #if defined(RTS_CFG_IO_TRACE)
-                    osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
-            #endif
-                }
+        // create servers
+        for (s = 0; s < theServersNumber; ++s) {
+            theServers[s].thread_status = NOT_STARTED;
+            if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
+                do {
+                    do_sleep_ms(1);
+                } while (theServers[s].thread_status != RUNNING);
+            } else {
+        #if defined(RTS_CFG_IO_TRACE)
+                osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
+        #endif
             }
         }
-
-        // case 60: CREATE DEVICE THREADS
-        {
-            int d;
-            for (d = 0; d < theDevicesNumber; ++d) {
-                theDevices[d].thread_status = NOT_STARTED;
-                if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
-                    do {
-                        do_sleep_ms(1);
-                    } while (theDevices[d].thread_status != RUNNING);
-                } else {
-            #if defined(RTS_CFG_IO_TRACE)
-                    osTrace("[%s] ERROR creating device thread %s: %s.\n", __func__, theDevices[d].name, strerror(errno));
-            #endif
-                }
+        // create clients
+        for (d = 0; d < theDevicesNumber; ++d) {
+            theDevices[d].thread_status = NOT_STARTED;
+            if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
+                do {
+                    do_sleep_ms(1);
+                } while (theDevices[d].thread_status != RUNNING);
+            } else {
+        #if defined(RTS_CFG_IO_TRACE)
+                osTrace("[%s] ERROR creating device thread %s: %s.\n", __func__, theDevices[d].name, strerror(errno));
+        #endif
             }
         }
-
-        // 70: ok
         if  (ALCrossTableState) {
             CommEnabled = TRUE;
         }
@@ -1968,7 +1707,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
     u_int8_t bitRegs[MODBUS_MAX_READ_BITS];         // > MAX_READS
     u_int16_t uintRegs[MODBUS_MAX_READ_REGISTERS];  // > MAX_READS
 
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC:
         // FIXME: assert
         break;
@@ -2155,7 +1894,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
     u_int8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
     u_int16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
 
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC:
         // FIXME: assert
         break;
@@ -2414,21 +2153,21 @@ static void *serverThread(void *arg)
 
     // thread init
     pthread_mutex_init(&theServers[s].mutex, NULL);
-    switch (theServers[s].Protocol) {
+    switch (theServers[s].protocol) {
     case RTUSRV: {
         char device[VMM_MAX_PATH];
 
-        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.rtusrv.Port);
-        modbus_ctx = modbus_new_rtu(device, theServers[s].u.rtusrv.BaudRate,
-                            theServers[s].u.rtusrv.Parity, theServers[s].u.rtusrv.DataBit, theServers[s].u.rtusrv.StopBit);
+        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
+        modbus_ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
+                            theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_RTUS_NUMBER, 0);
     }   break;
     case TCPSRV:
-        modbus_ctx = modbus_new_tcp(theServers[s].u.tcpsrv.IPaddr, theServers[s].u.tcpsrv.Port);
+        modbus_ctx = modbus_new_tcp(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_TCPS_NUMBER, 0);
         break;
     case TCPRTUSRV:
-        modbus_ctx = modbus_new_tcprtu(theServers[s].u.tcprtusrv.IPaddr, theServers[s].u.tcprtusrv.Port);
+        modbus_ctx = modbus_new_tcprtu(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_TCRS_NUMBER, 0);
         break;
     default:
@@ -2445,7 +2184,7 @@ static void *serverThread(void *arg)
         if (g_bRunning && threadInitOK) {
             // get file descriptor or bind and listen
             if (server_socket == -1) {
-                switch (theServers[s].Protocol) {
+                switch (theServers[s].protocol) {
                 case RTUSRV:
                     server_socket = modbus_get_socket(modbus_ctx); // here socket is file descriptor
                     break;
@@ -2477,7 +2216,7 @@ static void *serverThread(void *arg)
                 continue;
             }
             // accept requests
-            switch (theServers[s].Protocol) {
+            switch (theServers[s].protocol) {
             case RTUSRV:
                 // unique client (serial line)
                 rc = modbus_receive(modbus_ctx, query);
@@ -2545,7 +2284,7 @@ static void *serverThread(void *arg)
     }
 
     // thread clean
-    switch (theServers[s].Protocol) {
+    switch (theServers[s].protocol) {
     case RTUSRV:
     case TCPSRV:
     case TCPRTUSRV:
@@ -2612,21 +2351,21 @@ static void *clientThread(void *arg)
     // ------------------------------------------ thread init
     theDevices[d].modbus_ctx = NULL;
     // "new"
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU: {
         char device[VMM_MAX_PATH];
 
-        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theDevices[d].u.rtu.Port);
-        theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.rtu.BaudRate,
-                            theDevices[d].u.rtu.Parity, theDevices[d].u.rtu.DataBit, theDevices[d].u.rtu.StopBit);
+        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theDevices[d].u.serial.port);
+        theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.serial.baudrate,
+                            theDevices[d].u.serial.parity, theDevices[d].u.serial.databits, theDevices[d].u.serial.stopbits);
     }   break;
     case TCP:
-        theDevices[d].modbus_ctx = modbus_new_tcp(theDevices[d].u.tcp.IPaddr, theDevices[d].u.tcp.Port);
+        theDevices[d].modbus_ctx = modbus_new_tcp(theDevices[d].u.tcp_ip.IPaddr, theDevices[d].u.tcp_ip.port);
         break;
     case TCPRTU:
-        theDevices[d].modbus_ctx = modbus_new_tcprtu(theDevices[d].u.tcprtu.IPaddr, theDevices[d].u.tcprtu.Port);
+        theDevices[d].modbus_ctx = modbus_new_tcprtu(theDevices[d].u.tcp_ip.IPaddr, theDevices[d].u.tcp_ip.port);
         break;
     case CANOPEN:
         break; // FIXME: check can state
@@ -2640,7 +2379,7 @@ static void *clientThread(void *arg)
         ;
     }
     // check the "new" result
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU:
@@ -2668,7 +2407,7 @@ static void *clientThread(void *arg)
     }
     // update the error flags
     if (theDevices[d].status == NOT_CONNECTED) {
-        switch (theDevices[d].Protocol) {
+        switch (theDevices[d].protocol) {
         case PLC: // FIXME: assert
             break;
         case RTU:
@@ -2702,11 +2441,11 @@ static void *clientThread(void *arg)
 
     // ------------------------------------------ run
     fprintf(stderr, "%s: ", theDevices[d].name);
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU:
-        fprintf(stderr, "@%u/%u/%c/%u, ", theDevices[d].u.rtu.BaudRate, theDevices[d].u.rtu.DataBit, theDevices[d].u.rtu.Parity, theDevices[d].u.rtu.StopBit);
+        fprintf(stderr, "@%u/%u/%c/%u, ", theDevices[d].u.serial.baudrate, theDevices[d].u.serial.databits, theDevices[d].u.serial.parity, theDevices[d].u.serial.stopbits);
         break;
     case TCP:
     case TCPRTU:
@@ -2722,9 +2461,9 @@ static void *clientThread(void *arg)
     default:
         ;
     }
-    fprintf(stderr, "tmin=%ums, tout=%ums\n", theDevices[d].Tmin, theDevices[d].TimeOut);
-    response_timeout.tv_sec = theDevices[d].TimeOut / 1000;
-    response_timeout.tv_usec = (theDevices[d].TimeOut % 1000) * 1000;
+    fprintf(stderr, "tmin=%ums, tout=%ums\n", theDevices[d].silence_ms, theDevices[d].timeout_ms);
+    response_timeout.tv_sec = theDevices[d].timeout_ms / 1000;
+    response_timeout.tv_usec = (theDevices[d].timeout_ms % 1000) * 1000;
     clock_gettime(CLOCK_REALTIME, &abstime);
     this_loop_start_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
     write_index = 1;
@@ -2818,7 +2557,7 @@ static void *clientThread(void *arg)
         }
 
         // manage the reset of the error flags
-        switch (theDevices[d].Protocol) {
+        switch (theDevices[d].protocol) {
         case PLC: // FIXME: assert
             break;
         case RTU:
@@ -3016,7 +2755,7 @@ static void *clientThread(void *arg)
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
-                                read_time_ms[prio] += read_period_ms[prio];
+                                read_time_ms[prio] += system_ini.system.read_period_ms[prio];
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%09u ms: no read %uHPSF will restart at %09u ms\n", now_ms, prio, read_time_ms[prio]);
@@ -3045,7 +2784,7 @@ static void *clientThread(void *arg)
             break;
         case NOT_CONNECTED:
             // try connection
-            switch (theDevices[d].Protocol) {
+            switch (theDevices[d].protocol) {
             case PLC: // FIXME: assert
                 break;
             case RTU:
@@ -3166,7 +2905,7 @@ static void *clientThread(void *arg)
                     }
                     break;
                 case CommError:
-                    switch (theDevices[d].Protocol) {
+                    switch (theDevices[d].protocol) {
                     case PLC:       ; break; // FIXME: assert
                     case RTU:       RTUComm_ERROR_WORD = 1;     CommErrRTU |= (2 ^ DataNodeId); break;
                     case TCP:       TCPComm_ERROR_WORD = 1;     CommErrTCP |= (2 ^ DataNodeId); break;
@@ -3184,7 +2923,7 @@ static void *clientThread(void *arg)
                        CrossTable[DataAddr + i].Error = 1;
                        the_QdataStates[DataAddr + i] = DATA_ERR;
                     }
-                    switch (theDevices[d].Protocol) {
+                    switch (theDevices[d].protocol) {
                     case PLC:       ; break; // FIXME: assert
                     case RTU:       ERROR_FLAG |= ERROR_FLAG_RTU;       CounterRTU(DataNodeId) += 1; break;
                     case TCP:       ERROR_FLAG |= ERROR_FLAG_TCP;       CounterTCP(DataNodeId) += 1; break;
@@ -3231,11 +2970,11 @@ static void *clientThread(void *arg)
                     break;
                 case TimeoutError:
                     theNodes[Data_node].RetryCounter += 1;
-                    if (theNodes[Data_node].RetryCounter < NumberOfFails) {
+                    if (theNodes[Data_node].RetryCounter < system_ini.system.retries) {
                         theNodes[Data_node].status = TIMEOUT;
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
-                        theNodes[Data_node].JumpRead = FailDivisor;
+                        theNodes[Data_node].JumpRead = system_ini.system.blacklist;
                         theNodes[Data_node].status = BLACKLIST;
                         DataAddr = 0; // i.e. retry this after the others
                         sem_post(&theDevices[d].newOperations);
@@ -3285,7 +3024,7 @@ static void *clientThread(void *arg)
             } else {
                 // error == TimeoutError
                 if ((now_ms - last_good_ms) > THE_DEVICE_SILENCE_ms) {
-                    switch (theDevices[d].Protocol) {
+                    switch (theDevices[d].protocol) {
                     case PLC:
                         // FIXME: assert
                         break;
@@ -3318,14 +3057,14 @@ static void *clientThread(void *arg)
             ;
         }
         // wait, if necessary, after fieldbus operations
-        switch (theDevices[d].Protocol) {
+        switch (theDevices[d].protocol) {
         case PLC:
             // FIXME: assert
             break;
         case RTU:
-            if (theDevices[d].Tmin > 0) {
+            if (theDevices[d].silence_ms > 0) {
                 XX_GPIO_CLR(5);
-                do_sleep_ms(theDevices[d].Tmin);
+                do_sleep_ms(theDevices[d].silence_ms);
                 XX_GPIO_SET(5);
             }
             break;
@@ -3349,7 +3088,7 @@ static void *clientThread(void *arg)
     }
 
     // thread clean
-    switch (theDevices[d].Protocol) {
+    switch (theDevices[d].protocol) {
     case PLC:
         // FIXME: assert
         break;
@@ -3625,32 +3364,11 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
         uRes = ERR_INVALID_PARAM;
     }
     // read configuration file
-    if (app_config_load(APP_CONF_CAN0)) {
-        fprintf(stderr, "[%s]: Error loading config file (can0).\n", __func__);
+    if (app_config_load(&system_ini)) {
+        fprintf(stderr, "[%s]: Error loading config file.\n", __func__);
     }
-    if (app_config_load(APP_CONF_CAN1)) {
-        fprintf(stderr, "[%s]: Error loading config file (can1).\n", __func__);
-    }
-    if (app_config_load(APP_CONF_MB0)) {
-        fprintf(stderr, "[%s]: Error loading config file (mb0).\n", __func__);
-    }
-    if (app_config_load(APP_CONF_MB1)) {
-        fprintf(stderr, "[%s]: Error loading config file (mb1).\n", __func__);
-    }
-    // set hardware type according to configuration file
-    if (can0_cfg.enabled) {
-        hardware_type |= (can0_cfg.enabled & 0xFF) << 0;	// 0x000000FF
-    }
-    if (can1_cfg.enabled) {
-        hardware_type |= (can1_cfg.enabled & 0xFF) << 8;	// 0x0000FF00
-    }
-    if (modbus0_cfg.serial_cfg.enabled) {
-        hardware_type |= (modbus0_cfg.serial_cfg.enabled & 0xFF) << 16;	// 0x00FF0000
-    }
-    if (modbus1_cfg.serial_cfg.enabled) {
-        hardware_type |= (modbus1_cfg.serial_cfg.enabled & 0xFF) << 24;	// 0xFF000000
-    }
-#ifdef RTS_CFG_MECT_LIB // now undefined
+#ifdef DEBUG
+    app_config_dump(&system_ini);
 #endif
 #if defined(RTS_CFG_MECT_RETAIN)
     if (ptRetentive == MAP_FAILED) {
