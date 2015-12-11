@@ -49,224 +49,224 @@ clobber: osSharedCO vmKernelCO osKernelCO vmLibCO ioTestCO ioCANopenCO ioUDPCO i
 
 .PHONY : vmKernel
 vmKernel:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
   
 .PHONY : osKernel
 osKernel:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : vmLib
 vmLib:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : fcrts
 fcrts:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : osShared
 osShared:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioTest
 ioTest:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioCANopen
 ioCANopen:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioUDP
 ioUDP:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioKeypad
 ioKeypad:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioData
 ioData:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioSyncro
 ioSyncro:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioModbusTCPS
 ioModbusTCPS:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 .PHONY : ioModbusRTUC
 ioModbusRTUC:
-	$(MAKE) -C $@ -f $@$(DEBREL).mak
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
 # Mostly Clean (keep library and executables)
 # -----------------------------------------------------------------------------
 
 .PHONY : vmKernelML
 vmKernelML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : vmLibML
 vmLibML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : osKernelML
 osKernelML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : fcrtsML
 fcrtsML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : osSharedML
 osSharedML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioTestML
 ioTestML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioCANopenML
 ioCANopenML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioUDPML
 ioUDPML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioKeypadML
 ioKeypadML:
 	@#echo Cleaning $(subst ML,,$@)...
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioDataML
 ioDataML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioSyncroML
 ioSyncroML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioModbusTCPSML
 ioModbusTCPSML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 .PHONY : ioModbusRTUCML
 ioModbusRTUCML:
-	$(MAKE) -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 # Clean
 # -----------------------------------------------------------------------------
 
 .PHONY : vmKernelCL
 vmKernelCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : osKernelCL
 osKernelCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : vmLibCL
 vmLibCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : fcrtsCL
 fcrtsCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : osSharedCL
 osSharedCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioTestCL
 ioTestCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioCANopenCL
 ioCANopenCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioUDPCL
 ioUDPCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioKeypadCL
 ioKeypadCL:
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioDataCL
 ioDataCL:
 	echo Cleaning $(subst CL,,$@)...
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioSyncroCL
 ioSyncroCL:
 	echo Cleaning $(subst CL,,$@)...
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioModbusTCPSCL
 ioModbusTCPSCL:
 	echo Cleaning $(subst CL,,$@)...
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 .PHONY : ioModbusRTUCCL
 ioModbusRTUCCL:
 	echo Cleaning $(subst CL,,$@)...
-	$(MAKE) -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
 # Clobber
 # -----------------------------------------------------------------------------
 
 .PHONY : vmKernelCO
 vmKernelCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : osKernelCO
 osKernelCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : vmLibCO
 vmLibCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : fcrtsCO
 fcrtsCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : osSharedCO
 osSharedCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioTestCO
 ioTestCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioCANopenCO
 ioCANopenCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioUDPCO
 ioUDPCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioKeypadCO
 ioKeypadCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioDataCO
 ioDataCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioSyncroCO
 ioSyncroCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioModbusTCPSCO
 ioModbusTCPSCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 .PHONY : ioModbusRTUCCO
 ioModbusRTUCCO:
-	$(MAKE) -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 # -------------------------------------------------------------------------------
