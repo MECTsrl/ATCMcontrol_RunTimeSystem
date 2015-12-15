@@ -55,51 +55,11 @@
 /* Target specific definitions
  * ----------------------------------------------------------------------------
  */
-#ifdef USE_CROSSTABLE
-#undef RTS_CFG_IOCANOPEN
-#undef  RTS_CFG_IOUDP
 #define RTS_CFG_IODAT
-#undef RTS_CFG_IOSYN
-#undef  RTS_CFG_IOKEYPAD
-#undef RTS_CFG_IOMBTCPS
-#undef RTS_CFG_IOMBRTUC
-#elif USE_NO_CROSSTABLE
-#define RTS_CFG_IOCANOPEN
-#undef  RTS_CFG_IOUDP
-#undef  RTS_CFG_IODAT
-#undef  RTS_CFG_IOSYN
-#define RTS_CFG_IOKEYPAD
-#define RTS_CFG_IOMBTCPS
-#define RTS_CFG_IOMBRTUC
-
-#endif
-#define IOEXT_CANOPEN "canopen"
-#define IOID_CANOPEN 4 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_CAN "IOL_CAN"
-
-#define IOEXT_UDP "udp"
-#define IOID_UDP 5 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_UDP "IOL_UDP"
 
 #define IOEXT_DAT "ioData"
-#define IOID_DAT 6 /* see the file inc/vmmDef.h*/
+#define IOID_DAT 2 /* see the file inc/vmmDef.h*/
 #define TASK_NAME_IOL_DAT "IOL_DAT"
-
-#define IOEXT_SYN "ioSyncro"
-#define IOID_SYN 7 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_SYN "IOL_SYN"
-
-#define IOEXT_KEYPAD "keypad"
-#define IOID_KEYPAD 8 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_KPD "IOL_KEYPAD"
-
-#define IOEXT_MBTCPS "ModbusTCPS"
-#define IOID_MBTCPS 9 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_MBTCPS "IOL_MBTCPS"
-
-#define IOEXT_MBRTUC "ModbusRTUC"
-#define IOID_MBRTUC 10 /* see the file inc/vmmDef.h*/
-#define TASK_NAME_IOL_MBRTUC "IOL_MBRTUC"
 
 #endif /* _OSTARGET_H_ */
 

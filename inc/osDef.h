@@ -325,21 +325,13 @@
 #define RTS_CFG_UTILITY_LIB
 #define RTS_CFG_FILE_LIB
 #undef	RTS_CFG_MBUS2_LIB
-#ifdef USE_CROSSTABLE
+
 #undef	RTS_CFG_MECT_LIB  
 #undef RTS_CFG_MECT_UTY_LIB 
 #define RTS_CFG_USB_LIB
 #undef RTS_CFG_DATALOG_LIB
 #define RTS_CFG_HW119_LIB
 #define RTS_CFG_MODBUS_LIB
-#elif USE_NO_CROSSTABLE
-#define	RTS_CFG_MECT_LIB     /* define to enable Mect library */
-#define RTS_CFG_MECT_UTY_LIB /* define to enable mect utlis library */
-#define RTS_CFG_USB_LIB
-#define RTS_CFG_DATALOG_LIB
-#undef RTS_CFG_HW119_LIB
-#undef RTS_CFG_MODBUS_LIB
-#endif
 
 #define RTS_CFG_SFC
 #define RTS_CFG_FLASH
@@ -348,10 +340,8 @@
 #define RTS_CFG_EVENTS
 
 #undef RTS_CFG_EXT_RETAIN
-#ifdef USE_CROSSTABLE
 #define RTS_CFG_MECT_RETAIN
 
-#endif
 #define RTS_CFG_TASK_IMAGE
 #define RTS_CFG_WRITE_FLAGS
 #define RTS_CFG_WRITE_FLAGS_PI

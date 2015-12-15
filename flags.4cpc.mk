@@ -19,14 +19,6 @@
  # ------------------------------------------------------------------------------
  #
 
-ifeq ("$(PRODUCT)", "USE_CROSSTABLE")
-$(info "Product CROSSTABLE")
-else ifeq ("$(PRODUCT)", "USE_NO_CROSSTABLE")
-$(info "Product NO CROSSTABLE")
-else
-$(error "SPECIFY PRODUCT (USE_CROSSTABLE|USE_NO_CROSSTABLE)")
-endif
-
 ifeq ($(FREESCALE_GCC), 1)
 
 MECT_ROOTFS       = /imx_mect/trunk/imx28/ltib/rootfs
@@ -128,7 +120,7 @@ CRD               = ../CreatDir
 DED               = ../DelDir
 
 TFLAGS            =
-IFLAGS            = -I. -I../inc -I../inc.fc -I../inc.dp -I../inc.vis -I../vmLib -I../inc.can -I../inc.mect -I../inc.udp -I../inc.kpd -I../inc.data -I../inc.syncro -I../inc.mbtcps -I../inc.mbrtuc $(ARCH_INCLUDE) -D$(PRODUCT)
+IFLAGS            = -I. -I../inc -I../inc.fc -I../inc.dp -I../inc.vis -I../vmLib -I../inc.mect -I../inc.data $(ARCH_INCLUDE)
 SFLAGS            =
 DFLAGS            = -D_SOF_4CPC_SRC_ $(ARCH_DFLAGS)
 ifeq ($(DEBUG), 1)

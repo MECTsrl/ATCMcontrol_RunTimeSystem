@@ -96,48 +96,11 @@ IEC_UINT osEnableIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 
 	pIOL = pVMM->pIOLayer + uIOLayer;
 
-	/* IO Layer: BACnet
-	 * ------------------------------------------------------------------------
-	 */
-	if (OS_STRICMP(IOEXT_BACNET, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_BACNET)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
 	
-		pIOL->usNotifyRd = IO_NOTIFY_NONE;
-		pIOL->usNotifyWr = IO_NOTIFY_NONE;
-		
-		pIOL->bAsyncConfig = TRUE;
-
-		pIOL->uIOLType = IOID_BACNET;
-	}
-
-	/* IO Layer: Profibus DP
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_PROFIDP, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_PROFI_DP)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-	
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-		
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_PROFIDP;
-	}
-
 	/* IO Layer: Test
 	 * ------------------------------------------------------------------------
 	 */
-	else if (OS_STRICMP(IOEXT_TEST, pIOL->szIOLayer) == 0)
+	if (OS_STRICMP(IOEXT_TEST, pIOL->szIOLayer) == 0)
 	{
 	  #if defined(RTS_CFG_IOTEST)
 		pIOL->bEnabled	= TRUE;
@@ -151,44 +114,6 @@ IEC_UINT osEnableIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 		pIOL->bAsyncConfig = FALSE;
 
 		pIOL->uIOLType = IOID_TEST;
-	}
-
-	/* IO Layer: CANopen
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_CANOPEN, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOCANOPEN)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_CANOPEN;
-	}
-
-	/* IO Layer: UDP
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_UDP, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOUDP)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_UDP;
 	}
 
 	/* IO Layer: DATA
@@ -208,81 +133,6 @@ IEC_UINT osEnableIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 		pIOL->bAsyncConfig = FALSE;
 
 		pIOL->uIOLType = IOID_DAT;
-	}
-
-	/* IO Layer: SYNCRO
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_SYN, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOSYN)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_SYN;
-	}
-	/* IO Layer: KEYPAD
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_KEYPAD, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOKEYPAD)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_KEYPAD;
-	}
-
-	/* IO Layer: ModbusTCPS
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_MBTCPS, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOMBTCPS)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_MBTCPS;
-	}
-
-	/* IO Layer: ModbusRTUC
-	 * ------------------------------------------------------------------------
-	 */
-	else if (OS_STRICMP(IOEXT_MBRTUC, pIOL->szIOLayer) == 0)
-	{
-	  #if defined(RTS_CFG_IOMBRTUC)
-		pIOL->bEnabled	= TRUE;
-	  #else
-		pIOL->bEnabled	= FALSE;
-	  #endif
-
-		pIOL->usNotifyRd = IO_NOTIFY | IO_NOTIFY_SYNC;
-		pIOL->usNotifyWr = IO_NOTIFY | IO_NOTIFY_SYNC;
-
-		pIOL->bAsyncConfig = FALSE;
-
-		pIOL->uIOLType = IOID_MBRTUC;
 	}
 
 	else
@@ -330,42 +180,10 @@ IEC_UINT osCreateIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 	szName = pVMM->pIOLayer[uIOLayer].szIOLayer;
 
 
-	if (OS_STRICMP(szName, IOEXT_PROFIDP) == 0)
-	{
-	  #if defined(RTS_CFG_PROFI_DP)
-		lpStartAddress = IO_Layer_ProfiDP;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_BACNET) == 0)
-	{
-	  #if defined(RTS_CFG_BACNET)
-		lpStartAddress	= IO_Layer_BACnet;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_TEST) == 0)
+	if (OS_STRICMP(szName, IOEXT_TEST) == 0)
 	{
 	  #if defined(RTS_CFG_IOTEST)
 		lpStartAddress = IO_Layer_Test;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_CANOPEN) == 0)
-	{
-	  #if defined(RTS_CFG_IOCANOPEN)
-		lpStartAddress = IO_Layer_CANopen;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_UDP) == 0)
-	{
-	  #if defined(RTS_CFG_IOUDP)
-		lpStartAddress = IO_Layer_UDP;
 	  #else
 		lpStartAddress	= NULL;
 	  #endif
@@ -374,38 +192,6 @@ IEC_UINT osCreateIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 	{
 	  #if defined(RTS_CFG_IODAT)
 		lpStartAddress = IO_Layer_DAT;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_SYN) == 0)
-	{
-	  #if defined(RTS_CFG_IOSYN)
-		lpStartAddress = IO_Layer_SYN;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_KEYPAD) == 0)
-	{
-	  #if defined(RTS_CFG_IOKEYPAD)
-		lpStartAddress = IO_Layer_Keypad;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_MBTCPS) == 0)
-	{
-	  #if defined(RTS_CFG_IOMBTCPS)
-		lpStartAddress = IO_Layer_ModbusTCPS;
-	  #else
-		lpStartAddress	= NULL;
-	  #endif
-	}
-	else if (OS_STRICMP(szName, IOEXT_MBRTUC) == 0)
-	{
-	  #if defined(RTS_CFG_IOMBRTUC)
-		lpStartAddress = IO_Layer_ModbusRTUC;
 	  #else
 		lpStartAddress	= NULL;
 	  #endif

@@ -21,7 +21,6 @@
  */
 
 #include "libMectUserUtility.h"
-#include "kpdMain.h"
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>

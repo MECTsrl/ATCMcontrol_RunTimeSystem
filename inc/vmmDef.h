@@ -1221,13 +1221,9 @@ typedef struct
  * ----------------------------------------------------------------------------
  */
 #define IOEXT_TEST		"iotst"
-#define IOEXT_BACNET		"iobac"
-#define IOEXT_PROFIDP		"fcdp"
 /* see also inc/osTarget.h */
 
 #define IOID_TEST		1
-#define IOID_BACNET 		2
-#define IOID_PROFIDP		3
 /* see also inc/osTarget.h */
 
 
@@ -1768,15 +1764,9 @@ typedef struct
 #define TASK_OFFS_PDP_MGT		16
 #define TASK_OFFS_PDP_WRK		17
 
-#define TASK_OFFS_IOL_CAN		18
-#define TASK_OFFS_IOL_UDP		19
-#define TASK_OFFS_IOL_DAT		20
-#define TASK_OFFS_IOL_SYN		21
-#define TASK_OFFS_IOL_MTS		22
-#define TASK_OFFS_IOL_MRC		23
-#define TASK_OFFS_IOL_KPD		24
+#define TASK_OFFS_IOL_DAT		18
 
-#define TASK_OFFS_COM_WRK		25
+#define TASK_OFFS_COM_WRK		19
 
 #define TASK_OFFS_IEC_VM		(TASK_OFFS_COM_WRK + MAX_CONNECTIONS)
 

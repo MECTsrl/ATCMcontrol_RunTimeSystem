@@ -559,7 +559,7 @@ IEC_UINT ioStartLayer(STaskInfoVMM *pVMM, IEC_BOOL bStart, IEC_BOOL bAlways)
 
 		uID = (IEC_UINT)(bStart == TRUE ? MSG_IO_START : MSG_IO_STOP);
 
-		if (pIOLayer->uIOLType != IOID_BACNET || bAlways == TRUE)
+		if (/*pIOLayer->uIOLType != IOID_BACNET*/ TRUE || bAlways == TRUE)
 		{
 			uRes = msgTXCommand(uID, (IEC_UINT)(i + Q_OFFS_IO), Q_RESP_VMM_IO, VMM_TO_IPC_MSG_LONG, TRUE);
 			if (uRes != OK)
@@ -721,16 +721,6 @@ IEC_UINT ioNotifyLayer(STaskInfoVMM *pXXX, STaskInfoVM *pVM, IEC_BOOL bSet, IEC_
 		pIONotify->uLen 		= uLen;
 		pIONotify->usBit		= usBit;
 
-	  #if defined(_SOF_4CFC_SRC_) && defined(RTS_CFG_PROFI_DP)
-		if (pIO->uIOLType == IOID_PROFIDP)
-		{
-			uRes = bSet  == TRUE ? dpNotifySet(i, g_pProfiBusDP_IO, pIONotify) 
-								 : dpNotifyGet(i, g_pProfiBusDP_IO, pIONotify);
-		}
-		else
-		{
-	  #endif
-
 		uRes = msgTXMessage(&Message, (IEC_UINT)(i + Q_OFFS_IO), VMM_TO_IPC_MSG, TRUE);
 		if (uRes != OK)
 		{
@@ -742,9 +732,6 @@ IEC_UINT ioNotifyLayer(STaskInfoVMM *pXXX, STaskInfoVM *pVM, IEC_BOOL bSet, IEC_
 			RETURN(ERR_UNEXPECTED_MSG);
 		}
 
-	  #if defined(_SOF_4CFC_SRC_) && defined(RTS_CFG_PROFI_DP)
-		}
-	  #endif
 	}
 
 	RETURN(uRes);

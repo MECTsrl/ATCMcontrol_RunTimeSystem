@@ -174,11 +174,7 @@ IEC_UINT osInitializeVMM(STaskInfoVMM *pVMM)
 	fcSetLed(FC_LED_RUN,   FC_LED_ON_TOGGLE);
 	fcSetLed(FC_LED_ERROR, FC_LED_ON_TOGGLE);
 
-#ifndef __XENO__
-	int iRes = pthread_create(&thr, NULL, LED_Thread, pVMM);
-#else
 	int iRes = osPthreadCreate(&thr, NULL, LED_Thread, pVMM, "LED", 0);
-#endif
 	if (iRes != 0)
 	{
 		TR_ERR("pthread_create() failed", iRes);
@@ -645,11 +641,7 @@ IEC_UINT osCreateDeviceTask(void)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, BAC_DeviceThread, NULL);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, BAC_DeviceThread, NULL, "BAC_Device", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -673,11 +665,7 @@ IEC_UINT osCreateCOVTask(void)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, BAC_COVThread, NULL);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, BAC_COVThread, NULL, "BAC_COV", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -701,11 +689,7 @@ IEC_UINT osCreateScanTask(void)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, BAC_ScanThread, NULL);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, BAC_ScanThread, NULL, "BAC_Scan", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -730,11 +714,7 @@ IEC_UINT osCreateFlashTask(void)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, BAC_FlashThread, NULL);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, BAC_FlashThread, NULL, "BAC_Flash", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -758,11 +738,7 @@ IEC_UINT osCreateConfigTask(SIOLayerIniVal *pIni)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, BAC_ConfigThread, pIni);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, BAC_ConfigThread, pIni, "BAC_Config", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);
@@ -788,11 +764,7 @@ IEC_UINT osCreatePBManagementTask(IEC_UINT uIOLayer)
 
 	pthread_t hThread = 0;
 	
-#ifndef __XENO__
-	int iRes = pthread_create(&hThread, NULL, PDP_ManagementThread, (IEC_UDINT *)ulIOLayer);
-#else
 	int iRes = osPthreadCreate(&hThread, NULL, PDP_ManagementThread, (IEC_UDINT *)ulIOLayer, "PDP_Management", 0);
-#endif
 	if (iRes != 0)
 	{
 		RETURN_e(ERR_CREATE_TASK);

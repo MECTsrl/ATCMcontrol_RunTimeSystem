@@ -52,10 +52,7 @@ ifeq ($(DEBUG), 0)    # --- Release -------------------------------------------
   WA_LIBS          = $(LIB_PATH)/vmKernel.a $(LIB_PATH)/osKernel.a  
 
   LIBS             = $(LIB_PATH)/vmLib.a   $(LIB_PATH)/osShared.a \
-                     $(LIB_PATH)/ioTest.a $(LIB_PATH)/ioCANopen.a \
-                     $(LIB_PATH)/ioUDP.a  $(LIB_PATH)/ioKeypad.a \
-                     $(LIB_PATH)/ioModbusTCPS.a $(LIB_PATH)/ioModbusRTUC.a \
-                     $(LIB_PATH)/ioData.a  $(LIB_PATH)/ioSyncro.a
+                     $(LIB_PATH)/ioTest.a $(LIB_PATH)/ioData.a
 
   MFP_LIBS         = 
 
@@ -72,10 +69,7 @@ else                  # --- Debug ---------------------------------------------
   WA_LIBS          = $(LIB_PATH)/vmKernel_d.a $(LIB_PATH)/osKernel_d.a
 
   LIBS             = $(LIB_PATH)/vmLib_d.a  $(LIB_PATH)/osShared_d.a \
-                     $(LIB_PATH)/ioTest_d.a $(LIB_PATH)/ioCANopen_d.a \
-                     $(LIB_PATH)/ioUDP_d.a  $(LIB_PATH)/ioKeypad_d.a \
-                     $(LIB_PATH)/ioModbusTCPS_d.a $(LIB_PATH)/ioModbusRTUC_d.a \
-                     $(LIB_PATH)/ioData_d.a  $(LIB_PATH)/ioSyncro_d.a
+                     $(LIB_PATH)/ioTest_d.a $(LIB_PATH)/ioData_d.a
 
   MFP_LIBS         = 
 

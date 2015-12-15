@@ -5,10 +5,10 @@ SCP := scp
 .PHONY: all scp tags clean clobber
 
 all:
-	$(MAKE) -f _fcrts.mak TARGET=4CPC DEBUG=1 GDB=1 PRODUCT=USE_CROSSTABLE $@
+	$(MAKE) -f _fcrts.mak TARGET=4CPC DEBUG=1 GDB=1 $@
 
 scp:
-	$(SCP) -p bin/fcrts* root@192.168.5.211:
+	$(SCP) -r bin/fcrts* root@192.168.5.211:
 
 tags:
 	ctags -R . /usr/include
@@ -16,4 +16,4 @@ tags:
 clean: clobber
 
 clobber:
-	$(MAKE) -f _fcrts.mak TARGET=4CPC DEBUG=1 GDB=1 PRODUCT=USE_CROSSTABLE $@
+	$(MAKE) -f _fcrts.mak TARGET=4CPC DEBUG=1 GDB=1 $@

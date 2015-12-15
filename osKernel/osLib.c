@@ -42,7 +42,6 @@
 #include "fcProfi.h"
 #include "fcModbus.h"
 #include "fcMBus.h"
-#include "canMain.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

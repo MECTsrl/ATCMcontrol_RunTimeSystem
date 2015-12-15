@@ -44,8 +44,7 @@
  * ----------------------------------------------------------------------------
  */
 #ifdef __XENO__
-#define  FC_PRIO_IO_CANOPEN       91  /*  highest  */
-#define  FC_PRIO_IO_CANOPEN_CONF  91
+#define  FC_PRIO_IO_CANOPEN_CONF  91  /*  highest  */
 #define  FC_PRIO_IO_CANOPEN_MESG  91
 #define  FC_PRIO_IO_CANOPEN_STCK  91
 #define  FC_PRIO_VMTIMER          81
@@ -56,12 +55,7 @@
 #define  FC_PRIO_IO_BACNET        65
 #define  FC_PRIO_IO_PROFI_DP      65
 #define  FC_PRIO_IO_TEST          65
-#define  FC_PRIO_IO_UDP           65
-#define  FC_PRIO_IO_KEYPAD        65
 #define  FC_PRIO_IO_DAT           65
-#define  FC_PRIO_IO_SYN           65
-#define  FC_PRIO_IO_MBTCPS        65
-#define  FC_PRIO_IO_MBRTUC        65
 #define  FC_PRIO_BAC_CFG          64
 #define  FC_PRIO_PDP_MGT          64
 #define  FC_PRIO_PDP_WORK         63
@@ -74,21 +68,15 @@
 #define  FC_PRIO_RET              40
 #define  FC_PRIO_BAC_FLH          40  /*  lowest   */
 #else
-#define  FC_PRIO_IO_CANOPEN       91  /*  highest  */
-#define  FC_PRIO_VMTIMER          81
+#define  FC_PRIO_VMTIMER          81  /*  highest  */
 #define  FC_PRIO_VMM              80
 #define  FC_PRIO_LED              78
 #define  FC_PRIO_LIST             75
 #define  FC_PRIO_COM              74
 #define  FC_PRIO_IO_BACNET        65
 #define  FC_PRIO_IO_DAT           65
-#define  FC_PRIO_IO_KEYPAD        65
-#define  FC_PRIO_IO_MBRTUC        65
-#define  FC_PRIO_IO_MBTCPS        65
 #define  FC_PRIO_IO_PROFI_DP      65
-#define  FC_PRIO_IO_SYN           65
 #define  FC_PRIO_IO_TEST          65
-#define  FC_PRIO_IO_UDP           65
 #define  FC_PRIO_BAC_CFG          64
 #define  FC_PRIO_PDP_MGT          64
 #define  FC_PRIO_PDP_WORK         63
@@ -103,7 +91,6 @@
 #endif
 
 #ifdef __XENO__
-#define  FC_SCHED_IO_CANOPEN       SCHED_FIFO
 #define  FC_SCHED_IO_CANOPEN_CONF  SCHED_FIFO
 #define  FC_SCHED_IO_CANOPEN_MESG  SCHED_FIFO
 #define  FC_SCHED_IO_CANOPEN_STCK  SCHED_FIFO
@@ -115,12 +102,7 @@
 #define  FC_SCHED_IO_BACNET        SCHED_FIFO
 #define  FC_SCHED_IO_PROFI_DP      SCHED_FIFO
 #define  FC_SCHED_IO_TEST          SCHED_FIFO
-#define  FC_SCHED_IO_UDP           SCHED_FIFO
-#define  FC_SCHED_IO_KEYPAD        SCHED_FIFO
 #define  FC_SCHED_IO_DAT           SCHED_FIFO
-#define  FC_SCHED_IO_SYN           SCHED_FIFO
-#define  FC_SCHED_IO_MBTCPS        SCHED_FIFO
-#define  FC_SCHED_IO_MBRTUC        SCHED_FIFO
 #define  FC_SCHED_BAC_CFG          SCHED_FIFO
 #define  FC_SCHED_PDP_MGT          SCHED_FIFO
 #define  FC_SCHED_PDP_WORK         SCHED_FIFO
@@ -138,13 +120,7 @@
 #define  FC_SCHED_LIST             SCHED_FIFO
 #define  FC_SCHED_COM              SCHED_FIFO
 #define  FC_SCHED_IO_TEST          SCHED_FIFO
-#define  FC_SCHED_IO_CANOPEN       SCHED_FIFO
-#define  FC_SCHED_IO_MBTCPS        SCHED_FIFO
-#define  FC_SCHED_IO_MBRTUC        SCHED_FIFO
-#define  FC_SCHED_IO_UDP           SCHED_FIFO
 #define  FC_SCHED_IO_DAT           SCHED_FIFO
-#define  FC_SCHED_IO_SYN           SCHED_FIFO
-#define  FC_SCHED_IO_KEYPAD        SCHED_FIFO
 #define  FC_SCHED_IO_PROFI_DP      SCHED_FIFO
 #define  FC_SCHED_IO_BACNET        SCHED_FIFO
 #define  FC_SCHED_BAC_CFG          SCHED_FIFO

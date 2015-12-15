@@ -1,16 +1,9 @@
 inc
 inc.bac
-inc.can
 inc.data
 inc.fc
-inc.kpd
-inc.mbrtuc
-inc.mbtcps
 inc.mect
-inc.syncro
 inc.tst
-inc.udp
 inc.vis
-visTestQt
 vmKernel
 vmLib

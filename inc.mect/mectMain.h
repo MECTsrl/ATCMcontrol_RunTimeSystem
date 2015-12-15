@@ -36,13 +36,7 @@ extern "C" {
 /*
  * ----------------------------------------------------------------------------
  */
-void *IO_Layer_UDP(void *lpParam);
-void *IO_Layer_CANopen(void *lpParam);
-void *IO_Layer_Keypad(void *lpParam);
 void *IO_Layer_DAT(void *lpParam);
-void *IO_Layer_SYN(void *lpParam);
-void *IO_Layer_ModbusTCPS(void *lpParam);
-void *IO_Layer_ModbusRTUC(void *lpParam);
 
 #ifdef __cplusplus
 }

@@ -285,6 +285,7 @@ int app_config_load(struct system_ini *system_ini)
     }
     bzero(system_ini, sizeof(struct system_ini));
 
+    fprintf(stderr, "loading '%s' ...", APP_CONFIG_FILE);
 	cf = fopen(APP_CONFIG_FILE, "r");
 	if (cf == NULL) {
 		perror(APP_CONFIG_FILE);
@@ -360,6 +361,7 @@ int app_config_load(struct system_ini *system_ini)
 		}
 	}
 	fclose(cf);
+    fprintf(stderr, " OK\n");
 	return 0;
 }
 

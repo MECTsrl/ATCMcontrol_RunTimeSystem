@@ -302,13 +302,6 @@ IEC_UINT ldGetTaskName(IEC_UINT uTask, IEC_CHAR *szTask)
 
 			case TASK_OFFS_IOL_BAC: 	szTemp = TASK_NAME_IOL_BAC; 	break;
 			case TASK_OFFS_IOL_TST: 	szTemp = TASK_NAME_IOL_TST; 	break;
-			case TASK_OFFS_IOL_CAN: 	szTemp = TASK_NAME_IOL_CAN; 	break;
-			case TASK_OFFS_IOL_KPD: 	szTemp = TASK_NAME_IOL_KPD; 	break;
-			case TASK_OFFS_IOL_UDP: 	szTemp = TASK_NAME_IOL_UDP; 	break;
-			case TASK_OFFS_IOL_DAT: 	szTemp = TASK_NAME_IOL_DAT; 	break;
-			case TASK_OFFS_IOL_SYN: 	szTemp = TASK_NAME_IOL_SYN; 	break;
-			case TASK_OFFS_IOL_MTS: 	szTemp = TASK_NAME_IOL_MTS; 	break;
-			case TASK_OFFS_IOL_MRC: 	szTemp = TASK_NAME_IOL_MRC; 	break;
 			case TASK_OFFS_IOL_PDP: 	szTemp = TASK_NAME_IOL_PDP; 	break;
 
 			case TASK_OFFS_BAC_DEV: 	szTemp = TASK_NAME_BAC_DEV; 	break;
@@ -325,6 +318,8 @@ IEC_UINT ldGetTaskName(IEC_UINT uTask, IEC_CHAR *szTask)
 
 			case TASK_OFFS_COM_LIS: 	szTemp = TASK_NAME_COM_LIS; 	break;
 			case TASK_OFFS_COM_WRK: 	szTemp = TASK_NAME_COM_WRK; 	break;
+
+			case TASK_OFFS_IOL_DAT: 	szTemp = TASK_NAME_IOL_DAT; 	break;
 
 			default:
 			{
