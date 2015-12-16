@@ -84,6 +84,7 @@
 #define DimAlarmsCT     1152
 
 static struct system_ini system_ini;
+static int system_ini_ok;
 
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
 #define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
@@ -1589,6 +1590,9 @@ static void *engineThread(void *statusAdr)
             ERROR_FLAG |= ERROR_FLAG_CROSSTAB;
             goto exit_initialization;
         }
+        if (!system_ini_ok) {
+            goto exit_initialization;
+        }
         if (checkServersDevicesAndNodes()) {
             ERROR_FLAG |= ERROR_FLAG_COMMPAR;
             goto exit_initialization;
@@ -1632,6 +1636,11 @@ static void *engineThread(void *statusAdr)
     }
     pthread_mutex_unlock(&theCrosstableClientMutex);
 
+    if (CommEnabled) {
+        fprintf(stderr, "PLC communication enabled\n");
+    } else {
+        fprintf(stderr, "PLC communication disabled: application won't work.\n");
+    }
     // run
     osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM); // engineThread
     *threadStatusPtr = RUNNING;
@@ -3366,6 +3375,9 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
     // read configuration file
     if (app_config_load(&system_ini)) {
         fprintf(stderr, "[%s]: Error loading config file.\n", __func__);
+        system_ini_ok = FALSE;
+    } else {
+        system_ini_ok = TRUE;
     }
 #ifdef DEBUG
     app_config_dump(&system_ini);
