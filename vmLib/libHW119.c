@@ -183,6 +183,8 @@ void hw119_open_cross_table(STDLIBFUNCALL)
 	{
 		DBG_PRINT("Cannot open '%s'\n", filename);
 		pPara->ret_value = ERR_ERROR;
+    } else {
+        pPara->ret_value = OK;
     }
 
 	if (var_map != NULL && strcmp(filename, CROSS_TABLE) == 0)
@@ -191,7 +193,6 @@ void hw119_open_cross_table(STDLIBFUNCALL)
 		var_map = NULL;
 	}
 
-	pPara->ret_value = OK;
 }
 
 /* ---------------------------------------------------------------------------- */
