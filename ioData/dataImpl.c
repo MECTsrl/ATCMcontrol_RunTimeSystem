@@ -49,9 +49,10 @@
 
 #include "libHW119.h"
 #include "libModbus.h"
+#include "CANopen.h"
 
 #define REVISION_HI  7
-#define REVISION_LO  0
+#define REVISION_LO  1
 
 #undef VERBOSE_DEBUG
 
@@ -1291,6 +1292,7 @@ static int checkEventsandAlarms()
         }
 
         if (ALCrossTable[i].TagAddr == 0xffff || ALCrossTable[i].SourceAddr == 0xffff || ALCrossTable[i].CompareAddr == 0xffff) {
+            fprintf(stderr, "%s: bad alarm/event #%d\n", i);
             retval = -1;
             break;
         }
@@ -1333,12 +1335,9 @@ static int checkServersDevicesAndNodes()
             case RTU:
             case TCP:
             case TCPRTU:
-                // nothing to do for client
-                break;
-            case CANOPEN: // FIXME
-                break;
+            case CANOPEN:
             case MECT:
-                // FIXME: TODO
+                // nothing to do for client
                 break;
             case RTUSRV:
             case TCPSRV:
@@ -1356,7 +1355,8 @@ static int checkServersDevicesAndNodes()
                 if (s < theServersNumber) {
                     // ok already present
                 } else if (theServersNumber >= MAX_SERVERS) {
-                    // FIXME: error
+                    fprintf(stderr, "%s() too many servers\n", __func__, MAX_SERVERS);
+                    retval = -1;
                 } else {
                     // new server entry
                     ++theServersNumber;
@@ -1387,7 +1387,7 @@ static int checkServersDevicesAndNodes()
                             break;
                         default:
                             fprintf(stderr, "%s: bad RTU_SRV port %u for variable #%u", __func__, port, i);
-                            ; // FIXME: error
+                            retval = -1;
                         }
                         theServers[s].ctx = NULL;
                     }   break;
@@ -1446,6 +1446,8 @@ static int checkServersDevicesAndNodes()
                     CrossTable[i].device = d; // found
                 } else if (theDevicesNumber >= MAX_DEVICES) {
                     CrossTable[i].device = 0xffff; // FIXME: error
+                    fprintf(stderr, "%s() too many devices\n", __func__, MAX_DEVICES);
+                    retval = -1;
                 } else {
                     // new device entry
                     CrossTable[i].device = theDevicesNumber;
@@ -1475,7 +1477,7 @@ static int checkServersDevicesAndNodes()
                         default:
                             fprintf(stderr, "%s: bad %s port %u for variable #%u", __func__,
                                     (theDevices[d].protocol == RTU ? "RTU" : "MECT"), p, i);
-                            ; // FIXME: error
+                            retval = -1;
                         }
                         break;
                     case TCP:
@@ -1498,10 +1500,11 @@ static int checkServersDevicesAndNodes()
                             theDevices[d].u.can.baudrate = system_ini.canopen[p].baudrate;
                             theDevices[d].silence_ms = 0;
                             theDevices[d].timeout_ms = 0;
+                            CANopenEnable(p);
                             break;
                         default:
                             fprintf(stderr, "%s: bad CANOPEN port %u for variable #%u", __func__, p, i);
-                            ; // FIXME: error
+                            retval = -1;
                         }
                         break;
                     case RTUSRV:
@@ -1516,7 +1519,8 @@ static int checkServersDevicesAndNodes()
                             }
                         }
                         if (theDevices[d].server == 0xffff) {
-                            // FIXME: error
+                            fprintf(stderr, "%s: bad server for variable #%u", __func__, i);
+                            retval = -1;
                         }
                         break;
                     default:
@@ -1546,7 +1550,9 @@ static int checkServersDevicesAndNodes()
                 if (n < theNodesNumber) {
                     CrossTable[i].node = n; // found
                 } else if (theNodesNumber >= MAX_NODES) {
-                    CrossTable[i].node = 0xffff; // FIXME: error
+                    CrossTable[i].node = 0xffff;
+                    fprintf(stderr, "%s() too many nodes\n", __func__, MAX_NODES);
+                    retval = -1;
                 } else {
                     // new device entry
                     CrossTable[i].node = theNodesNumber;
@@ -1575,8 +1581,7 @@ static void *engineThread(void *statusAdr)
     XX_GPIO_SET(3);
     pthread_mutex_lock(&theCrosstableClientMutex);
     {
-        int s;
-        int d;
+        int s, channel, i, d;
         ErrorsState = 0;
         ERROR_FLAG = 0;
 
@@ -1612,6 +1617,19 @@ static void *engineThread(void *statusAdr)
         #if defined(RTS_CFG_IO_TRACE)
                 osTrace("[%s] ERROR creating server thread %s: %s.\n", __func__, theServers[n].name, strerror(errno));
         #endif
+            }
+        }
+        // start enabled CANopen channels
+        for (channel = 0; channel < CANopenChannels(); ++channel) {
+            CANopenStart(channel);
+        }
+        // get the CANopen variables indexes (if unspecified)
+        for (i = 1; i <= DimCrossTable; ++i) {
+            if (CrossTable[i].Enable > 0 && CrossTable[i].Protocol == CANOPEN) {
+                if (CrossTable[i].Offset == 0) {
+                    CrossTable[i].Offset = CANopenGetVarIndex(CrossTable[i].Port, CrossTable[i].Tag);
+                }
+                fprintf(stderr, "CANOPEN %u.%u '%s' %u\n", CrossTable[i].Port, CrossTable[i].NodeId, CrossTable[i].Tag, CrossTable[i].Offset);
             }
         }
         // create clients
@@ -1810,60 +1828,62 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
     case CANOPEN:
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
-            server = theDevices[device].server;
-            if (server != 0xffff) {
-                pthread_mutex_lock(&theServers[server].mutex);
-                {
+            u_int8_t channel = theDevices[device].port;
                     for (i = 0; i < DataNumber; ++i) {
                         register u_int16_t offset = CrossTable[DataAddr + i].Offset;
-                        register u_int8_t *p = (u_int8_t *)&theServers[server].can_buffer[offset];
-                        register u_int8_t a = p[0];
-                        register u_int8_t b = p[1];
-                        register u_int8_t c = p[2];
-                        register u_int8_t d = p[3];
-                        register u_int16_t *p16 = (u_int16_t *)p;
-                        register u_int32_t *p32 = (u_int32_t *)p;
 
                         switch (CrossTable[DataAddr + i].Types) {
                         case       BIT:
-                            DataValue[i] = a; break;
-                        case  BYTE_BIT:
-                            DataValue[i] = get_byte_bit(*p, CrossTable[DataAddr + i].Decimal);
+                    DataValue[i] = CANopenReadPDOBit(channel, offset);
                             break;
-                        case  WORD_BIT:
-                            DataValue[i] = get_word_bit(*p16, CrossTable[DataAddr + i].Decimal);
-                            break;
-                        case DWORD_BIT:
-                            DataValue[i] = get_dword_bit(*p32, CrossTable[DataAddr + i].Decimal);
-                            break;
+                case  BYTE_BIT: {
+                    u_int8_t a;
+                    a = CANopenReadPDOByte(channel, offset);
+                    x = CrossTable[DataAddr + i].Decimal; // 1..32
+                    DataValue[i] = get_byte_bit(a, x);
+                }   break;
+                case  WORD_BIT: {
+                    u_int16_t a;
+                    a = CANopenReadPDOWord(channel, offset);
+                    x = CrossTable[DataAddr + i].Decimal; // 1..32
+                    DataValue[i] = get_word_bit(a, x);
+                }   break;
+                case DWORD_BIT:{
+                    u_int16_t a;
+                    a = CANopenReadPDODword(channel, offset);
+                    x = CrossTable[DataAddr + i].Decimal; // 1..32
+                    DataValue[i] = get_dword_bit(a, x);
+                }   break;
                         case  UINT16:
                         case   INT16:
-                            DataValue[i] = a + (b << 8); break;
+                    DataValue[i] = CANopenReadPDOWord(channel, offset);
+                    break;
                         case  UINT16BA:
                         case   INT16BA:
-                            DataValue[i] = b + (a << 8); break;
+                    // FIXME: assert
+                    break;
                         case UDINT:
                         case  DINT:
                         case REAL:
-                            DataValue[i] = a + (b << 8) + (c << 16) + (d << 24); break;
+                    DataValue[i] = CANopenReadPDODword(channel, offset);
                         case UDINTCDAB:
                         case  DINTCDAB:
                         case REALCDAB:
-                            DataValue[i] = c + (d << 8) + (a << 16) + (b << 24); break;
+                    // FIXME: assert
+                    break;
                         case UDINTDCBA:
                         case  DINTDCBA:
                         case REALDCBA:
-                            DataValue[i] = d + (c << 8) + (b << 16) + (a << 24); break;
+                    // FIXME: assert
+                    break;
                         case UDINTBADC:
                         case  DINTBADC:
                         case REALBADC:
-                            DataValue[i] = b + (a << 8) + (d << 16) + (c << 24); break;
+                    // FIXME: assert
+                    break;
                         default:
                             ;
                         }
-                    }
-                }
-                pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
         break;
@@ -1898,7 +1918,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
-    u_int16_t i, r, regs, device, server, x;
+    u_int16_t i, r, regs, device, x;
     int e = 0;
     u_int8_t bitRegs[MODBUS_MAX_WRITE_BITS];         // > MAX_WRITES
     u_int16_t uintRegs[MODBUS_MAX_WRITE_REGISTERS];  // > MAX_WRITES
@@ -2057,65 +2077,66 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
     case CANOPEN:
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
-            server = theDevices[device].server;
-            if (server != 0xffff) {
-                pthread_mutex_lock(&theServers[server].mutex);
-                {
+            u_int8_t channel = theDevices[device].port;
                     for (i = 0; i < DataNumber; ++i) {
                         register u_int16_t offset = CrossTable[DataAddr + i].Offset;
-                        register u_int8_t *p = (u_int8_t *)&DataValue[i];
-                        register u_int8_t a = p[0];
-                        register u_int8_t b = p[1];
-                        register u_int8_t c = p[2];
-                        register u_int8_t d = p[3];
-                        register u_int8_t * p8 = &theServers[server].can_buffer[offset];
-                        register u_int16_t * p16 = (u_int16_t *)p8;
-                        register u_int32_t * p32 = (u_int32_t *)p8;
 
                         switch (CrossTable[DataAddr + i].Types) {
                         case       BIT:
-                                *p8 = a; break;
-                        case  BYTE_BIT:
-                            x = CrossTable[DataAddr + i].Decimal; // 1..32
-                            set_byte_bit(p8, x, DataValue[i]);
+                    CANopenWritePDOBit(channel, offset, DataValue[i]);
                             break;
-                        case  WORD_BIT:
+                case  BYTE_BIT: {
+                    u_int8_t a;
+                    a = CANopenReadPDOByte(channel, offset);
                             x = CrossTable[DataAddr + i].Decimal; // 1..32
-                            set_word_bit(p16, x, DataValue[i]);
-                            break;
-                        case DWORD_BIT:
+                    set_byte_bit(&a, x, DataValue[i]);
+                    CANopenWritePDOByte(channel, offset, a);
+                }   break;
+                case  WORD_BIT: {
+                    u_int16_t a;
+                    a = CANopenReadPDOWord(channel, offset);
                             x = CrossTable[DataAddr + i].Decimal; // 1..32
-                            set_dword_bit(p32, x, DataValue[i]);
-                            break;
+                    set_word_bit(&a, x, DataValue[i]);
+                    CANopenWritePDOWord(channel, offset, a);
+                }   break;
+                case DWORD_BIT:  {
+                    u_int32_t a;
+                    a = CANopenReadPDODword(channel, offset);
+                    x = CrossTable[DataAddr + i].Decimal; // 1..32
+                    set_dword_bit(&a, x, DataValue[i]);
+                    CANopenWritePDODword(channel, offset, a);
+                }   break;
                         case    UINT16:
                         case     INT16:
-                            *p16 = a + (b << 8); break;
+                    CANopenWritePDOWord(channel, offset, DataValue[i]);
+                    break;
                         case    UINT16BA:
                         case     INT16BA:
-                            *p16 = b + (a << 8); break;
+                    // FIXME: assert
+                    break;
                         case UDINT:
                         case  DINT:
                         case REAL:
-                            *p32 = a + (b << 8) + (c << 16) + (d << 24); break;
+                    CANopenWritePDODword(channel, offset, DataValue[i]);
+                    break;
                         case UDINTCDAB:
                         case  DINTCDAB:
                         case REALCDAB:
-                            *p32 = c + (d << 8) + (a << 16) + (b << 24); break;
+                    // FIXME: assert
+                    break;
                         case UDINTDCBA:
                         case  DINTDCBA:
                         case REALDCBA:
-                            *p32 = d + (c << 8) + (b << 16) + (a << 24); break;
+                    // FIXME: assert
+                    break;
                         case UDINTBADC:
                         case  DINTBADC:
                         case REALBADC:
-                            *p32 = b + (a << 8) + (d << 16) + (c << 24); break;
+                    // FIXME: assert
+                    break;
                         default:
                             ;
                         }
-                    }
-                    retval = NoError; // FIXME: check bus state
-                }
-                pthread_mutex_unlock(&theServers[server].mutex);
             }
         }
         break;

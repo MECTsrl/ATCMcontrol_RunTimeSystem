@@ -1,3 +1,6 @@
+CANopen/objects.mk
+CANopen/CANopen.mak
+CANopen/CANopen.c
 fcrts/fcMain.c
 fcrts/fcrts.dsp
 fcrts/fcrts.mak
@@ -24,6 +27,7 @@ inc/vmmDef.h
 inc/vmmMain.h
 inc/vmShared.h
 inc.bac/bacFun.h
+inc.data/CANopen.h
 inc.data/dataMain.h
 inc.fc/fcComm.h
 inc.fc/fcDef.h
@@ -69,6 +73,10 @@ osShared/osMsg.c
 osShared/osShared.dsp
 osShared/osShared.mak
 osShared/osUtil.c
+sysconfig/iomap0.cmg
+sysconfig/network0.cmg
+sysconfig/Crosstable.csv
+sysconfig/system.ini
 visLib/objects.mk
 visLib/visAdapt.c
 visLib/visCmd.c
@@ -209,5 +217,4 @@ install.sh
 README.md
 SDK.V220.dsw
 SDK.V220.opt
-notes.txt
 Makefile

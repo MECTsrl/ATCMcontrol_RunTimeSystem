@@ -52,7 +52,7 @@ ifeq ($(DEBUG), 0)    # --- Release -------------------------------------------
   WA_LIBS          = $(LIB_PATH)/vmKernel.a $(LIB_PATH)/osKernel.a  
 
   LIBS             = $(LIB_PATH)/vmLib.a   $(LIB_PATH)/osShared.a \
-                     $(LIB_PATH)/ioTest.a $(LIB_PATH)/ioData.a
+                     $(LIB_PATH)/ioTest.a $(LIB_PATH)/ioData.a $(LIB_PATH)/CANopen.a
 
   MFP_LIBS         = 
 
@@ -69,7 +69,7 @@ else                  # --- Debug ---------------------------------------------
   WA_LIBS          = $(LIB_PATH)/vmKernel_d.a $(LIB_PATH)/osKernel_d.a
 
   LIBS             = $(LIB_PATH)/vmLib_d.a  $(LIB_PATH)/osShared_d.a \
-                     $(LIB_PATH)/ioTest_d.a $(LIB_PATH)/ioData_d.a
+                     $(LIB_PATH)/ioTest_d.a $(LIB_PATH)/ioData_d.a $(LIB_PATH)/CANopen_d.a
 
   MFP_LIBS         = 
 

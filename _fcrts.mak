@@ -33,15 +33,15 @@ endif               # -------------------------------------------------------
 
 export DEBUG GDBFLAG
 
-all: osShared vmKernel vmLib osKernel ioTest ioData fcrts
+all: osShared vmKernel vmLib osKernel ioTest ioData CANopen fcrts
 
-rebuild: osSharedCL vmKernelCL osKernelCL vmLibCL ioTestCL ioDataCL fcrtsCL osShared vmKernel osKernel vmLib ioTest ioData fcrts 
+mostlyclean: osSharedML vmKernelML osKernelML vmLibML ioTestML ioDataML CANopenML fcrtsML
 
-mostlyclean: osSharedML vmKernelML osKernelML vmLibML ioTestML ioDataML fcrtsML
+clean: osSharedCL vmKernelCL osKernelCL vmLibCL ioTestCL ioDataCL CANopenCL fcrtsCL
 
-clean: osSharedCL vmKernelCL osKernelCL vmLibCL ioTestCL ioDataCL fcrtsCL
+clobber: osSharedCO vmKernelCO osKernelCO vmLibCO ioTestCO ioDataCO CANopenCO fcrtsCO
 
-clobber: osSharedCO vmKernelCO osKernelCO vmLibCO ioTestCO ioDataCO fcrtsCO
+rebuild: clean all
 
 
 # Normal build
@@ -75,6 +75,9 @@ ioTest:
 ioData:
 	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 
+.PHONY : CANopen
+CANopen:
+	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
 # Mostly Clean (keep library and executables)
 # -----------------------------------------------------------------------------
 
@@ -104,6 +107,10 @@ ioTestML:
 
 .PHONY : ioDataML
 ioDataML:
+	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
+
+.PHONY : CANopenML
+CANopenML:
 	$(MAKE) -j1 -C $(subst ML,,$@) -f $(subst ML,,$@)$(DEBREL).mak mostlyclean
 
 # Clean
@@ -138,6 +145,10 @@ ioDataCL:
 	echo Cleaning $(subst CL,,$@)...
 	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 
+.PHONY : CANopenCL
+CANopenCL:
+	echo Cleaning $(subst CL,,$@)...
+	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
 # Clobber
 # -----------------------------------------------------------------------------
 
@@ -167,6 +178,10 @@ ioTestCO:
 
 .PHONY : ioDataCO
 ioDataCO:
+	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
+
+.PHONY : CANopenCO
+CANopenCO:
 	$(MAKE) -j1 -C $(subst CO,,$@) -f $(subst CO,,$@)$(DEBREL).mak clobber
 
 # -------------------------------------------------------------------------------
