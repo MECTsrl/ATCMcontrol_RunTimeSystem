@@ -44,14 +44,14 @@
  * ----------------------------------------------------------------------------
  */
 #ifdef __XENO__
-#define  FC_PRIO_IO_CANOPEN_CONF  91  /*  highest  */
-#define  FC_PRIO_IO_CANOPEN_MESG  91
-#define  FC_PRIO_IO_CANOPEN_STCK  91
-#define  FC_PRIO_VMTIMER          81
+#define  FC_PRIO_VMTIMER          81  /*  highest  */
 #define  FC_PRIO_VMM              80
 #define  FC_PRIO_LED              78
 #define  FC_PRIO_LIST             75
 #define  FC_PRIO_COM              74
+#define  FC_PRIO_IO_CANOPEN_CONF  65
+#define  FC_PRIO_IO_CANOPEN_MESG  65
+#define  FC_PRIO_IO_CANOPEN_STCK  65
 #define  FC_PRIO_IO_BACNET        65
 #define  FC_PRIO_IO_PROFI_DP      65
 #define  FC_PRIO_IO_TEST          65

@@ -1143,7 +1143,7 @@ static void PLCsync(void)
                     case PLC:
                         // immediate read: no fieldbus
                         // ready "by design" the_QdataRegisters[addr] = the_QdataRegisters[addr];
-                        // the_QdataStates[addr] = DATA_OK;
+                        the_QdataStates[addr] = DATA_OK;
                         break;
                     case RTU:
                     case TCP:
@@ -1221,26 +1221,29 @@ static void LocalIO(void)
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
 
     // TICtimer
-    float PLC_time, PLC_timeMin, PLC_timeMax;
+    float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
     u_int32_t tic_ms;
 
     tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
     PLC_time = tic_ms / 1000.0;
-    if (PLC_time <= 10.0) {
+    // PLC_timeWin    AT %QD0.21572: REAL; 5393
+    memcpy(&PLC_timeWin, &the_QdataRegisters[5393], sizeof(u_int32_t));
+    if (PLC_timeWin < 1.0) {
+        PLC_timeWin = 1.0;
+    }
+    if (PLC_time <= PLC_timeWin) {
         PLC_timeMin = 0;
-        PLC_timeMax = 10.0;
+        PLC_timeMax = PLC_timeWin;
     } else {
-        PLC_timeMin = PLC_time - 10.0;
+        PLC_timeMin = PLC_time - PLC_timeWin;
         PLC_timeMax = PLC_time;
     }
-    // PLC_time         AT %QD0.21560: REAL; 5390
-    // PLC_timeMin      AT %QD0.21564: REAL; 5391
-    // PLC_timeMax      AT %QD0.21568: REAL; 5392
-    // PLC_hardwareType AT %QD0.21572:UDINT; 5393
+    // PLC_time         AT %ID0.21560: REAL; 5390
+    // PLC_timeMin      AT %ID0.21564: REAL; 5391
+    // PLC_timeMax      AT %ID0.21568: REAL; 5392
     memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
     memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
     memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
-    // the_QdataRegisters[5393] = hardware_type;
 #if defined(RTS_CFG_MECT_RETAIN)
     if (retentive) {
         retentive[(5390 - 1)] = the_QdataRegisters[5390];
@@ -1527,7 +1530,7 @@ static int checkServersDevicesAndNodes()
                         ;
                     }
                     snprintf(theDevices[d].name, MAX_THREADNAME_LEN, "dev(%d)%s_%s_%u", d, fieldbusName[theDevices[d].protocol], theDevices[d].IPaddress, theDevices[d].port);
-                    if (theDevices[d].timeout_ms == 0) {
+                    if (theDevices[d].timeout_ms == 0 && theDevices[d].protocol == RTU) {
                         theDevices[d].timeout_ms = 300;
                         fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].timeout_ms);
                     }
