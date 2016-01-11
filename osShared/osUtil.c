@@ -278,7 +278,7 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 
 	retval = pthread_create(thread, attr, start_routine, arg);
     if (retval) {
-        // error
+        fprintf(stderr, "[%s] ERROR creating %s thread: %s.\n", __func__, name, strerror(errno));
     } else {
         pthread_set_name_np(*thread, name);
     }

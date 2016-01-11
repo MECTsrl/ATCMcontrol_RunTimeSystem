@@ -47,11 +47,6 @@
 #define  FC_PRIO_VMTIMER          81  /*  highest  */
 #define  FC_PRIO_VMM              80
 #define  FC_PRIO_LED              78
-#define  FC_PRIO_LIST             75
-#define  FC_PRIO_COM              74
-#define  FC_PRIO_IO_CANOPEN_CONF  65
-#define  FC_PRIO_IO_CANOPEN_MESG  65
-#define  FC_PRIO_IO_CANOPEN_STCK  65
 #define  FC_PRIO_IO_BACNET        65
 #define  FC_PRIO_IO_PROFI_DP      65
 #define  FC_PRIO_IO_TEST          65
@@ -61,6 +56,8 @@
 #define  FC_PRIO_PDP_WORK         63
 #define  FC_PRIO_VM_MAX           59
 #define  FC_PRIO_VM_MIN           50
+#define  FC_PRIO_LIST             48
+#define  FC_PRIO_COM              47
 #define  FC_PRIO_BAC_DEV          45
 #define  FC_PRIO_BAC_COV          44
 #define  FC_PRIO_BAC_SCN          43

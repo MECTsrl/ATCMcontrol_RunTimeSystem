@@ -47,6 +47,7 @@
 #include <getopt.h>
 
 #include "libMect.h"
+#include "dataMain.h" // dataEngineStop()
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 #define MSR_EE			(1<<15) 		/* External Interrupt Enable		*/
@@ -776,11 +777,10 @@ void ReleaseResources(void)
 	fprintf(stdout, "[%s] - Release resources...\n", __func__);
 #endif
 
-#if defined(RTS_CFG_IOCANOPEN)
-#endif
 #if defined(RTS_CFG_MECT_LIB)
 	app_mect_done();
 #endif
+    dataEngineStop();
 
 #ifdef DBG_MAIN
 	fprintf(stdout, "[%s] - done.\n", __func__);

@@ -29,13 +29,9 @@
 #define STACK_RATE_MS   10
 #define MESSAGE_RATE_MS 1
 
-#define MAX_CHANNELS 2
+#define CAN_CHANNELS 2
 #define MAX_NODES 32
 
-static int enabled[MAX_CHANNELS] = { 0, 0};
-static pthread_t config_id[MAX_CHANNELS] = { NO_THREAD, NO_THREAD};
-static pthread_t msgthr_id[MAX_CHANNELS] = { NO_THREAD, NO_THREAD};
-static pthread_t stkthr_id[MAX_CHANNELS] = { NO_THREAD, NO_THREAD};
 struct statusID {
     u_int16_t runningID;
     u_int16_t goodID;
@@ -53,7 +49,7 @@ static inline void do_sleep_ms(unsigned delay_ms)
     rqtp.tv_sec = q.quot;
     rqtp.tv_nsec = q.rem * 1E6; // ms -> ns
 
-    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &rqtp, &rmtp) == EINTR) {
+    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
         rqtp.tv_sec = rmtp.tv_sec;
         rqtp.tv_nsec = rmtp.tv_nsec;
     }
@@ -61,58 +57,39 @@ static inline void do_sleep_ms(unsigned delay_ms)
 
 u_int8_t CANopenChannels()
 {
-    return MAX_CHANNELS;
-}
-
-void CANopenEnable(u_int8_t channel)
-{
-    if (channel > MAX_CHANNELS) {
-        fprintf(stderr, "CANopenEnable, ERROR: wrong channel %u\n", channel);
-        return;
-    }
-    enabled[channel] = TRUE;
-}
-
-void CANopenDisable(u_int8_t channel)
-{
-    if (channel > MAX_CHANNELS) {
-        fprintf(stderr, "CANopenDisable, ERROR: wrong channel %u\n", channel);
-        return;
-    }
-    enabled[channel] = FALSE;
+    return CAN_CHANNELS;
 }
 
 void CANopenStart(u_int8_t channel)
 {
-    if (channel > MAX_CHANNELS) {
+    if (channel > CAN_CHANNELS) {
         fprintf(stderr, "CANopenStart, ERROR: wrong channel %u\n", channel);
         return;
     }
-    if (! enabled[channel]) {
-        return;
-    }
-    if (config_id[channel] != NO_THREAD) {
-        fprintf(stderr, "CANopenStart[%u], ERROR: double config_th\n", channel);
-        return;
-    }
-    if (msgthr_id[channel] != NO_THREAD) {
-        fprintf(stderr, "CANopenStart[%u], ERROR: double msgthr_th\n", channel);
-        return;
-    }
-    if (stkthr_id[channel] != NO_THREAD) {
-        fprintf(stderr, "CANopenStart[%u], ERROR: double stkthr_th\n", channel);
-        return;
-    }
-
     // start
     /***************************************
      *           CANopen start             *
      ***************************************/
-    fprintf(stderr, "CANopenStart[%u]: this is only a stub :(\n", channel);
+}
+
+int CANopenConfigured(u_int8_t channel)
+{
+    if (channel > CAN_CHANNELS) {
+        fprintf(stderr, "CANopenConfigured, ERROR: wrong channel %u\n", channel);
+        return FALSE;
+    }
+    /***************************************
+     *                 stub                *
+     ***************************************/
+    return FALSE;
 }
 
 void CANopenStop(u_int8_t channel)
 {
+    if (channel > CAN_CHANNELS) {
+        fprintf(stderr, "CANopenStart, ERROR: wrong channel %u\n", channel);
+        return;
+    }
     /***************************************
      *                 stub                *
      ***************************************/
@@ -122,13 +99,7 @@ u_int16_t CANopenGetVarIndex(u_int8_t channel, char *name)
 {
     u_int16_t retval = 0;
 
-    if (channel > MAX_CHANNELS) {
-        return retval;
-    }
-    if (! enabled[channel]) {
-        return retval;
-    }
-    if (name == NULL) {
+    if (channel > CAN_CHANNELS || name == NULL) {
         return retval;
     }
     /***************************************
@@ -139,7 +110,12 @@ u_int16_t CANopenGetVarIndex(u_int8_t channel, char *name)
 
 void CANopenGetChannelStatus(u_int8_t channel, struct CANopenStatus *status)
 {
-    if (channel > MAX_CHANNELS || ! enabled[channel] || status == NULL) {
+    if (channel > CAN_CHANNELS || status == NULL) {
+        if (status) {
+            status->running = FALSE;
+            status->good = FALSE;
+            status->error = 0xffffffff;
+        }
         return;
     }
     /***************************************
@@ -149,7 +125,12 @@ void CANopenGetChannelStatus(u_int8_t channel, struct CANopenStatus *status)
 
 void CANopenGetNodeStatus(u_int8_t channel, u_int8_t node, struct CANopenStatus *status)
 {
-    if (channel > MAX_CHANNELS || node > MAX_NODES || ! enabled[channel] || status == NULL) {
+    if (channel > CAN_CHANNELS || node > MAX_NODES || status == NULL) {
+        if (status) {
+            status->running = FALSE;
+            status->good = FALSE;
+            status->error = 0xffffffff;
+        }
         return;
     }
     /***************************************
@@ -159,7 +140,7 @@ void CANopenGetNodeStatus(u_int8_t channel, u_int8_t node, struct CANopenStatus 
 
 void CANopenResetChannel(u_int8_t channel)
 {
-    if (channel > MAX_CHANNELS || ! enabled[channel]) {
+    if (channel > CAN_CHANNELS) {
         return;
     }
     /***************************************
@@ -169,7 +150,7 @@ void CANopenResetChannel(u_int8_t channel)
 
 void CANopenResetNode(u_int8_t channel, u_int8_t node)
 {
-    if (channel > MAX_CHANNELS || node > MAX_NODES || ! enabled[channel]) {
+    if (channel > CAN_CHANNELS || node > MAX_NODES) {
         return;
     }
     /***************************************
@@ -179,7 +160,7 @@ void CANopenResetNode(u_int8_t channel, u_int8_t node)
 
 void CANopenDisableChannel(u_int8_t channel)
 {
-    if (channel > MAX_CHANNELS || ! enabled[channel]) {
+    if (channel > CAN_CHANNELS) {
         return;
     }
     /***************************************
@@ -189,7 +170,7 @@ void CANopenDisableChannel(u_int8_t channel)
 
 void CANopenDisableNode(u_int8_t channel, u_int8_t node)
 {
-    if (channel > MAX_CHANNELS || node > MAX_NODES || ! enabled[channel]) {
+    if (channel > CAN_CHANNELS || node > MAX_NODES) {
         return;
     }
     /***************************************
@@ -197,66 +178,66 @@ void CANopenDisableNode(u_int8_t channel, u_int8_t node)
      ***************************************/
 }
 
-u_int8_t CANopenReadPDOBit(u_int8_t channel, u_int16_t address)
+int CANopenReadPDOBit(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 {
-    u_int8_t value = 0;
     /***************************************
      *                 stub                *
      ***************************************/
-    return value;
+    return 0;
 }
 
-u_int8_t CANopenReadPDOByte(u_int8_t channel, u_int16_t address)
+int CANopenReadPDOByte(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 {
-    u_int8_t value = 0;
     /***************************************
      *                 stub                *
      ***************************************/
-    return value;
+    return 0;
 }
 
-u_int16_t CANopenReadPDOWord(u_int8_t channel, u_int16_t address)
+int CANopenReadPDOWord(u_int8_t channel, u_int16_t address, u_int16_t *pvalue)
 {
-    u_int16_t value = 0;
     /***************************************
      *                 stub                *
      ***************************************/
-    return value;
+    return 0;
 }
 
-u_int32_t CANopenReadPDODword(u_int8_t channel, u_int16_t address)
+int CANopenReadPDODword(u_int8_t channel, u_int16_t address, u_int32_t *pvalue)
 {
-    u_int32_t value = 0;
     /***************************************
      *                 stub                *
      ***************************************/
-    return value;
+    return 0;
 }
 
-void CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value)
+int CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value)
 {
     /***************************************
      *                 stub                *
      ***************************************/
+	return 0;
 }
 
-void CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value)
+int CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value)
 {
     /***************************************
      *                 stub                *
      ***************************************/
+	return 0;
 }
 
-void CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value)
+int CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value)
 {
     /***************************************
      *                 stub                *
      ***************************************/
+	return 0;
 }
 
-void CANopenWritePDODword(u_int8_t channel, u_int16_t address, u_int32_t value)
+int CANopenWritePDODword(u_int8_t channel, u_int16_t address, u_int32_t value)
 {
     /***************************************
      *                 stub                *
      ***************************************/
+	return 0;
 }

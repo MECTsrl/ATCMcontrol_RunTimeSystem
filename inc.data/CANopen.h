@@ -11,9 +11,8 @@ struct CANopenStatus {
 
 u_int8_t CANopenChannels();
 
-void CANopenEnable(u_int8_t channel);
-void CANopenDisable(u_int8_t channel);
 void CANopenStart(u_int8_t channel);
+int CANopenConfigured(u_int8_t channel);
 void CANopenStop(u_int8_t channel);
 
 u_int16_t CANopenGetVarIndex(u_int8_t channel, char *name);
@@ -24,15 +23,15 @@ void CANopenResetNode(u_int8_t channel, u_int8_t node);
 void CANopenDisableChannel(u_int8_t channel);
 void CANopenDisableNode(u_int8_t channel, u_int8_t node);
 
-u_int8_t CANopenReadPDOBit(u_int8_t channel, u_int16_t address);
-u_int8_t CANopenReadPDOByte(u_int8_t channel, u_int16_t address);
-u_int16_t CANopenReadPDOWord(u_int8_t channel, u_int16_t address);
-u_int32_t CANopenReadPDODword(u_int8_t channel, u_int16_t address);
+int CANopenReadPDOBit(u_int8_t channel, u_int16_t address, u_int8_t *pvalue);
+int CANopenReadPDOByte(u_int8_t channel, u_int16_t address, u_int8_t *pvalue);
+int CANopenReadPDOWord(u_int8_t channel, u_int16_t address, u_int16_t *pvalue);
+int CANopenReadPDODword(u_int8_t channel, u_int16_t address, u_int32_t *pvalue);
 
-void CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value);
-void CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value);
-void CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value);
-void CANopenWritePDODword(u_int8_t channel, u_int16_t address, u_int32_t value);
+int CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value);
+int CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value);
+int CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value);
+int CANopenWritePDODword(u_int8_t channel, u_int16_t address, u_int32_t value);
 
 #endif // CANOPEN_H
 

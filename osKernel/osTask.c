@@ -44,6 +44,7 @@
 
 #include <sys/mman.h>
 #include "mectMain.h"
+#include "dataMain.h" // dataEngineStart()
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 
@@ -184,22 +185,8 @@ IEC_UINT osInitializeVMM(STaskInfoVMM *pVMM)
 
 	osSleep(50);
 #endif
-#if defined(RTS_CFG_IOCANOPEN)
 
-	if (app_config_load(APP_CONF_CAN0))
-	{
-		fprintf(stderr, "[%s]: Error Can0 module configuration file is wrong.\n", __func__);
-	}
-
-	if (app_config_load(APP_CONF_CAN1))
-	{
-		fprintf(stderr, "[%s]: Error Can1 module configuration file is wrong.\n", __func__);
-	}
-
-	if (can0_cfg.enabled != 0 || can1_cfg.enabled != 0)
-	{
-	}
-  #endif
+    dataEngineStart();
 
   #if defined(IP_CFG_NCC)
 	typedef void (*LibFct)(void);
