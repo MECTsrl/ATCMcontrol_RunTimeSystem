@@ -182,28 +182,10 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define BlackListTCPRTU    (*(u_int64_t *)&the_QsyncRegisters[5724])
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
 
-// -------- RTU SERVER ---------------------------------------------
-#define REG_RTUS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_RTUS_SIZE       (REG_TCRS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
-#define	THE_RTUS_DEVICE 	 "/dev/ttyS1"
-#define	THE_RTUS_BAUDRATE	 38400
-#define	THE_RTUS_PARITY 	 'N'
-#define	THE_RTUS_DATABIT 	 8
-#define	THE_RTUS_STOPBIT 	 1
-
-// -------- TCP SERVER ---------------------------------------------
-#define REG_TCPS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCPS_SIZE       (REG_TCPS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
-#define	THE_TCPS_TCP_PORT	 502
-#define	THE_TCPS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
-#define	THE_TCPS_MAX_WORK	 10 // MAX CLIENTS
-
-// -------- TCPRTU SERVER ---------------------------------------------
-#define REG_TCRS_NUMBER     4096 // MODBUS_MAX_READ_REGISTERS // 125.
-#define THE_TCRS_SIZE       (REG_TCRS_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
-#define	THE_TCRS_TCP_PORT	 502
-#define	THE_TCRS_TCP_ADDR	 "127.0.0.1" // useless since modbus_tcp_listen() forces INADDR_ANY
-#define	THE_TCRS_MAX_WORK	 10 // MAX CLIENTS
+// -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCP_RTU_SRV) ------------
+#define REG_SRV_NUMBER      4096
+#define THE_SRV_SIZE        (REG_SRV_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
+#define	THE_SRV_MAX_CLIENTS	10
 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv};
@@ -1923,7 +1905,10 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     for (i = 0; i < DataNumber; ++i) {
                         // FIXME: no byte swapping should be ok,
                         //        but what do we write in the manual?
-                        DataValue[i] = theServers[server].mb_mapping->tab_registers[i];
+                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                        if (offset < REG_SRV_NUMBER) {
+                            DataValue[i] = theServers[server].mb_mapping->tab_registers[offset];
+                        }
                     }
                 }
                 pthread_mutex_unlock(&theServers[server].mutex);
@@ -2203,7 +2188,10 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     for (i = 0; i < DataNumber; ++i) {
                         // FIXME: no byte swapping should be ok,
                         //        but what do we write in the manual?
-                        theServers[server].mb_mapping->tab_registers[i] = DataValue[i];
+                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                        if (offset < REG_SRV_NUMBER) {
+                            theServers[server].mb_mapping->tab_registers[offset] = DataValue[i];
+                        }
                     }
                 }
                 pthread_mutex_unlock(&theServers[server].mutex);
@@ -2239,15 +2227,15 @@ static void *serverThread(void *arg)
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
         modbus_ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_RTUS_NUMBER, 0);
+        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     case TCPSRV:
         modbus_ctx = modbus_new_tcp(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_TCPS_NUMBER, 0);
+        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
         break;
     case TCPRTUSRV:
         modbus_ctx = modbus_new_tcprtu(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_TCRS_NUMBER, 0);
+        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
         break;
     default:
         ;
@@ -2267,10 +2255,10 @@ static void *serverThread(void *arg)
                     server_socket = modbus_get_socket(modbus_ctx); // here socket is file descriptor
                     break;
                 case TCPSRV:
-                    server_socket = modbus_tcp_listen(modbus_ctx, THE_TCPS_MAX_WORK);
+                    server_socket = modbus_tcp_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
                     break;
                 case TCPRTUSRV:
-                    server_socket = modbus_tcprtu_listen(modbus_ctx, THE_TCRS_MAX_WORK);
+                    server_socket = modbus_tcprtu_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
                     break;
                 default:
                     ;
