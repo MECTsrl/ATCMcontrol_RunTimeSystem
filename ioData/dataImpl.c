@@ -182,21 +182,23 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define BlackListTCPRTU    (*(u_int64_t *)&the_QsyncRegisters[5724])
 #define CommErrTCPRTU      (*(u_int64_t *)&the_QsyncRegisters[5728])
 
-// -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCP_RTU_SRV) ------------
+// -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCPRTU_SRV) ------------
 #define REG_SRV_NUMBER      4096
 #define THE_SRV_SIZE        (REG_SRV_NUMBER * sizeof(u_int16_t)) // 0x00002000 8kB
 #define	THE_SRV_MAX_CLIENTS	10
 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv};
-enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV};
+enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV};
 enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
 enum EventAlarm { Event = 0, Alarm};
-static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "RTUSRV", "TCPSRV", "TCPRTUSRV" };
+static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
 
 enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
 enum DeviceStatus  {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
+#ifdef VERBOSE_DEBUG
 static const char *statusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
+#endif
 enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError = 0, CommError, TimeoutError};
 #undef WORD_BIT
@@ -664,12 +666,12 @@ static int ReadFields(int16_t Index)
             CrossTable[Index].Protocol = CANOPEN;
         } else if (strncmp(Field.Contents, "MECT", Field.CurLen) == 0) {
             CrossTable[Index].Protocol = MECT;
-        } else if (strncmp(Field.Contents, "RTUSRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = RTUSRV;
-        } else if (strncmp(Field.Contents, "TCPSRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCPSRV;
-        } else if (strncmp(Field.Contents, "TCPRTUSRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCPRTUSRV;
+        } else if (strncmp(Field.Contents, "RTU_SRV", Field.CurLen) == 0) {
+            CrossTable[Index].Protocol = RTU_SRV;
+        } else if (strncmp(Field.Contents, "TCP_SRV", Field.CurLen) == 0) {
+            CrossTable[Index].Protocol = TCP_SRV;
+        } else if (strncmp(Field.Contents, "TCPRTU_SRV", Field.CurLen) == 0) {
+            CrossTable[Index].Protocol = TCPRTU_SRV;
         } else {
             CrossTable[Index].Protocol = PLC;
             // FIXME: ERR ?
@@ -916,7 +918,8 @@ static int LoadXTable(enum TableType CTType)
             break;
         default:
             ;
-        }        hw119_read_cross_table_record(NULL, NULL, (unsigned char *)&read_param);
+        }
+        hw119_read_cross_table_record(NULL, NULL, (unsigned char *)&read_param);
         if (read_param.ret_value) {
             switch (CTType) {
             case Crosstable_csv:
@@ -1131,9 +1134,9 @@ static void PLCsync(void)
                     case TCPRTU:
                     case CANOPEN:
                     case MECT:
-                    case RTUSRV:
-                    case TCPSRV:
-                    case TCPRTUSRV:
+                    case RTU_SRV:
+                    case TCP_SRV:
+                    case TCPRTU_SRV:
                         if (CrossTable[addr].device != 0xffff) {
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
@@ -1169,9 +1172,9 @@ static void PLCsync(void)
                     case TCPRTU:
                     case CANOPEN:
                     case MECT:
-                    case RTUSRV:
-                    case TCPSRV:
-                    case TCPRTUSRV:
+                    case RTU_SRV:
+                    case TCP_SRV:
+                    case TCPRTU_SRV:
                         if (CrossTable[addr].device != 0xffff) {
 #ifdef VERBOSE_DEBUG
                             fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u\n", oper, addr, indx, the_IdataRegisters[addr]);
@@ -1323,9 +1326,9 @@ static int checkServersDevicesAndNodes()
             case MECT:
                 // nothing to do for client
                 break;
-            case RTUSRV:
-            case TCPSRV:
-            case TCPRTUSRV: {
+            case RTU_SRV:
+            case TCP_SRV:
+            case TCPRTU_SRV: {
                 u_int16_t s;
                 // add unique variable's server
                 for (s = 0; s < theServersNumber; ++s) {
@@ -1356,7 +1359,7 @@ static int checkServersDevicesAndNodes()
                     case MECT:
                         // FIXME: assert
                         break;
-                    case RTUSRV: {
+                    case RTU_SRV: {
                         u_int16_t port = CrossTable[i].Port;
                         switch (port) {
                         case 0:
@@ -1375,12 +1378,12 @@ static int checkServersDevicesAndNodes()
                         }
                         theServers[s].ctx = NULL;
                     }   break;
-                    case TCPSRV:
+                    case TCP_SRV:
                         strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
                         break;
-                    case TCPRTUSRV:
+                    case TCPRTU_SRV:
                         strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
@@ -1410,9 +1413,9 @@ static int checkServersDevicesAndNodes()
             case TCPRTU:
             case CANOPEN:
             case MECT:
-            case RTUSRV:
-            case TCPSRV:
-            case TCPRTUSRV: {
+            case RTU_SRV:
+            case TCP_SRV:
+            case TCPRTU_SRV: {
                 u_int16_t d;
                 u_int16_t n;
                 u_int16_t s;
@@ -1490,9 +1493,9 @@ static int checkServersDevicesAndNodes()
                             retval = -1;
                         }
                         break;
-                    case RTUSRV:
-                    case TCPSRV:
-                    case TCPRTUSRV:
+                    case RTU_SRV:
+                    case TCP_SRV:
+                    case TCPRTU_SRV:
                         for (s = 0; s < theServersNumber; ++s) {
                             if (theServers[s].protocol == theDevices[d].protocol
                              && strncmp(theServers[s].IPaddress, theDevices[d].IPaddress, MAX_IPADDR_LEN) == 0
@@ -1893,9 +1896,9 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
     case MECT:
         // FIXME: TODO
         break;
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             server = theDevices[device].server;
@@ -2176,9 +2179,9 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
     case MECT:
         // FIXME: TODO
         break;
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV: {
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV: {
         u_int16_t device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             u_int16_t server = theDevices[device].server;
@@ -2221,7 +2224,7 @@ static void *serverThread(void *arg)
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // serverThread
     pthread_mutex_init(&theServers[s].mutex, NULL);
     switch (theServers[s].protocol) {
-    case RTUSRV: {
+    case RTU_SRV: {
         char device[VMM_MAX_PATH];
 
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
@@ -2229,11 +2232,11 @@ static void *serverThread(void *arg)
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
-    case TCPSRV:
+    case TCP_SRV:
         modbus_ctx = modbus_new_tcp(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
         break;
-    case TCPRTUSRV:
+    case TCPRTU_SRV:
         modbus_ctx = modbus_new_tcprtu(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
         break;
@@ -2251,13 +2254,13 @@ static void *serverThread(void *arg)
             // get file descriptor or bind and listen
             if (server_socket == -1) {
                 switch (theServers[s].protocol) {
-                case RTUSRV:
+                case RTU_SRV:
                     server_socket = modbus_get_socket(modbus_ctx); // here socket is file descriptor
                     break;
-                case TCPSRV:
+                case TCP_SRV:
                     server_socket = modbus_tcp_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
                     break;
-                case TCPRTUSRV:
+                case TCPRTU_SRV:
                     server_socket = modbus_tcprtu_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
                     break;
                 default:
@@ -2283,7 +2286,7 @@ static void *serverThread(void *arg)
             }
             // accept requests
             switch (theServers[s].protocol) {
-            case RTUSRV:
+            case RTU_SRV:
                 // unique client (serial line)
                 rc = modbus_receive(modbus_ctx, query);
                 if (rc > 0) {
@@ -2294,8 +2297,8 @@ static void *serverThread(void *arg)
                     pthread_mutex_unlock(&theServers[s].mutex);
                 }
                 break;
-            case TCPSRV:
-            case TCPRTUSRV:
+            case TCP_SRV:
+            case TCPRTU_SRV:
                 // multiple clients (tcp/ip server)
                 for (master_socket = 0; master_socket <= fdmax; ++master_socket) {
                     if (!FD_ISSET(master_socket, &rdset)) {
@@ -2351,9 +2354,9 @@ static void *serverThread(void *arg)
 
     // thread clean
     switch (theServers[s].protocol) {
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         if (theServers[s].mb_mapping != NULL) {
             modbus_mapping_free(theServers[s].mb_mapping);
             theServers[s].mb_mapping = NULL;
@@ -2478,9 +2481,9 @@ static void *clientThread(void *arg)
     }   break;
     case MECT:
         break; // FIXME: check can state
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         break;
     default:
         ;
@@ -2511,9 +2514,9 @@ static void *clientThread(void *arg)
     case MECT:
         changeDeviceStatus(d, NOT_CONNECTED); // FIXME: check state
         break;
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         changeDeviceStatus(d, NOT_CONNECTED);
         break;
     default:
@@ -2539,13 +2542,13 @@ static void *clientThread(void *arg)
         case MECT:
             ERROR_FLAG |= ERROR_FLAG_MECT_ON;
             break;
-        case RTUSRV:
+        case RTU_SRV:
             ERROR_FLAG |= ERROR_FLAG_RTUSRV_ON;
             break;
-        case TCPSRV:
+        case TCP_SRV:
             ERROR_FLAG |= ERROR_FLAG_TCPSRV_ON;
             break;
-        case TCPRTUSRV:
+        case TCPRTU_SRV:
             ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV_ON;
             break;
         default:
@@ -2568,9 +2571,9 @@ static void *clientThread(void *arg)
         break;
     case MECT:
         break;
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         break;
     default:
         ;
@@ -2712,9 +2715,9 @@ static void *clientThread(void *arg)
             break;
         case CANOPEN:
         case MECT:
-        case RTUSRV:
-        case TCPSRV:
-        case TCPRTUSRV:
+        case RTU_SRV:
+        case TCP_SRV:
+        case TCPRTU_SRV:
             // FIXME: add flags (missing the Reset_XXX)
             break;
         default:
@@ -2931,9 +2934,9 @@ static void *clientThread(void *arg)
             case MECT:
                 changeDeviceStatus(d, CONNECTED); // FIXME: check bus status
                 break;
-            case RTUSRV:
-            case TCPSRV:
-            case TCPRTUSRV:
+            case RTU_SRV:
+            case TCP_SRV:
+            case TCPRTU_SRV:
                 changeDeviceStatus(d, CONNECTED);
                 break;
             default:
@@ -3032,9 +3035,9 @@ static void *clientThread(void *arg)
                     case TCPRTU:    TCPRTUComm_ERROR_WORD = 1;  CommErrTCPRTU |= (2 ^ DataNodeId); break;
                     case CANOPEN:   break; // FIXME: add error flags
                     case MECT:      break; // FIXME: add error flags
-                    case RTUSRV:    break; // FIXME: add error flags
-                    case TCPSRV:    break; // FIXME: add error flags
-                    case TCPRTUSRV: break; // FIXME: add error flags
+                    case RTU_SRV:    break; // FIXME: add error flags
+                    case TCP_SRV:    break; // FIXME: add error flags
+                    case TCPRTU_SRV: break; // FIXME: add error flags
                     default:        ;
                     }
                     // no break, continue with TimeoutError case
@@ -3050,9 +3053,9 @@ static void *clientThread(void *arg)
                     case TCPRTU:    ERROR_FLAG |= ERROR_FLAG_TCPRTU;    CounterTCPRTU(DataNodeId) += 1; break;
                     case CANOPEN:   ERROR_FLAG |= ERROR_FLAG_CANOPEN;   break; // FIXME: add error flags
                     case MECT:      ERROR_FLAG |= ERROR_FLAG_MECT;      break; // FIXME: add error flags
-                    case RTUSRV:    ERROR_FLAG |= ERROR_FLAG_RTUSRV;    break; // FIXME: add error flags
-                    case TCPSRV:    ERROR_FLAG |= ERROR_FLAG_TCPSRV;    break; // FIXME: add error flags
-                    case TCPRTUSRV: ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV; break; // FIXME: add error flags
+                    case RTU_SRV:    ERROR_FLAG |= ERROR_FLAG_RTUSRV;    break; // FIXME: add error flags
+                    case TCP_SRV:    ERROR_FLAG |= ERROR_FLAG_TCPSRV;    break; // FIXME: add error flags
+                    case TCPRTU_SRV: ERROR_FLAG |= ERROR_FLAG_TCPRTUSRV; break; // FIXME: add error flags
                     default:        ;
                     }
                     break;
@@ -3159,9 +3162,9 @@ static void *clientThread(void *arg)
                     case MECT:
                         // FIXME: check state
                         break;
-                    case RTUSRV:
-                    case TCPSRV:
-                    case TCPRTUSRV:
+                    case RTU_SRV:
+                    case TCP_SRV:
+                    case TCPRTU_SRV:
                         break;
                     default:
                         ;
@@ -3199,9 +3202,9 @@ static void *clientThread(void *arg)
         case MECT:
             // FIXME: check state
             break;
-        case RTUSRV:
-        case TCPSRV:
-        case TCPRTUSRV:
+        case RTU_SRV:
+        case TCP_SRV:
+        case TCPRTU_SRV:
             break;
         default:
             ;
@@ -3228,9 +3231,9 @@ static void *clientThread(void *arg)
     case MECT:
         // FIXME: check state
         break;
-    case RTUSRV:
-    case TCPSRV:
-    case TCPRTUSRV:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
         break;
     default:
         ;
