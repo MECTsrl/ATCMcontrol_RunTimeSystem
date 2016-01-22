@@ -145,6 +145,9 @@ int main(int argc, char *argv[])
 
 #ifdef __XENO__
 	printf("Xenomai enabled\n");
+    struct rlimit rlimit;
+    rlimit.rlim_cur = rlimit.rlim_max = 256; // KB
+    setrlimit(RLIMIT_STACK, &rlimit);
     mlockall(MCL_CURRENT | MCL_FUTURE);
 #endif
 

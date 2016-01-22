@@ -348,7 +348,7 @@ MODBUS_END_DECLS
 
 /* Time waited beetween the RTS switch before transmit data or after transmit
    data before to read */
-#define _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH 10000
+#define _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH 3 // 2,5 us for ADM2587, 10000 us for ??
 
 #if defined(_WIN32)
 #if !defined(ENOTSUP)
@@ -531,20 +531,9 @@ static void _sleep_response_timeout(modbus_t *ctx)
 	Sleep((ctx->response_timeout.tv_sec * 1000) +
 			(ctx->response_timeout.tv_usec / 1000));
 #else
-	/* usleep source code */
-	struct timespec request, remaining;
-	request.tv_sec = ctx->response_timeout.tv_sec;
-	request.tv_nsec = ((long int)ctx->response_timeout.tv_usec % 1000000)
-		* 1000;
-#ifdef __XENO__
-    while (clock_nanosleep(CLOCK_REALTIME, 0, &request, &remaining) == EINTR) {
-        request.tv_sec = remaining.tv_sec;
-        request.tv_nsec = remaining.tv_nsec;
-    }
-#else
-    while (nanosleep(&request, &remaining) == -1 && errno == EINTR)
-		request = remaining;
-#endif
+    register u_int32_t delay_ms;
+    delay_ms = ctx->response_timeout.tv_sec * 1000 + ctx->response_timeout.tv_usec / 1000;
+    osSleep(delay_ms);
 #endif
 }
 
@@ -2717,11 +2706,11 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 		}
 
 		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
-		usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+		// usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 
 		size = write(ctx->s, req, req_length);
 
-		usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+		// usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
 
 		return size;

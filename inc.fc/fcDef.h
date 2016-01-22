@@ -87,10 +87,6 @@
 #define  FC_PRIO_RET              40  /*  lowest   */
 #endif
 
-#ifdef __XENO__
-#define  FC_SCHED_IO_CANOPEN_CONF  SCHED_FIFO
-#define  FC_SCHED_IO_CANOPEN_MESG  SCHED_FIFO
-#define  FC_SCHED_IO_CANOPEN_STCK  SCHED_FIFO
 #define  FC_SCHED_VMTIMER          SCHED_FIFO
 #define  FC_SCHED_VMM              SCHED_FIFO
 #define  FC_SCHED_LED              SCHED_FIFO
@@ -110,27 +106,6 @@
 #define  FC_SCHED_OC               SCHED_FIFO
 #define  FC_SCHED_RET              SCHED_FIFO
 #define  FC_SCHED_BAC_FLH          SCHED_FIFO
-#else
-#define  FC_SCHED_VMTIMER          SCHED_FIFO
-#define  FC_SCHED_VMM              SCHED_FIFO
-#define  FC_SCHED_LED              SCHED_FIFO
-#define  FC_SCHED_LIST             SCHED_FIFO
-#define  FC_SCHED_COM              SCHED_FIFO
-#define  FC_SCHED_IO_TEST          SCHED_FIFO
-#define  FC_SCHED_IO_DAT           SCHED_FIFO
-#define  FC_SCHED_IO_PROFI_DP      SCHED_FIFO
-#define  FC_SCHED_IO_BACNET        SCHED_FIFO
-#define  FC_SCHED_BAC_CFG          SCHED_FIFO
-#define  FC_SCHED_PDP_MGT          SCHED_FIFO
-#define  FC_SCHED_PDP_WORK         SCHED_FIFO
-#define  FC_SCHED_VM               SCHED_RR
-#define  FC_SCHED_BAC_SCN          SCHED_FIFO
-#define  FC_SCHED_BAC_COV          SCHED_FIFO
-#define  FC_SCHED_BAC_DEV          SCHED_FIFO
-#define  FC_SCHED_OC               SCHED_FIFO
-#define  FC_SCHED_RET              SCHED_FIFO
-#define  FC_SCHED_BAC_FLH          SCHED_FIFO
-#endif
 
 
 /* Device Files

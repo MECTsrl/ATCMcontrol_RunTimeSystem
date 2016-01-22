@@ -243,8 +243,9 @@ IEC_UINT osTrace(IEC_CHAR *szFormat, ...)
 }
 #endif /* RTS_CFG_DEBUG_OUTPUT */
 
+#ifdef __XENO__
 static unsigned threads_num = 0;
-
+#endif
 int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
                         void *(*start_routine)(void *), void *arg,
                         const char *name, size_t stacksize)
@@ -318,7 +319,7 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 {
 	IEC_UINT uRes = OK;
 
-#ifdef __XENO__
+#if 0
     struct timespec timer_next;
     struct timespec timer_now;
 	ldiv_t x;
@@ -344,9 +345,18 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
         retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
 	} while (retval == EINTR);
 #else
-	usleep(ulTime * 1000);
+    struct timespec rqtp, rmtp;
+    ldiv_t q;
+
+    q = ldiv(ulTime, 1000);
+    rqtp.tv_sec = q.quot;
+    rqtp.tv_nsec = q.rem * 1E6; // ms -> ns
+
+    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
+        rqtp.tv_sec = rmtp.tv_sec;
+        rqtp.tv_nsec = rmtp.tv_nsec;
+    }
 #endif
-	
 	RETURN(uRes);
 }
 
@@ -364,7 +374,7 @@ IEC_UINT osSleepAbsolute(IEC_UDINT ulTime)
 	IEC_UINT uRes = OK;
 
 #ifdef __XENO__
-        struct timespec timer_next;
+    struct timespec timer_next;
 	ldiv_t x;
 	int retval; 
 
