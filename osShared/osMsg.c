@@ -291,17 +291,6 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 		{
 			pMessage->mtype = buffer.mtype;
 			OS_MEMCPY(((char*)pMessage) + sizeof(long), buffer.mtext, result);
-#if 0
-			{
-				int i=0;
-				printf("EGB-RX-MSG:");
-				for (i = 0; i < result; i++)
-				{
-					printf(".%x.", *(((char*)pMessage) + sizeof(long) + i));
-				}
-				printf("\n");
-			}
-#endif
 			if (pMessage->uLen > FC_MAX_MSG_LEN)
 			{
 				// NB in questo caso la osMalloc() l'ha fatta il chiamante
@@ -330,23 +319,6 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 			continue;
 		}
 		
-#if 0
-		if (errno == EINTR)
-		{
-			/* This error is - hopefully - caused by the debugger, so we can ignore it.
-			 */
-		  #if defined(RTS_CFG_DEBUG_OUTPUT)
-			osTrace("WARNING: ***** EINTR Received. ***** \r\n");
-		  #endif
-
-			if (ulTimeOut == VMM_WAIT_FOREVER)
-			{
-				continue;
-			}
-		}
-		else 
-#endif
-
 		if (errno != ENOMSG || ulTimeOut == VMM_WAIT_FOREVER)
 		{
 			RETURN_e(ERR_IPC_RECV_FAILED);

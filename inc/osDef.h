@@ -414,7 +414,7 @@
 #undef	RTS_CFG_IPC_TRACE_IO
 #undef	RTS_CFG_OBJ_TRACE
 #undef RTS_CFG_OC_TRACE
-#undef RTS_CFG_PRJ_TRACE
+#define RTS_CFG_PRJ_TRACE
 #undef	RTS_CFG_ALI_TRACE
 #undef	RTS_CFG_MEM_TRACE
 #undef	RTS_CFG_RET_TRACE
@@ -514,7 +514,7 @@
 #define MAX_OC_CODE_OBJ 	1000u	/* Max. online change code objects		*/
 #define MAX_OC_DATA_OBJ 	1000u	/* Max. online change data objects		*/
 
-#define MAX_DATA		   25000u	/* Max. count of data bytes per block	*/
+#define MAX_DATA		    8000u	/* Max. count of data bytes per block	*/
 #define MAX_BP_QUEUE	  (25u+1u)	/* Max. count (-1) of BP notifications	*/
 #define MAX_STR_MSG_QUEUE (25u+1u)	/* Max. count (-1) of Messages stored	*/
 #define MAX_STR_MSG_LEN 	 100u	/* Max. length of messages				*/
@@ -526,7 +526,7 @@
 
 #define MAX_EVENTS			  64u	/* Max. no. of events					*/
 
-#define MAX_IO_LAYER		   7u	/* Max. no. of IO layer 				*/
+#define MAX_IO_LAYER		   1u	/* Max. no. of IO layer 				*/
 
 #define MAX_BACNET_OBJ		2000u	/* Max. no. of BACnet data objects		*/
 

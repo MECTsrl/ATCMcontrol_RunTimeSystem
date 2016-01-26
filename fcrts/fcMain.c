@@ -146,8 +146,9 @@ int main(int argc, char *argv[])
 #ifdef __XENO__
 	printf("Xenomai enabled\n");
     struct rlimit rlimit;
-    rlimit.rlim_cur = rlimit.rlim_max = 256; // KB
-    setrlimit(RLIMIT_STACK, &rlimit);
+    int retval;
+    rlimit.rlim_cur = rlimit.rlim_max = 128 * 1024;
+    retval = setrlimit(RLIMIT_STACK, &rlimit);
     mlockall(MCL_CURRENT | MCL_FUTURE);
 #endif
 
@@ -333,16 +334,6 @@ int main(int argc, char *argv[])
 	#error Posix scheduling not defined in actual Linux kernel
   #endif
 	// osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM) in vmKernel/vmmMain.c
-
-	struct sched_param sp;
-	sp.sched_priority = FC_PRIO_VMM;
-
-	if (sched_setscheduler(0, FC_SCHED_VMM, &sp) == -1)
-	{
-		fprintf(stdout, "sched_setscheduler failed (reason:%d)\r\n", errno);
-		return(-1);
-	}
-
 
 	/* Initialize Jiffies
 	 * ------------------------------------------------------------------------
@@ -730,7 +721,7 @@ IEC_UINT writepid(void)
 	//int configfd;
 	char buf[10];
 
-	configfd = open(PID_PATH, O_CREAT | O_WRONLY);
+	configfd = open(PID_PATH, O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR);
 	if (configfd < 0) {
 		fprintf(stderr, "open '%s' failed (reason:%d (%s))\r\n", PID_FILE, os_errno, OS_STRERROR);
 		RETURN(ERR_ERROR);
@@ -780,9 +771,6 @@ void ReleaseResources(void)
 	fprintf(stdout, "[%s] - Release resources...\n", __func__);
 #endif
 
-#if defined(RTS_CFG_MECT_LIB)
-	app_mect_done();
-#endif
     dataEngineStop();
 
 #ifdef DBG_MAIN

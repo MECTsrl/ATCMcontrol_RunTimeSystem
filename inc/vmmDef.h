@@ -1715,8 +1715,6 @@ typedef struct
 
 #define TASK_NAME_IOL_BAC		"IOL_BAC"
 #define TASK_NAME_IOL_TST		"IOL_TST"
-#define TASK_NAME_IOL_MTS		"IOL_MTS"
-#define TASK_NAME_IOL_MRC		"IOL_MRC"
 #define TASK_NAME_IOL_PDP		"IOL_PDP"
 
 #define TASK_NAME_BAC_DEV		"BAC_DEV"

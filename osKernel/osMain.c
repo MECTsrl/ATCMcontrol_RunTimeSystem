@@ -39,23 +39,11 @@
 #include <fcntl.h>
 #include <sys/timeb.h>
 #include <sys/reboot.h>
-#if defined(RTS_CFG_IOCANOPEN)
-#include <libCanOpen.h>
-#endif
-#if defined(RTS_CFG_MECT_LIB)
-#include <libMect.h>
-#endif
 #if defined(RTS_CFG_USB_LIB)
 #include <libUSB.h>
 #endif
 #if defined(RTS_CFG_DATALOG_LIB)
 #include <libDatalog.h>
-#endif
-#if defined(RTS_CFG_HW119_LIB)
-#include <libHW119.h>
-#endif
-#if defined (RTS_CFG_MODBUS_LIB)
-#include <libModbus.h>
 #endif
 /* ----  Local Defines:   ----------------------------------------------------- */
 
@@ -200,18 +188,9 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			g_bDownloadInProgress = TRUE;
 			g_bDownloadFailed	  = FALSE;
 			if(pVMM->bProjLoaded){
-#if defined(RTS_CFG_MECT_LIB)
-				app_mect_done();
-#endif
-#if defined(RTS_CFG_IOCANOPEN)
-#endif
 #if defined(RTS_CFG_USB_LIB)
 #endif
 #if defined(RTS_CFG_DATALOG_LIB)
-#endif
-#if defined(RTS_CFG_HW119_LIB)
-#endif
-#if defined (RTS_CFG_MODBUS_LIB)
 #endif
 			}
 #if defined(RTS_CFG_IO_LAYER)
@@ -242,11 +221,6 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			
 		case CMD_DOWNLOAD_END:
 			if(pVMM->bProjLoaded){
-#if defined(RTS_CFG_MECT_LIB)
-				app_mect_init();
-#endif
-#if defined(RTS_CFG_IOCANOPEN)
-#endif
 			}		
 
 		case CMD_OC_END:
