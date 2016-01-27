@@ -3503,18 +3503,28 @@ void dataEngineStop(void)
     int n;
     for (n = 0; n < theDevicesNumber; ++n) {
         pthread_join(theDevices[n].thread_id, &retval);
+        theDevices[n].thread_id = -1;
         fprintf(stderr, "joined dev(%d)\n", n);
     }
     for (n = 0; n < theServersNumber; ++n) {
         pthread_join(theServers[n].thread_id, &retval);
         fprintf(stderr, "joined srv(%d)\n", n);
     }
-    pthread_join(theDataThread_id, &retval);
-    fprintf(stderr, "joined data\n");
-    pthread_join(theSyncThread_id, &retval);
-    fprintf(stderr, "joined syncro\n");
-    pthread_join(theEngineThread_id, &retval);
-    fprintf(stderr, "joined engine\n");
+    if (theDataThread_id != -1) {
+        pthread_join(theDataThread_id, &retval);
+        theDataThread_id = -1;
+        fprintf(stderr, "joined data\n");
+    }
+    if (theSyncThread_id != -1) {
+        pthread_join(theSyncThread_id, &retval);
+        theSyncThread_id = -1;
+        fprintf(stderr, "joined syncro\n");
+    }
+    if (theEngineThread_id != -1) {
+        pthread_join(theEngineThread_id, &retval);
+        theEngineThread_id = -1;
+        fprintf(stderr, "joined engine\n");
+    }
 
 #endif
 }
