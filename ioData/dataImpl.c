@@ -1288,13 +1288,9 @@ static int checkServersDevicesAndNodes()
             base = i;
             block = CrossTable[i].Block;
         }
-        if (block > 0) {
-            CrossTable[i].BlockBase = base;
-        } else {
-            CrossTable[i].BlockBase = 0;
-        }
-        if (CrossTable[i].Enable > 0) {
+        CrossTable[i].BlockBase = base;
 
+        if (CrossTable[i].Enable > 0) {
             u_int16_t s = MAX_SERVERS;
 
             // server variables =---> enable the server thread
@@ -1825,9 +1821,11 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     continue;
                 }
                 switch (CrossTable[DataAddr + i].Types) {
-                case       BIT:
-                    e = CANopenReadPDOBit(channel, offset, (u_int8_t *)&DataValue[i]);
-                    break;
+                case BIT: {
+                    u_int8_t a;
+                    e = CANopenReadPDOBit(channel, offset, &a);
+                    DataValue[i] = a;
+                }   break;
                 case  BYTE_BIT: {
                     u_int8_t a;
                     e = CANopenReadPDOByte(channel, offset, &a);
@@ -1862,18 +1860,22 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                         && ++i);
                 }   break;
                 case  UINT16:
-                case   INT16:
-                    e = CANopenReadPDOWord(channel, offset, (u_int16_t *)&DataValue[i]);
-                    break;
+                case INT16: {
+                    u_int16_t a;
+                    e = CANopenReadPDOWord(channel, offset, &a);
+                    DataValue[i] = a;
+                }   break;
                 case  UINT16BA:
                 case   INT16BA:
                     // FIXME: assert
                     break;
                 case UDINT:
                 case  DINT:
-                case REAL:
-                    e = CANopenReadPDODword(channel, offset, &DataValue[i]);
-                    break;
+                case REAL: {
+                    u_int32_t a;
+                    e = CANopenReadPDODword(channel, offset, &a);
+                    DataValue[i] = a;
+                }   break;
                 case UDINTCDAB:
                 case  DINTCDAB:
                 case REALCDAB:
@@ -1897,6 +1899,13 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     break;
               }
             }
+#ifdef VERBOSE_DEBUG
+            fprintf(stderr, "%d vars @ %d: ", DataNumber, DataAddr);
+            for (i = 0; i < DataNumber; ++i) {
+                fprintf(stderr, "%s = 0x%08x ", CrossTable[DataAddr + i].Tag, DataValue[i]);
+            }
+            fprintf(stderr, "\n");
+#endif
         }
         break;
     case MECT:
@@ -2659,13 +2668,13 @@ static void *clientThread(void *arg)
                 // what time is it please?
                 updateDeviceTiming(d);
 #ifdef VERBOSE_DEBUG
-                fprintf(stderr, "%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", now_ms,
+                fprintf(stderr, "%s@%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", theDevices[d].name, theDevices[d].current_time_ms,
                     timeout?"timeout":(invalid_timeout?"invalid_timeout":(invalid_permission?"invalid_permission":(other_error?"other_error":"signal"))),
                     next_ms, abstime.tv_sec, abstime.tv_nsec);
 #endif
             } else {
 #ifdef VERBOSE_DEBUG
-                fprintf(stderr, "%09u ms: immediate restart\n", now_ms);
+                fprintf(stderr, "%s@%09u ms: immediate restart\n", theDevices[d].name, theDevices[d].current_time_ms);
 #endif
             }
         }
@@ -2744,7 +2753,7 @@ static void *clientThread(void *arg)
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
 #ifdef VERBOSE_DEBUG
-                    fprintf(stderr, "%09u ms: write PLC [%u], there are still %u\n", now_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
+                    fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
                 // is it there a write requests from PLC to this device?
                 } else if (theDevices[d].writeOperations > 0) {
@@ -2787,7 +2796,7 @@ static void *clientThread(void *arg)
                         theDevices[d].writeOperations -= 1;
                         write_index = indx + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
-                        fprintf(stderr, "%09u ms: write [%u]@%u value=%u, will check @%u\n", now_ms, DataAddr, indx, DataValue[0], write_index);
+                        fprintf(stderr, "%s@%09u ms: write [%u]@%u value=%u, will check @%u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, indx, DataValue[0], write_index);
 #endif
                     } else {
                         // next time we'll restart from the first one
@@ -2814,6 +2823,7 @@ static void *clientThread(void *arg)
                                 if (CrossTable[addr].device == d
                                  && CrossTable[addr].Enable == (prio + 1)
                                  && CrossTable[addr].Plc > Htype
+                                 && addr == CrossTable[addr].BlockBase // reading by block only
                                  && the_QdataStates[addr] != DATA_RUN) {
                                     found = TRUE;
                                     break;
@@ -2828,7 +2838,7 @@ static void *clientThread(void *arg)
                                 // keep the index for the next loop
                                 read_addr[prio] = DataAddr + DataNumber + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", now_ms, prio, DataAddr, addr, read_addr[prio]);
+                                fprintf(stderr, "%s@%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, addr, read_addr[prio]);
 #endif
                                 break;
                             } else {
@@ -2846,6 +2856,7 @@ static void *clientThread(void *arg)
                                 } else if (CrossTable[addr].device == d && oper == READ
                                         && CrossTable[addr].Enable == (prio + 1)
                                         && CrossTable[addr].Plc == Htype
+                                        && addr == CrossTable[addr].BlockBase // reading by block only
                                         && the_QdataStates[addr] != DATA_RUN) {
                                     // NB: DATA_RUN is active while processing the read,
                                     //     while DATA_OK and DATA_ERR are the possible output when finished
@@ -2864,7 +2875,7 @@ static void *clientThread(void *arg)
                                 // keep the index for the next loop
                                 read_index[prio] = indx + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%09u ms: read %uH [%u]@%u, will check @%u\n", now_ms, prio, DataAddr, indx, read_index[prio]);
+                                fprintf(stderr, "%s@%09u ms: read %uH [%u]@%u, will check @%u\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, indx, read_index[prio]);
 #endif
                                 break;
                             } else {
@@ -2872,7 +2883,7 @@ static void *clientThread(void *arg)
                                 read_time_ms[prio] += system_ini.system.read_period_ms[prio];
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%09u ms: no read %uHPSF will restart at %09u ms\n", now_ms, prio, read_time_ms[prio]);
+                                fprintf(stderr, "%s@%09u ms: no read %uHPSF will restart at %09u ms\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, read_time_ms[prio]);
 #endif
                             }
                         }
@@ -2918,13 +2929,7 @@ static void *clientThread(void *arg)
                 break;
             case CANOPEN: {
                 u_int8_t channel = theDevices[d].u.can.bus;
-#if 0
-                struct CANopenStatus status;
-                CANopenGetChannelStatus(channel, &status);
-                if (status.good) {
-#else
                 if (CANopenConfigured(channel)) {
-#endif
                     changeDeviceStatus(d, CONNECTED);
                 } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
                     // CANopenResetChannel(theDevices[d].u.can.bus);
@@ -3004,6 +3009,12 @@ static void *clientThread(void *arg)
             {
                 u_int16_t i;
 
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevices[d].name, theDevices[d].current_time_ms,
+                        Operation == READ ? "read" : "write",
+                        error == NoError ? "ok" : "error",
+                        DataNumber, DataAddr);
+#endif
                 // manage the data values
                 switch (error) {
                 case NoError:
