@@ -2143,12 +2143,14 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     }
                     // do write
                     switch (vartype) {
-                    case  BYTE_BIT:
-                        e = CANopenWritePDOByte(channel, offset, (u_int8_t)(buffer & 0x000000FF));
-                        break;
-                    case  WORD_BIT:
-                        e = CANopenWritePDOWord(channel, offset, (u_int16_t)(buffer & 0x0000FFFF));
-                        break;
+                    case BYTE_BIT: {
+                        register u_int8_t a = (u_int8_t)(buffer & 0x000000FF);
+                        e = CANopenWritePDOByte(channel, offset, a);
+                    }   break;
+                    case WORD_BIT: {
+                        register u_int16_t a = (u_int16_t)(buffer & 0x0000FFFF);
+                        e = CANopenWritePDOWord(channel, offset, a);
+                    }   break;
                     case DWORD_BIT:
                         e = CANopenWritePDODword(channel, offset, buffer);
                         break;
