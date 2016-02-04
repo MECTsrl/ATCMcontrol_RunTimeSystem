@@ -1718,6 +1718,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
             }
+            break;
         case RTU_SRV:
         case TCP_SRV:
         case TCPRTU_SRV:
@@ -2833,12 +2834,12 @@ static void *clientThread(void *arg)
                             }
                             if (found) {
                                 QueueIndex = 0;
-                                DataAddr = CrossTable[addr].BlockBase;
+                                DataAddr = addr; // CrossTable[addr].BlockBase;
                                 DataNumber = CrossTable[addr].BlockSize;
                                 Operation = READ;
                                 // data values will be available after the fieldbus access
                                 // keep the index for the next loop
-                                read_addr[prio] = DataAddr + DataNumber + 1; // may overlap DimCrossTable, it's ok
+                                read_addr[prio] = DataAddr + DataNumber; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%s@%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, addr, read_addr[prio]);
 #endif
