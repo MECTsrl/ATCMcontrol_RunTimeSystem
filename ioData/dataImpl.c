@@ -84,6 +84,7 @@
 #define DimCrossTable_3 44004
 #define DimCrossTable_4 (DimCrossTable_3 + 2 * DimCrossTable + 2 + 2)
 #define DimAlarmsCT     1152
+#define LAST_RETENTIVE  192
 
 static struct system_ini system_ini;
 static int system_ini_ok;
@@ -114,8 +115,8 @@ static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 static u_int16_t the_IsyncRegisters[REG_SYNC_NUMBER]; // %I Array delle CODE in lettura
 static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in scrittura
 
-#define QueueOperMask       0xE000  // BIT 15 WR EN, BIT 14 RD EN
-#define QueueAddrMask       0x1FFF  // BIT 13..0 CROSSTABLE ADDRESS
+#define QueueOperMask       0xE000  // BIT 15 WR EN, BIT 14 RD EN, BIT 13 ??
+#define QueueAddrMask       0x1FFF  // BIT 12..0 CROSSTABLE ADDRESS
 // Isync Operations
 #define NOP                 0x0000
 #define READ                0x4000
@@ -286,6 +287,7 @@ static struct ClientStruct {
     u_int32_t elapsed_time_ms;
     sem_t newOperations;
     u_int16_t writeOperations;
+    u_int16_t writeResetIndex;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
     // local queue
@@ -410,7 +412,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
 {
     the_QdataRegisters[addr] = value;
 #if defined(RTS_CFG_MECT_RETAIN)
-    if (retentive) {
+    if (retentive && addr <= LAST_RETENTIVE) {
         retentive[addr -1] = value;
     }
 #endif
@@ -1084,14 +1086,13 @@ static void PLCsync(void)
 {
     u_int16_t indx;
     u_int16_t oper;
-    u_int16_t addr, DataAddr;
-    u_int16_t i, DataNumber;
+    u_int16_t addr;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
         oper = the_IsyncRegisters[indx] & QueueOperMask;
         addr = the_IsyncRegisters[indx] & QueueAddrMask;
-        if (addr < DimCrossTable) {
+        if (0 < addr && addr < DimCrossTable) {
             switch (oper) {
             case NOP:
                 the_QsyncRegisters[indx] = QUEUE_EMPTY;
@@ -1134,20 +1135,11 @@ static void PLCsync(void)
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
                     the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                     switch (CrossTable[addr].Protocol) {
-                    case PLC: {
+                    case PLC:
                         // immediate write: no fieldbus
-                        if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
-                            DataAddr = addr;
-                            DataNumber = 1;
-                        } else { // (oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE)
-                            DataAddr = CrossTable[addr].BlockBase;
-                            DataNumber = CrossTable[addr].BlockSize;
-                        }
-                        for (i = 0; i < DataNumber; ++i) {
-                            writeQdataRegisters(DataAddr + i, the_IdataRegisters[DataAddr + i]);
-                            the_QdataStates[DataAddr + i] = DATA_OK;
-                        }
-                    }   break;
+                        writeQdataRegisters(addr, the_IdataRegisters[addr]);
+                        the_QdataStates[addr] = DATA_OK;
+                        break;
                     case RTU:
                     case TCP:
                     case TCPRTU:
@@ -1161,6 +1153,9 @@ static void PLCsync(void)
                             fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u\n", oper, addr, indx, the_IdataRegisters[addr]);
 #endif
                             theDevices[CrossTable[addr].device].writeOperations += 1;
+                            if (oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE) {
+                                theDevices[CrossTable[addr].device].writeResetIndex = 1;
+                            }
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
                         break;
@@ -1496,6 +1491,7 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].thread_status = NOT_STARTED;
                     sem_init(&theDevices[d].newOperations, 0, 0);
                     theDevices[d].writeOperations = 0;
+                    theDevices[d].writeResetIndex = 0;
                     // theDevices[d].modbus_ctx .last_good_ms, PLCwriteRequests, PLCwriteRequestNumber, PLCwriteRequestGet, PLCwriteRequestPut
                 }
                 // add variable's node
@@ -2620,7 +2616,7 @@ static void *clientThread(void *arg)
             continue;
         }
 
-        // what time is it please?
+        // was I already doing something?
         if (DataAddr == 0) {
             int rc;
             u_int32_t next_ms;
@@ -2764,6 +2760,10 @@ static void *clientThread(void *arg)
 
                     // it should be there something to write from HMI to this device
                     int found = FALSE;
+                    if (theDevices[d].writeResetIndex) {
+                        write_index = 1; // for recipes
+                        theDevices[d].writeResetIndex = 0;
+                    }
                     for (indx = write_index; indx <= DimCrossTable; ++indx) {
                         oper = the_IsyncRegisters[indx] & QueueOperMask;
                         addr = the_IsyncRegisters[indx] & QueueAddrMask;
@@ -2778,24 +2778,14 @@ static void *clientThread(void *arg)
                         }
                     }
                     if (found) {
-                        u_int16_t n;
-
                         QueueIndex = indx;
-                        Operation = oper;
-                        // data values from the the udp input, the *_BIT management is in fieldWrite()
-                        if (oper == WRITE_SINGLE || oper == WRITE_RIC_SINGLE) {
-                            DataAddr = addr;
-                            DataNumber = 1;
-                            DataValue[0] = the_IdataRegisters[addr];
-                        } else { // oper == WRITE_MULTIPLE || oper == WRITE_RIC_MULTIPLE
-                            // NB the HMI programmer must prepare the write for the whole block
-                            DataAddr = CrossTable[addr].BlockBase;
-                            DataNumber = CrossTable[addr].BlockSize;
-                            for (n = 0; n < DataNumber; ++n) {
-                                DataValue[n] = the_IdataRegisters[DataAddr + n];
-                            }
-                        }
-                        // keep the index for the next loop
+                        Operation = oper; // WRITE_*
+                        DataAddr = addr;
+                        DataNumber = 1;
+                        DataValue[0] = the_IdataRegisters[addr];
+                        // FIXME: we could search the Isync for other writes in order at the same priority
+                        //        of the same type to the same fieldbus, but the complex thing is the
+                        //        management of the Qsync and of the errors
                         theDevices[d].writeOperations -= 1;
                         write_index = indx + 1; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
@@ -3461,10 +3451,13 @@ void dataEngineStart(void)
 #if defined(RTS_CFG_MECT_RETAIN)
     if (ptRetentive == MAP_FAILED) {
         retentive = NULL;
+        fprintf(stderr, "Missing retentive file.\n");
     } else {
         retentive = (u_int32_t *)ptRetentive;
-
         OS_MEMCPY(the_QdataRegisters, retentive, lenRetentive);
+        if (lenRetentive != LAST_RETENTIVE * 4) {
+            fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
+        }
     }
 #endif
     OS_MEMCPY(the_IdataRegisters, the_QdataRegisters, sizeof(the_QdataRegisters));
@@ -3660,41 +3653,44 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
                 if (pIR->pSetQ[uIOLayer]) {
                     // write from __%Q__ segment only if changed (using the %W write flags)
-                    int i;
+                    u_int16_t addr;
                     void *pvQsegment = pIO->Q.pAdr + pIO->Q.ulOffs;
                     void *pvWsegment = pIO->W.pAdr + pIO->W.ulOffs;
                     u_int32_t *values = (u_int32_t *)pvQsegment;
                     u_int32_t *flags = (u_int32_t *)pvWsegment;
-                    for (i = 0; i < REG_DATA_NUMBER; ++i) {
-                        if (flags[i] != 0) {
-                            u_int16_t d = CrossTable[i].device;
-                            if (d == 0xffff) {
-                                if (CrossTable[i].Protocol == PLC) {
-                                    flags[i] = 0;
-                                    writeQdataRegisters(i, values[i]);
-                                }
+                    for (addr = 0; addr < REG_DATA_NUMBER; ++addr) {
+                        if (flags[addr] != 0) {
+                            if (CrossTable[addr].Protocol == PLC) {
+                                flags[addr] = 0;
+                                writeQdataRegisters(addr, values[addr]);
                             } else {
                                 // RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV
-                                if (theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    register int base, size, n, total;
+                                u_int16_t d = CrossTable[addr].device;
 
-                                    flags[i] = 0; // zeroes the write flag only if can write in queue
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = i;
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[i];
+                                if (d != 0xffff && theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
+                                    register int types, base, size, n, total;
+
+                                    flags[addr] = 0; // zeroes the write flag only if can write in queue
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = addr;
+                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[addr];
                                     // are there any other consecutive writes to the same block?
-                                    base = CrossTable[i].BlockBase;
-                                    size = CrossTable[i].BlockSize;
-                                    for (n = 1, total = 1; (i + n) < (base + size) && total < MAX_WRITES; ++n) {
-                                        if (flags[i + n] != 0) {
+                                    base = CrossTable[addr].BlockBase;
+                                    size = CrossTable[addr].BlockSize;
+                                    types = CrossTable[addr].Types;
+                                    for (n = 1, total = 1; (addr + n) < (base + size) && total < MAX_WRITES; ++n) {
+                                        if (CrossTable[addr + n].Types != types) {
+                                            break; // only group variables of the same type
+                                        }
+                                        if (flags[addr + n] != 0) {
                                             total += 1; // will be WRITE_MULTIPLE
-                                            flags[i + n] = 0;
-                                            theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[i + n];
+                                            flags[addr + n] = 0;
+                                            theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[addr + n];
                                         } else {
-                                            break; // only sequential writes
+                                            break; // only sequential writes FIXME: filter *_BIT
                                         }
                                     }
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = total;
-                                    i += (total - 1);
+                                    addr += (total - 1);
                                     // manage local queue
                                     theDevices[d].PLCwriteRequestNumber += 1;
                                     theDevices[d].PLCwriteRequestPut += 1;

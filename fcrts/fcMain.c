@@ -304,7 +304,7 @@ int main(int argc, char *argv[])
         }
 
         ptRetentive = mmap (0, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	lenRetentive = sb.st_size;
+        lenRetentive = sb.st_size;
         if(ptRetentive == MAP_FAILED) {
                 perror ("mmap");
                 RETURN(ERR_ERROR);
