@@ -69,7 +69,7 @@
 
 #define THE_CONFIG_DELAY_ms     10
 #define THE_ENGINE_DELAY_ms     5
-#define THE_SERVER_DELAY_ms     10
+#define THE_SERVER_DELAY_ms     1000
 #define THE_CONNECTION_DELAY_ms 1000
 #define THE_DEVICE_BLACKLIST_ms 4000
 #define THE_DEVICE_SILENCE_ms   9999
@@ -251,7 +251,7 @@ static struct ServerStruct {
 } theServers[MAX_SERVERS];
 static u_int16_t theServersNumber = 0;
 
-#define MaxLocalQueue 15
+#define MaxLocalQueue 16
 static struct ClientStruct {
     // for clientThread
     enum FieldbusType protocol;
@@ -1725,13 +1725,20 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     pthread_mutex_lock(&theServers[server].mutex);
                     {
                         register u_int16_t base = CrossTable[DataAddr].Offset;
+                        bzero(uintRegs, sizeof(uintRegs));
                         for (r = 0; r < regs; ++r) {
                             if ((base + r) < REG_SRV_NUMBER) {
                                 uintRegs[r] = theServers[server].mb_mapping->tab_registers[base + r];
                             }
                         }
+                        e = 0;
                     }
                     pthread_mutex_unlock(&theServers[server].mutex);
+#if 0
+                    if (theDevices[d].protocol == TCP_SRV) {
+                        fprintf(stderr, "%s read %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
+                    }
+#endif
                 }
             }
             break;
@@ -1754,6 +1761,12 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 register u_int8_t c = p[2];
                 register u_int8_t d = p[3];
 
+                if (CrossTable[DataAddr + i].Output && (CrossTable[DataAddr + i].Protocol == RTU_SRV
+                    || CrossTable[DataAddr + i].Protocol == TCP_SRV || CrossTable[DataAddr + i].Protocol == TCPRTU_SRV)) {
+                    // FIXME: manage also r
+                    // DataValue[i] = the_QdataRegisters[DataAddr + i];
+                    // continue;
+                }
                 switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
                         DataValue[i] = bitRegs[r]; r += 1;
@@ -1810,8 +1823,8 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             u_int8_t channel = theDevices[device].port;
-                    for (i = 0; i < DataNumber; ++i) {
-                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+            for (i = 0; i < DataNumber; ++i) {
+                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
 
                 if (CrossTable[DataAddr + i].Output) {
                     DataValue[i] = the_QdataRegisters[DataAddr + i];
@@ -2070,6 +2083,11 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             } else {
                 e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
             }
+#if 0
+            if (theDevices[d].protocol == TCP) {
+                fprintf(stderr, "%s wrote %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
+            }
+#endif
             break;
         case RTU_SRV:
         case TCP_SRV:
@@ -2778,6 +2796,7 @@ static void *clientThread(void *arg)
                         }
                     }
                     if (found) {
+
                         QueueIndex = indx;
                         Operation = oper; // WRITE_*
                         DataAddr = addr;
@@ -3454,6 +3473,7 @@ void dataEngineStart(void)
         fprintf(stderr, "Missing retentive file.\n");
     } else {
         retentive = (u_int32_t *)ptRetentive;
+
         OS_MEMCPY(the_QdataRegisters, retentive, lenRetentive);
         if (lenRetentive != LAST_RETENTIVE * 4) {
             fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
@@ -3668,7 +3688,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                 u_int16_t d = CrossTable[addr].device;
 
                                 if (d != 0xffff && theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    register int types, base, size, n, total;
+                                    register int base, size, types, n, total;
 
                                     flags[addr] = 0; // zeroes the write flag only if can write in queue
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = addr;
