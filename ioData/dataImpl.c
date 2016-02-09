@@ -59,8 +59,8 @@
 #endif
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#define MAX_SERVERS  5 // 3 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV (PLC in dataMain->dataNotifySet/Get)
-#define MAX_DEVICES 64 // 1 PLC + 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
+#define MAX_SERVERS  5 // 3 RTU_SRV + 1 TCP_SRV + 1 TCPRTU_SRV (PLC in dataMain->dataNotifySet/Get)
+#define MAX_DEVICES 32 // 1 PLC + 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
 #define MAX_NODES   64 //
 
 #define MAX_WRITES  64 // 16
@@ -251,7 +251,7 @@ static struct ServerStruct {
 } theServers[MAX_SERVERS];
 static u_int16_t theServersNumber = 0;
 
-#define MaxLocalQueue 16
+#define MaxLocalQueue 64
 static struct ClientStruct {
     // for clientThread
     enum FieldbusType protocol;
@@ -1974,11 +1974,11 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                         for (addr = base; addr < (base + size); ++addr) {
                         if (CrossTable[addr].Types == vartype
                          && CrossTable[addr].Offset == offset
-                             && !(DataAddr <= addr && addr < (DataAddr + DataNumber))) {
+                         && !(DataAddr <= addr && addr < (DataAddr + DataNumber))) {
                                 x = CrossTable[addr].Decimal; // 1..32
-                                if (x <= 16 && regs >= 1) {
+                                if (x <= 16 && regs >= 1) { // BYTE_BIT, WORD_BIT, DWORD_BIT
                                     set_word_bit(&uintRegs[r], x, the_QdataRegisters[addr]);
-                                } else if (x <= 32 && regs >= 2) {
+                                } else if (x <= 32 && regs >= 2) { // DWORD_BIT
                                     set_word_bit(&uintRegs[r + 1], x - 16, the_QdataRegisters[addr]);
                                 } else {
                                      // FIXME: assert
@@ -2033,9 +2033,9 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     // manage this and the other *_BIT variables of the same offset
                     do {
                         x = CrossTable[DataAddr + i].Decimal; // 1..32
-                        if (x <= 16 && regs >= 1) {
+                        if (x <= 16 && regs >= 1) { // BYTE_BIT, WORD_BIT, DWORD_BIT
                             set_word_bit(&uintRegs[r], x, DataValue[i]);
-                        } else if (x <= 32 && regs >= 2) {
+                        } else if (x <= 32 && regs >= 2) { // DWORD_BIT
                             set_word_bit(&uintRegs[r + 1], x - 16, DataValue[i]);
                         } else {
                             // FIXME: assert
@@ -3474,7 +3474,7 @@ void dataEngineStart(void)
     } else {
         retentive = (u_int32_t *)ptRetentive;
 
-        OS_MEMCPY(the_QdataRegisters, retentive, lenRetentive);
+        OS_MEMCPY(&the_QdataRegisters[1], retentive, lenRetentive);
         if (lenRetentive != LAST_RETENTIVE * 4) {
             fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
         }
@@ -3688,26 +3688,33 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                 u_int16_t d = CrossTable[addr].device;
 
                                 if (d != 0xffff && theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    register int base, size, types, n, total;
+                                    register int base, size, type, n, total, offset;
 
-                                    flags[addr] = 0; // zeroes the write flag only if can write in queue
+                                    flags[addr] = 0; // zeroes the write flag only if we can write in queue
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = addr;
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[addr];
                                     // are there any other consecutive writes to the same block?
                                     base = CrossTable[addr].BlockBase;
                                     size = CrossTable[addr].BlockSize;
-                                    types = CrossTable[addr].Types;
+                                    type = CrossTable[addr].Types;
+                                    offset = CrossTable[addr].Offset;
                                     for (n = 1, total = 1; (addr + n) < (base + size) && total < MAX_WRITES; ++n) {
-                                        if (CrossTable[addr + n].Types != types) {
-                                            break; // only group variables of the same type
+                                        // in Modbus clients we cannot mix BIT and non BIT variables
+                                        if ((type == RTU || type == TCP || type == TCPRTU)
+                                            && ((type == BIT && CrossTable[addr + n].Types != BIT)
+                                               || (type != BIT && CrossTable[addr + n].Types == BIT))) {
+                                            break;
                                         }
-                                        if (flags[addr + n] != 0) {
-                                            total += 1; // will be WRITE_MULTIPLE
-                                            flags[addr + n] = 0;
-                                            theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[addr + n];
-                                        } else {
-                                            break; // only sequential writes FIXME: filter *_BIT
+                                        // only sequential writes, with the exception of *_BIT of the same offset
+                                        if (flags[addr + n] == 0
+                                           && !((type == BYTE_BIT || type == WORD_BIT || type == DWORD_BIT)
+                                                && type == CrossTable[addr + n].Types
+                                                && offset == CrossTable[addr + n].Offset)) {
+                                            break;
                                         }
+                                        total += 1; // will be WRITE_MULTIPLE
+                                        flags[addr + n] = 0;
+                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[addr + n];
                                     }
                                     theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = total;
                                     addr += (total - 1);

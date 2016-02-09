@@ -267,9 +267,9 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 
 	if (stacksize < PTHREAD_STACK_MIN) {
 		stacksize = PTHREAD_STACK_MIN;
-#if 0
-		stacksize = 131072;
-#endif
+	}
+    if (stacksize < 65536) {
+		stacksize = 65536;
 	}
 
     pthread_attr_setdetachstate(attr_p, PTHREAD_CREATE_DETACHED);
