@@ -193,7 +193,7 @@ enum TableType {Crosstable_csv = 0, Alarms_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV};
 enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
 enum EventAlarm { Event = 0, Alarm};
-static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
+static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "MECT", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
 
 enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
 enum DeviceStatus  {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
@@ -240,6 +240,7 @@ static struct ServerStruct {
             u_int16_t port;
         } tcp_ip;
     } u;
+    u_int16_t NodeId;
     //
     char name[MAX_THREADNAME_LEN]; // "(64)TCPRTUSRV_123.567.901.345_65535"
     pthread_t thread_id;
@@ -1364,6 +1365,7 @@ static int checkServersDevicesAndNodes()
                     default:
                         ;
                     }
+                    theServers[s].NodeId = CrossTable[i].NodeId;
                     theServers[s].thread_id = 0;
                     theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -2262,7 +2264,8 @@ static void *serverThread(void *arg)
     default:
         ;
     }
-    if (modbus_ctx != NULL && theServers[s].mb_mapping != NULL) {
+    if (modbus_ctx != NULL && theServers[s].mb_mapping != NULL
+     && modbus_set_slave(modbus_ctx, theServers[s].NodeId) == 0) {
         threadInitOK = TRUE;
     }
 
@@ -3465,8 +3468,13 @@ void dataEngineStart(void)
     app_config_dump(&system_ini);
 #endif
 
-    // retentive variables
+    // cleanup variables
     bzero(the_QdataRegisters, sizeof(the_QdataRegisters));
+    bzero(the_IdataRegisters, sizeof(the_IdataRegisters));
+    bzero(the_QsyncRegisters, sizeof(the_QsyncRegisters));
+    bzero(the_IsyncRegisters, sizeof(the_IsyncRegisters));
+
+    // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
     if (ptRetentive == MAP_FAILED) {
         retentive = NULL;
@@ -3474,13 +3482,13 @@ void dataEngineStart(void)
     } else {
         retentive = (u_int32_t *)ptRetentive;
 
-        OS_MEMCPY(&the_QdataRegisters[1], retentive, lenRetentive);
-        if (lenRetentive != LAST_RETENTIVE * 4) {
+        if (lenRetentive == LAST_RETENTIVE * 4) {
+            OS_MEMCPY(&the_QdataRegisters[1], retentive, LAST_RETENTIVE * 4);
+        } else {
             fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
         }
     }
 #endif
-    OS_MEMCPY(the_IdataRegisters, the_QdataRegisters, sizeof(the_QdataRegisters));
 
     // initialize data array
     PLCRevision01 = REVISION_HI;
