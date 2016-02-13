@@ -72,7 +72,7 @@
 #define THE_SERVER_DELAY_ms     1000
 #define THE_CONNECTION_DELAY_ms 1000
 #define THE_DEVICE_BLACKLIST_ms 4000
-#define THE_DEVICE_SILENCE_ms   9999
+#define THE_DEVICE_SILENCE_ms   20000 // tpac boot time
 
 // -------- MANAGE THREADS: DATA & SYNCRO
 #define THE_UDP_TIMEOUT_ms	500
@@ -96,6 +96,7 @@ static int system_ini_ok;
 #define	THE_DATA_RECV_PORT	34903
 #define	THE_DATA_SEND_PORT	34902
 
+static u_int32_t the_IdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
 static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
 static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
@@ -112,6 +113,7 @@ static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 #define	THE_SYNC_RECV_PORT	34905
 #define	THE_SYNC_SEND_PORT	34904
 
+static u_int16_t the_IsyncBuffer[REG_SYNC_NUMBER]; // udp recv buffer
 static u_int16_t the_IsyncRegisters[REG_SYNC_NUMBER]; // %I Array delle CODE in lettura
 static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in scrittura
 
@@ -365,11 +367,9 @@ static IEC_BOOL engineRunning	= FALSE;
 static IEC_BOOL engineExiting	= FALSE;
 
 static pthread_t theEngineThread_id = -1;
-static pthread_t theDataThread_id = -1;
-static pthread_t theSyncThread_id = -1;
+static pthread_t theDataSyncThread_id = -1;
 static enum threadStatus theEngineThreadStatus = NOT_STARTED;
-static enum threadStatus theDataThreadStatus = NOT_STARTED;
-static enum threadStatus theSyncThreadStatus = NOT_STARTED;
+static enum threadStatus theDataSyncThreadStatus = NOT_STARTED;
 
 static STaskInfoVMM *pVMM = NULL;
 static u_int32_t ErrorsState;
@@ -392,8 +392,7 @@ static int CommEnabled;
 /* ----  Local Functions:	--------------------------------------------------- */
 
 static void *engineThread(void *statusAdr);
-static void *dataThread(void *statusAdr);
-static void *syncroThread(void *statusAdr);
+static void *datasyncThread(void *statusAdr);
 static void *serverThread(void *statusAdr);
 static void *clientThread(void *statusAdr);
 
@@ -406,6 +405,9 @@ static void AlarmMngr(void);
 static void ErrorMNG(void);
 static void LocalIO(void);
 static void PLCsync(void);
+
+static void zeroNodeVariables(u_int32_t node);
+static void zeroDeviceVariables(u_int32_t d);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -1093,7 +1095,7 @@ static void PLCsync(void)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
         oper = the_IsyncRegisters[indx] & QueueOperMask;
         addr = the_IsyncRegisters[indx] & QueueAddrMask;
-        if (0 < addr && addr < DimCrossTable) {
+        if (1 <= addr && addr <= DimCrossTable) {
             switch (oper) {
             case NOP:
                 the_QsyncRegisters[indx] = QUEUE_EMPTY;
@@ -1189,8 +1191,9 @@ static void LocalIO(void)
     PLC_time = tic_ms / 1000.0;
     // PLC_timeWin    AT %QD0.21572: REAL; 5393
     memcpy(&PLC_timeWin, &the_QdataRegisters[5393], sizeof(u_int32_t));
-    if (PLC_timeWin < 1.0) {
-        PLC_timeWin = 1.0;
+    if (PLC_timeWin < 5.0) {
+        PLC_timeWin = 5.0;
+        memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
     }
     if (PLC_time <= PLC_timeWin) {
         PLC_timeMin = 0;
@@ -1494,6 +1497,9 @@ static int checkServersDevicesAndNodes()
                     sem_init(&theDevices[d].newOperations, 0, 0);
                     theDevices[d].writeOperations = 0;
                     theDevices[d].writeResetIndex = 0;
+                    theDevices[d].PLCwriteRequestNumber = 0;
+                    theDevices[d].PLCwriteRequestGet = 0;
+                    theDevices[d].PLCwriteRequestPut = 0;
                     // theDevices[d].modbus_ctx .last_good_ms, PLCwriteRequests, PLCwriteRequestNumber, PLCwriteRequestGet, PLCwriteRequestPut
                 }
                 // add variable's node
@@ -1588,15 +1594,10 @@ static void *engineThread(void *statusAdr)
             }
         }
         // create udp servers
-        if (osPthreadCreate(&theDataThread_id, NULL, &dataThread, &theDataThreadStatus, "data", 0) == 0) {
+        if (osPthreadCreate(&theDataSyncThread_id, NULL, &datasyncThread, &theDataSyncThreadStatus, "datasync", 0) == 0) {
             do {
                 osSleep(THE_CONFIG_DELAY_ms); // not sched_yield();
-            } while (theDataThreadStatus != RUNNING);
-        }
-        if (osPthreadCreate(&theSyncThread_id, NULL, &syncroThread, &theSyncThreadStatus, "syncro", 0) == 0) {
-            do {
-                osSleep(THE_CONFIG_DELAY_ms); // not sched_yield();
-            } while (theSyncThreadStatus != RUNNING);
+            } while (theDataSyncThreadStatus != RUNNING);
         }
         if  (ALCrossTableState) {
             CommEnabled = TRUE;
@@ -1662,15 +1663,18 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
             break;
         case BYTE_BIT:
         case WORD_BIT:
-        case DWORD_BIT:
-            retval += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
-            // skip the other *_BIT variables of the same offset
-            while (i < DataNumber
-                && CrossTable[DataAddr + i + 1].Types == CrossTable[DataAddr + i].Types
-                && CrossTable[DataAddr + i + 1].Offset == CrossTable[DataAddr + i].Offset) {
-                ++i;
-            }
-            break;
+        case DWORD_BIT: {
+            register enum varTypes vartype = CrossTable[DataAddr + i].Types;
+            register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+
+            do {
+                // skip the other *_BIT variables of the same offset
+            } while ((i + 1) < DataNumber
+                && CrossTable[DataAddr + (i + 1)].Types == vartype
+                && CrossTable[DataAddr + (i + 1)].Offset == offset
+                && ++i);
+            retval += (vartype == DWORD_BIT) ? 2 : 1;
+        }   break;
         default:
             ; // FIXME: assert
         }
@@ -1709,10 +1713,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             if (CrossTable[DataAddr].Types == BIT) {
                 bzero(bitRegs, sizeof(bitRegs));
                 e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (regs == 1) {
-                bzero(uintRegs, sizeof(uintRegs));
-                e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, 1, uintRegs);
-            } else if (regs > 1) {
+            } else {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
             }
@@ -1733,10 +1734,10 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                                 uintRegs[r] = theServers[server].mb_mapping->tab_registers[base + r];
                             }
                         }
-                        e = 0;
+                        e = regs;
                     }
                     pthread_mutex_unlock(&theServers[server].mutex);
-#if 0
+#ifdef VERBOSE_DEBUG
                     if (theDevices[d].protocol == TCP_SRV) {
                         fprintf(stderr, "%s read %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
                     }
@@ -1747,78 +1748,136 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
         default:
             ;
         }
-        switch (e) {
-        case -1: // OTHER_ERROR
-            retval = CommError;
-            break;
-        case -2: // TIMEOUT_ERROR
-            retval = TimeoutError;
-            break;
-        default:
+        if (e == regs) {
             retval = NoError;
             for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
-                register u_int8_t *p = (u_int8_t *)&uintRegs[r];
-                register u_int8_t a = p[0];
-                register u_int8_t b = p[1];
-                register u_int8_t c = p[2];
-                register u_int8_t d = p[3];
-
-                if (CrossTable[DataAddr + i].Output && (CrossTable[DataAddr + i].Protocol == RTU_SRV
-                    || CrossTable[DataAddr + i].Protocol == TCP_SRV || CrossTable[DataAddr + i].Protocol == TCPRTU_SRV)) {
-                    // FIXME: manage also r
-                    // DataValue[i] = the_QdataRegisters[DataAddr + i];
-                    // continue;
-                }
-                switch (CrossTable[DataAddr + i].Types) {
-                case       BIT:
-                        DataValue[i] = bitRegs[r]; r += 1;
-                        break;
-                case  BYTE_BIT:
-                case  WORD_BIT:
-                case DWORD_BIT:
+#define DO_READ_OUTPUTS
+#ifndef DO_READ_OUTPUTS
+                if (CrossTable[DataAddr + i].Output) {
+                    DataValue[i] = the_QdataRegisters[DataAddr + i];
+                    switch (CrossTable[DataAddr + i].Types) {
+                    case BIT:
+                         r += 1;
+                         break;
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
                         // manage this and the other *_BIT variables of the same offset
                         do {
-                            x = CrossTable[DataAddr + i].Decimal; // 1..32
-                            if (x <= 16 && regs >= 1) {
-                                DataValue[i] = get_word_bit(uintRegs[r], x);
-                            } else if (x <= 32 && regs == 2) {
-                                DataValue[i] = get_word_bit(uintRegs[r + 1], x - 16);
-                            } else {
-                                // FIXME: assert
-                            }
+                            DataValue[i] = the_QdataRegisters[DataAddr + i];
                         } while ((i + 1) < DataNumber
                             && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
                             && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset
                             && ++i);
                         r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
                         break;
-                case  UINT16:
-                case   INT16:
-                    DataValue[i] = uintRegs[r]; r += 1; break;
-                case  UINT16BA:
-                case   INT16BA:
-                    DataValue[i] = b + (a << 8); r += 1; break;
-                case UDINT:
-                case  DINT:
-                case REAL:
-                    DataValue[i] = a + (b << 8) + (c << 16) + (d << 24); r += 2; break;
-                case UDINTCDAB:
-                case  DINTCDAB:
-                case REALCDAB:
+                    case UINT16:
+                    case INT16:
+                    case UINT16BA:
+                    case INT16BA:
+                        r += 1;
+                        break;
+                    case UDINT:
+                    case DINT:
+                    case REAL:
+                    case UDINTCDAB:
+                    case DINTCDAB:
+                    case REALCDAB:
+                    case UDINTDCBA:
+                    case DINTDCBA:
+                    case REALDCBA:
+                    case UDINTBADC:
+                    case DINTBADC:
+                    case REALBADC:
+                        r += 2;
+                        break;
+                    default:
+                        ;
+                    }
+                } else {
+#endif
+                    register u_int8_t a = (uintRegs[r] & 0x00FF);
+                    register u_int8_t b = (uintRegs[r] & 0xFF00) >> 8;
+                    register u_int8_t c = (uintRegs[r + 1] & 0x00FF);
+                    register u_int8_t d = (uintRegs[r + 1] & 0xFF00) >> 8;
 
-                    DataValue[i] = c + (d << 8) + (a << 16) + (b << 24); r += 2; break;
-                case UDINTDCBA:
-                case  DINTDCBA:
-                case REALDCBA:
-                    DataValue[i] = d + (c << 8) + (b << 16) + (a << 24); r += 2; break;
-                case UDINTBADC:
-                case  DINTBADC:
-                case REALBADC:
-                    DataValue[i] = b + (a << 8) + (d << 16) + (c << 24); r += 2; break;
-                default:
-                    ;
+                    switch (CrossTable[DataAddr + i].Types) {
+                    case BIT:
+                        DataValue[i] = bitRegs[r];
+                        r += 1;
+                        break;
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT: {
+                        register enum varTypes vartype = CrossTable[DataAddr + i].Types;
+                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+
+                        do {
+                            // manage this and the other *_BIT variables of the same offset
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            if (x <= 16) {
+                                DataValue[i] = get_word_bit(uintRegs[r], x);
+                            } else if (x <= 32 && (r + 1) < regs) {
+                                DataValue[i] = get_word_bit(uintRegs[r + 1], x - 16);
+                            } else {
+                                DataValue[i] = 0; // FIXME: assert
+                            }
+                        } while ((i + 1) < DataNumber
+                            && CrossTable[DataAddr + (i + 1)].Types == vartype
+                            && CrossTable[DataAddr + (i + 1)].Offset == offset
+                            && ++i);
+                        r += (vartype == DWORD_BIT) ? 2 : 1;
+                    }   break;
+                    case UINT16:
+                    case INT16:
+                        DataValue[i] = uintRegs[r];
+                        r += 1;
+                        break;
+                    case UINT16BA:
+                    case INT16BA:
+                        DataValue[i] = b + (a << 8);
+                        r += 1;
+                        break;
+                    case UDINT:
+                    case DINT:
+                    case REAL:
+                        DataValue[i] = a + (b << 8) + (c << 16) + (d << 24);
+                        r += 2;
+                        break;
+                    case UDINTCDAB:
+                    case DINTCDAB:
+                    case REALCDAB:
+                        DataValue[i] = c + (d << 8) + (a << 16) + (b << 24);
+                        r += 2;
+                        break;
+                    case UDINTDCBA:
+                    case DINTDCBA:
+                    case REALDCBA:
+                        DataValue[i] = d + (c << 8) + (b << 16) + (a << 24);
+                        r += 2;
+                        break;
+                    case UDINTBADC:
+                    case DINTBADC:
+                    case REALBADC:
+                        DataValue[i] = b + (a << 8) + (d << 16) + (c << 24);
+                        r += 2;
+                        break;
+                    default:
+                        ;
+                    }
+#ifndef DO_READ_OUTPUTS
                 }
+#endif
             }
+        } else if (e == -1) { // OTHER_ERROR
+            retval = CommError;
+        } else if (e == -2) { // TIMEOUT_ERROR
+            retval = TimeoutError;
+        } else {
+#ifdef VERBOSE_DEBUG
+			fprintf(stderr, "fieldbusRead(): regs = %d, e = %d\n", regs, e); 
+#endif
+            retval = CommError;
         }
         break;
     case CANOPEN:
@@ -1826,90 +1885,92 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
         if (device != 0xffff) {
             u_int8_t channel = theDevices[device].port;
             for (i = 0; i < DataNumber; ++i) {
+                register enum varTypes vartype = CrossTable[DataAddr + i].Types;
                 register u_int16_t offset = CrossTable[DataAddr + i].Offset;
 
+                // cannot read outputs, anyway
                 if (CrossTable[DataAddr + i].Output) {
-                    DataValue[i] = the_QdataRegisters[DataAddr + i];
-                    continue;
-                }
-                switch (CrossTable[DataAddr + i].Types) {
-                case BIT: {
-                    u_int8_t a;
-                    e = CANopenReadPDOBit(channel, offset, &a);
-                    DataValue[i] = a;
-                }   break;
-                case  BYTE_BIT: {
-                    u_int8_t a;
-                    e = CANopenReadPDOByte(channel, offset, &a);
-                    do {
-                        x = CrossTable[DataAddr + i].Decimal; // 1..8
-                    	DataValue[i] = get_byte_bit(a, x);
-                    } while ((i + 1) < DataNumber
-                        && CrossTable[DataAddr + (i + 1)].Types == BYTE_BIT
-                        && CrossTable[DataAddr + (i + 1)].Offset == offset
-                        && ++i);
-                }   break;
-                case  WORD_BIT: {
-                    u_int16_t a;
-                    e = CANopenReadPDOWord(channel, offset, &a);
-                    do {
-                        x = CrossTable[DataAddr + i].Decimal; // 1..16
-                    	DataValue[i] = get_word_bit(a, x);
-                    } while ((i + 1) < DataNumber
-                        && CrossTable[DataAddr + (i + 1)].Types == WORD_BIT
-                        && CrossTable[DataAddr + (i + 1)].Offset == offset
-                        && ++i);
-                }   break;
-                case DWORD_BIT:{
-                    u_int32_t a;
-                    e = CANopenReadPDODword(channel, offset, &a);
-                    do {
-                    	x = CrossTable[DataAddr + i].Decimal; // 1..32
-                    	DataValue[i] = get_dword_bit(a, x);
-                    } while ((i + 1) < DataNumber
-                        && CrossTable[DataAddr + (i + 1)].Types == DWORD_BIT
-                        && CrossTable[DataAddr + (i + 1)].Offset == offset
-                        && ++i);
-                }   break;
-                case  UINT16:
-                case INT16: {
-                    u_int16_t a;
-                    e = CANopenReadPDOWord(channel, offset, &a);
-                    DataValue[i] = a;
-                }   break;
-                case  UINT16BA:
-                case   INT16BA:
-                    // FIXME: assert
-                    break;
-                case UDINT:
-                case  DINT:
-                case REAL: {
-                    u_int32_t a;
-                    e = CANopenReadPDODword(channel, offset, &a);
-                    DataValue[i] = a;
-                }   break;
-                case UDINTCDAB:
-                case  DINTCDAB:
-                case REALCDAB:
-                    // FIXME: assert
-                    break;
-               case UDINTDCBA:
-               case  DINTDCBA:
-               case REALDCBA:
-                    // FIXME: assert
-                    break;
-               case UDINTBADC:
-               case  DINTBADC:
-               case REALBADC:
-                    // FIXME: assert
-                    break;
-               default:
-                    ;
+                    DataValue[i] = the_QdataRegisters[DataAddr + i];                    
+                } else {
+                    switch (CrossTable[DataAddr + i].Types) {
+                    case BIT: {
+                        u_int8_t a;
+                        e = CANopenReadPDOBit(channel, offset, &a);
+                        DataValue[i] = a;
+                    }   break;
+                    case  BYTE_BIT: {
+                        u_int8_t a;
+                        e = CANopenReadPDOByte(channel, offset, &a);
+                        do {
+                            x = CrossTable[DataAddr + i].Decimal; // 1..8
+                            DataValue[i] = get_byte_bit(a, x);
+                        } while ((i + 1) < DataNumber
+                            && CrossTable[DataAddr + (i + 1)].Types == vartype
+                            && CrossTable[DataAddr + (i + 1)].Offset == offset
+                            && ++i);
+                    }   break;
+                    case  WORD_BIT: {
+                        u_int16_t a;
+                        e = CANopenReadPDOWord(channel, offset, &a);
+                        do {
+                            x = CrossTable[DataAddr + i].Decimal; // 1..16
+                            DataValue[i] = get_word_bit(a, x);
+                        } while ((i + 1) < DataNumber
+                            && CrossTable[DataAddr + (i + 1)].Types == vartype
+                            && CrossTable[DataAddr + (i + 1)].Offset == offset
+                            && ++i);
+                    }   break;
+                    case DWORD_BIT:{
+                        u_int32_t a;
+                        e = CANopenReadPDODword(channel, offset, &a);
+                        do {
+                            x = CrossTable[DataAddr + i].Decimal; // 1..32
+                            DataValue[i] = get_dword_bit(a, x);
+                        } while ((i + 1) < DataNumber
+                            && CrossTable[DataAddr + (i + 1)].Types == vartype
+                            && CrossTable[DataAddr + (i + 1)].Offset == offset
+                            && ++i);
+                    }   break;
+                    case  UINT16:
+                    case INT16: {
+                        u_int16_t a;
+                        e = CANopenReadPDOWord(channel, offset, &a);
+                        DataValue[i] = a;
+                    }   break;
+                    case  UINT16BA:
+                    case   INT16BA:
+                        // FIXME: assert
+                        break;
+                    case UDINT:
+                    case  DINT:
+                    case REAL: {
+                        u_int32_t a;
+                        e = CANopenReadPDODword(channel, offset, &a);
+                        DataValue[i] = a;
+                    }   break;
+                    case UDINTCDAB:
+                    case  DINTCDAB:
+                    case REALCDAB:
+                        // FIXME: assert
+                        break;
+                   case UDINTDCBA:
+                   case  DINTDCBA:
+                   case REALDCBA:
+                        // FIXME: assert
+                        break;
+                   case UDINTBADC:
+                   case  DINTBADC:
+                   case REALBADC:
+                        // FIXME: assert
+                        break;
+                   default:
+                        ;
+                   }
                }
                if (e) {
                     retval = TimeoutError; // CommError;
                     break;
-              }
+               }
             }
 #ifdef VERBOSE_DEBUG
             fprintf(stderr, "%d vars @ %d: ", DataNumber, DataAddr);
@@ -1961,8 +2022,9 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             // *_BIT management
             for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
                 switch (CrossTable[DataAddr + i].Types) {
-                case       BIT:
-                    r += 1; break; // FIXME: assert
+                case BIT:
+                    r += 1; // FIXME: assert
+                    break;
                 case  BYTE_BIT:
                 case  WORD_BIT:
                 case DWORD_BIT: {
@@ -1972,104 +2034,121 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int16_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
 
-                    // init the buffer bits with ALL the actual bit values from the_QdataRegisters
-                        for (addr = base; addr < (base + size); ++addr) {
+                    // init the buffer bits with ALL the other actual bit values from the_QdataRegisters
+                    for (addr = base; addr < (base + size); ++addr) {
                         if (CrossTable[addr].Types == vartype
                          && CrossTable[addr].Offset == offset
                          && !(DataAddr <= addr && addr < (DataAddr + DataNumber))) {
-                                x = CrossTable[addr].Decimal; // 1..32
-                                if (x <= 16 && regs >= 1) { // BYTE_BIT, WORD_BIT, DWORD_BIT
-                                    set_word_bit(&uintRegs[r], x, the_QdataRegisters[addr]);
-                                } else if (x <= 32 && regs >= 2) { // DWORD_BIT
-                                    set_word_bit(&uintRegs[r + 1], x - 16, the_QdataRegisters[addr]);
-                                } else {
-                                     // FIXME: assert
-                                }
+                            x = CrossTable[addr].Decimal; // 1..32
+                            if (x <= 16) { // BYTE_BIT, WORD_BIT, DWORD_BIT
+                                set_word_bit(&uintRegs[r], x, the_QdataRegisters[addr]);
+                            } else if (x <= 32 && (r + 1) < regs) { // DWORD_BIT
+                                set_word_bit(&uintRegs[r + 1], x - 16, the_QdataRegisters[addr]);
+                            } else {
+                                 // FIXME: assert
                             }
                         }
-                    // increment the buffer index
-                    r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
-                    // skip the other *_BIT variables of the same offset
-                    while ((i + 1) < DataNumber
-                        && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
-                        && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset) {
-                        ++i;
                     }
+                    do {
+                        // skip the other *_BIT variables of the same offset
+                    } while ((i + 1) < DataNumber
+                        && CrossTable[DataAddr + (i + 1)].Types == vartype
+                        && CrossTable[DataAddr + (i + 1)].Offset == offset
+                        && ++i);
+                    r += (vartype == DWORD_BIT) ? 2 : 1;
                 }   break;
-                case  UINT16:
-                case   INT16:
-                case  UINT16BA:
-                case   INT16BA:
-                    r += 1; break;
+                case UINT16:
+                case INT16:
+                case UINT16BA:
+                case INT16BA:
+                    r += 1;
+                    break;
                 case UDINT:
-                case  DINT:
+                case DINT:
                 case REAL:
                 case UDINTCDAB:
-                case  DINTCDAB:
+                case DINTCDAB:
                 case REALCDAB:
                 case UDINTDCBA:
-                case  DINTDCBA:
+                case DINTDCBA:
                 case REALDCBA:
                 case UDINTBADC:
-                case  DINTBADC:
+                case DINTBADC:
                 case REALBADC:
-                    r += 2; break;
+                    r += 2;
+                    break;
                 default:
                     ;
                 }
             }
         }
         for (i = 0, r = 0; i < DataNumber && r < regs; ++i) {
-            register u_int8_t *p = (u_int8_t *)&DataValue[i];
-            register u_int8_t a = p[0];
-            register u_int8_t b = p[1];
-            register u_int8_t c = p[2];
-            register u_int8_t d = p[3];
+            register u_int8_t a = (DataValue[i] & 0x000000FF);
+            register u_int8_t b = (DataValue[i] & 0x0000FF00) >>  8;
+            register u_int8_t c = (DataValue[i] & 0x00FF0000) >> 16;
+            register u_int8_t d = (DataValue[i] & 0xFF000000) >> 24;
 
             switch (CrossTable[DataAddr + i].Types) {
-            case       BIT:
-                    bitRegs[r] = DataValue[i]; r += 1; break;
-            case  BYTE_BIT:
-            case  WORD_BIT:
-            case DWORD_BIT:
+            case BIT:
+                bitRegs[r] = DataValue[i]; r += 1; break;
+            case BYTE_BIT:
+            case WORD_BIT:
+            case DWORD_BIT: {
+                register enum varTypes vartype = CrossTable[DataAddr + i].Types;
+                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+
+                do {
                     // manage this and the other *_BIT variables of the same offset
-                    do {
-                        x = CrossTable[DataAddr + i].Decimal; // 1..32
-                        if (x <= 16 && regs >= 1) { // BYTE_BIT, WORD_BIT, DWORD_BIT
-                            set_word_bit(&uintRegs[r], x, DataValue[i]);
-                        } else if (x <= 32 && regs >= 2) { // DWORD_BIT
-                            set_word_bit(&uintRegs[r + 1], x - 16, DataValue[i]);
-                        } else {
-                            // FIXME: assert
-                        }
-                    } while ((i + 1) < DataNumber
-                          && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
-                          && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset
-                          && ++i);
-                    r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
-                    break;
-            case  UINT16:
-            case   INT16:
-                uintRegs[r] = DataValue[i]; r += 1; break;
-            case  UINT16BA:
-            case   INT16BA:
-                uintRegs[r] = b + (a << 8); r += 1; break;
+                    x = CrossTable[DataAddr + i].Decimal; // 1..32
+                    if (x <= 16) { // BYTE_BIT, WORD_BIT, DWORD_BIT
+                        set_word_bit(&uintRegs[r], x, DataValue[i]);
+                    } else if (x <= 32 && (r + 1) < regs) { // DWORD_BIT
+                        set_word_bit(&uintRegs[r + 1], x - 16, DataValue[i]);
+                    }
+                } while ((i + 1) < DataNumber
+                      && CrossTable[DataAddr + (i + 1)].Types == vartype
+                      && CrossTable[DataAddr + (i + 1)].Offset == offset
+                      && ++i);
+                r += (vartype == DWORD_BIT) ? 2 : 1;
+            }   break;
+            case UINT16:
+            case INT16:
+                uintRegs[r] = DataValue[i];
+                r += 1;
+                break;
+            case UINT16BA:
+            case  INT16BA:
+                uintRegs[r] = b + (a << 8);
+                r += 1;
+                break;
             case UDINT:
-            case  DINT:
+            case DINT:
             case REAL:
-                uintRegs[r] = a + (b << 8); uintRegs[r + 1] = c + (d << 8); r += 2; break;
+                uintRegs[r] = a + (b << 8);
+                uintRegs[r + 1] = c + (d << 8);
+                r += 2;
+                break;
             case UDINTCDAB:
-            case  DINTCDAB:
+            case DINTCDAB:
             case REALCDAB:
-                uintRegs[r] = c + (d << 8); uintRegs[r + 1] = a + (b << 8); r += 2; break;
+                uintRegs[r] = c + (d << 8);
+                uintRegs[r + 1] = a + (b << 8);
+                r += 2;
+                break;
             case UDINTDCBA:
-            case  DINTDCBA:
+            case DINTDCBA:
             case REALDCBA:
-                uintRegs[r] = d + (c << 8); uintRegs[r + 1] = b + (a << 8); r += 2; break;
+                uintRegs[r] = d + (c << 8);
+                uintRegs[r + 1] = b + (a << 8);
+                r += 2;
+                break;
             case UDINTBADC:
-            case  DINTBADC:
+            case DINTBADC:
             case REALBADC:
-                uintRegs[r] = b + (a << 8); uintRegs[r + 1] = d + (c << 8); r += 2; break;
+                uintRegs[r] = b + (a << 8);
+                uintRegs[r + 1] = d + (c << 8);
+                r += 2;
+                break;
             default:
                 ;
             }
@@ -2085,7 +2164,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             } else {
                 e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
             }
-#if 0
+#ifdef VERBOSE_DEBUG
             if (theDevices[d].protocol == TCP) {
                 fprintf(stderr, "%s wrote %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
             }
@@ -2129,15 +2208,15 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         device = CrossTable[DataAddr].device;
         if (device != 0xffff) {
             u_int8_t channel = theDevices[device].port;
-                    for (i = 0; i < DataNumber; ++i) {
-                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+            for (i = 0; i < DataNumber; ++i) {
+                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
 
                 switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
                     e = CANopenWritePDOBit(channel, offset, DataValue[i]);
                     break;
-                case  BYTE_BIT:
-                case  WORD_BIT:
+                case BYTE_BIT:
+                case WORD_BIT:
                 case DWORD_BIT:  {
                     register u_int16_t addr;
                     register u_int16_t base = CrossTable[DataAddr + i].BlockBase;
@@ -2174,38 +2253,32 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     default:
                         ; // FIXME: assert
                     }
-                    // skip the other *_BIT variables of the same offset
-                    while ((i + 1) < DataNumber
+                    do {
+                        // skip the other *_BIT variables of the same offset
+                    } while ((i + 1) < DataNumber
                         && CrossTable[DataAddr + (i + 1)].Types == vartype
-                        && CrossTable[DataAddr + (i + 1)].Offset == offset) {
-                        ++i;
-                    }
+                        && CrossTable[DataAddr + (i + 1)].Offset == offset
+                        && ++i);
                 }   break;
-                case    UINT16:
-                case     INT16:
+                case UINT16:
+                case INT16:
                     e = CANopenWritePDOWord(channel, offset, DataValue[i]);
                     break;
-                case    UINT16BA:
-                case     INT16BA:
-                    // FIXME: assert
-                    break;
                 case UDINT:
-                case  DINT:
+                case DINT:
                 case REAL:
                     e = CANopenWritePDODword(channel, offset, DataValue[i]);
                     break;
+                case UINT16BA:
+                case INT16BA:
                 case UDINTCDAB:
                 case  DINTCDAB:
                 case REALCDAB:
-                    // FIXME: assert
-                    break;
                 case UDINTDCBA:
-                case  DINTDCBA:
+                case DINTDCBA:
                 case REALDCBA:
-                    // FIXME: assert
-                    break;
                 case UDINTBADC:
-                case  DINTBADC:
+                case DINTBADC:
                 case REALBADC:
                     // FIXME: assert
                     break;
@@ -2408,6 +2481,30 @@ static void *serverThread(void *arg)
     fprintf(stderr, "EXITING: %s\n", theServers[s].name);
     theServers[s].thread_status = EXITING;
     return arg;
+}
+
+static void zeroNodeVariables(u_int32_t node)
+{
+    u_int16_t addr;
+
+    fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
+            writeQdataRegisters(addr, 0);
+        }
+    }
+}
+
+static void zeroDeviceVariables(u_int32_t d)
+{
+    u_int16_t addr;
+
+    fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
+            writeQdataRegisters(addr, 0);
+        }
+    }
 }
 
 // RTU_Communication.st
@@ -2883,7 +2980,7 @@ static void *clientThread(void *arg)
                             }
                             if (found) {
                                 QueueIndex = indx;
-                                DataAddr = CrossTable[addr].BlockBase;
+                                DataAddr = addr; // CrossTable[addr].BlockBase;
                                 DataNumber = CrossTable[addr].BlockSize;
                                 Operation = READ;
                                 // data values will be available after the fieldbus access
@@ -2937,9 +3034,11 @@ static void *clientThread(void *arg)
                     } else {
                         modbus_close(theDevices[d].modbus_ctx);
                         changeDeviceStatus(d, DEVICE_BLACKLIST);
+                        zeroDeviceVariables(d);
                     }
                 } else {
                     changeDeviceStatus(d, DEVICE_BLACKLIST);
+                    zeroDeviceVariables(d);
                 }
                 break;
             case CANOPEN: {
@@ -2949,6 +3048,7 @@ static void *clientThread(void *arg)
                 } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
                     // CANopenResetChannel(theDevices[d].u.can.bus);
                     changeDeviceStatus(d, DEVICE_BLACKLIST);
+                    zeroDeviceVariables(d);
                 }
             }   break;
             case MECT:
@@ -3097,9 +3197,26 @@ static void *clientThread(void *arg)
             case NODE_OK:
                 switch (error) {
                 case NoError:
-                case CommError:
                     theNodes[Data_node].status = NODE_OK;
                     DataAddr = 0; // i.e. get next
+                    break;
+                case CommError:
+                    switch (Operation) {
+                    case READ:
+                        theNodes[Data_node].status = NODE_OK;
+                        DataAddr = 0; // i.e. get next
+                        break;
+                    case WRITE_SINGLE:
+                    case WRITE_MULTIPLE:
+                    case WRITE_RIC_MULTIPLE:
+                    case WRITE_RIC_SINGLE:
+                        theNodes[Data_node].status = NODE_OK;
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        break;
+                    case WRITE_PREPARE:
+                    default:
+                        ;
+                    }
                     break;
                 case TimeoutError:
                     theNodes[Data_node].RetryCounter = 0;
@@ -3113,9 +3230,26 @@ static void *clientThread(void *arg)
             case TIMEOUT:
                 switch (error) {
                 case NoError:
-                case CommError:
                     theNodes[Data_node].status = NODE_OK;
                     DataAddr = 0; // i.e. get next
+                    break;
+                case CommError:
+                    switch (Operation) {
+                    case READ:
+                        theNodes[Data_node].status = NODE_OK;
+                        DataAddr = 0; // i.e. get next
+                        break;
+                    case WRITE_SINGLE:
+                    case WRITE_MULTIPLE:
+                    case WRITE_RIC_MULTIPLE:
+                    case WRITE_RIC_SINGLE:
+                        theNodes[Data_node].status = NODE_OK;
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        break;
+                    case WRITE_PREPARE:
+                    default:
+                        ;
+                    }
                     break;
                 case TimeoutError:
                     theNodes[Data_node].RetryCounter += 1;
@@ -3125,6 +3259,19 @@ static void *clientThread(void *arg)
                     } else {
                         theNodes[Data_node].JumpRead = system_ini.system.blacklist;
                         theNodes[Data_node].status = BLACKLIST;
+                        switch (Operation) {
+                        case READ:
+                            zeroNodeVariables(Data_node);
+                            break;
+                        case WRITE_SINGLE:
+                        case WRITE_MULTIPLE:
+                        case WRITE_RIC_MULTIPLE:
+                        case WRITE_RIC_SINGLE:
+                            break;
+                        case WRITE_PREPARE:
+                        default:
+                            ;
+                        }
                         DataAddr = 0; // i.e. retry this after the others
                         sem_post(&theDevices[d].newOperations);
                     }
@@ -3271,34 +3418,43 @@ static void *clientThread(void *arg)
     return arg;
 }
 
-static void *dataThread(void *statusAdr)
+static void *datasyncThread(void *statusAdr)
 {
-    int udp_recv_socket = -1;
-    int udp_send_socket = -1;
-    struct  sockaddr_in DestinationAddress;
-    struct  sockaddr_in ServerAddress;
+    // data
+    int dataRecvSock = -1;
+    int dataSendSock = -1;
+    struct  sockaddr_in dataSendAddr;
+    struct  sockaddr_in dataRecvAddr;
+    // sync
+    int syncRecvSock = -1;
+    int syncSendSock = -1;
+    struct  sockaddr_in syncSendAddr;
+    struct  sockaddr_in syncRecvAddr;
+    // datasync
     int threadInitOK = FALSE;
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
 
-    // thread init
-    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // dataThread
-    udp_recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_recv_socket != -1) {
-        if (fcntl(udp_recv_socket, F_SETFL, O_NONBLOCK) >= 0) {
-            memset((char *)&ServerAddress,0,sizeof(ServerAddress));
-            ServerAddress.sin_family = AF_INET;
-            ServerAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-            ServerAddress.sin_port = htons((u_short)THE_DATA_RECV_PORT);
-            if (bind(udp_recv_socket, (struct sockaddr *)&ServerAddress, sizeof(ServerAddress)) >= 0) {
-                udp_send_socket = socket(AF_INET, SOCK_DGRAM, 0);
-                if (udp_send_socket >= 0) {
+    // thread init (datasync)
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // datasyncThread
+
+    // thread init (data)
+    dataRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (dataRecvSock != -1) {
+        if (fcntl(dataRecvSock, F_SETFL, O_NONBLOCK) >= 0) {
+            memset((char *)&dataRecvAddr,0,sizeof(dataRecvAddr));
+            dataRecvAddr.sin_family = AF_INET;
+            dataRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            dataRecvAddr.sin_port = htons((u_short)THE_DATA_RECV_PORT);
+            if (bind(dataRecvSock, (struct sockaddr *)&dataRecvAddr, sizeof(dataRecvAddr)) >= 0) {
+                dataSendSock = socket(AF_INET, SOCK_DGRAM, 0);
+                if (dataSendSock >= 0) {
                     struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
                     if (h != NULL) {
-                        memset(&DestinationAddress, 0, sizeof(DestinationAddress));
-                        DestinationAddress.sin_family = h->h_addrtype;
-                        memcpy((char *) &DestinationAddress.sin_addr.s_addr,
+                        memset(&dataSendAddr, 0, sizeof(dataSendAddr));
+                        dataSendAddr.sin_family = h->h_addrtype;
+                        memcpy((char *) &dataSendAddr.sin_addr.s_addr,
                                 h->h_addr_list[0], h->h_length);
-                        DestinationAddress.sin_port = htons(THE_DATA_SEND_PORT);
+                        dataSendAddr.sin_port = htons(THE_DATA_SEND_PORT);
                         threadInitOK = TRUE;
                     }
                 }
@@ -3306,143 +3462,122 @@ static void *dataThread(void *statusAdr)
         }
     }
 
-    // run
+    // thread init (sync)
+    syncRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (syncRecvSock != -1) {
+        if (fcntl(syncRecvSock, F_SETFL, O_NONBLOCK) >= 0) {
+            memset((char *)&syncRecvAddr,0,sizeof(syncRecvAddr));
+            syncRecvAddr.sin_family = AF_INET;
+            syncRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            syncRecvAddr.sin_port = htons((u_short)THE_SYNC_RECV_PORT);
+            if (bind(syncRecvSock, (struct sockaddr *)&syncRecvAddr, sizeof(syncRecvAddr)) >= 0) {
+                syncSendSock = socket(AF_INET, SOCK_DGRAM, 0);
+                if (syncSendSock >= 0) {
+                    struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
+                    if (h != NULL) {
+                        memset(&syncSendAddr, 0, sizeof(syncSendAddr));
+                        syncSendAddr.sin_family = h->h_addrtype;
+                        memcpy((char *) &syncSendAddr.sin_addr.s_addr,
+                                h->h_addr_list[0], h->h_length);
+                        syncSendAddr.sin_port = htons(THE_SYNC_SEND_PORT);
+                        threadInitOK = TRUE;
+                    }
+                }
+            }
+        }
+    }
+
+    // run (datasync)
     *threadStatusPtr = RUNNING;
     while (!engineExiting) {
-        if (engineRunning && threadInitOK) {
-            // wait on server socket, only until timeout
-            fd_set recv_set;
-            struct timeval tv;
-            FD_ZERO(&recv_set);
-            FD_SET(udp_recv_socket, &recv_set);
-            tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
-            tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
-            if (select(udp_recv_socket + 1, &recv_set, NULL, NULL, &tv) <= 0) {
-                // timeout or error
-                continue;
-            }
-            // ready data: receive and immediately reply
-            pthread_mutex_lock(&theCrosstableClientMutex);
-            {
-                int rc = do_recv(udp_recv_socket, the_IdataRegisters, THE_DATA_UDP_SIZE);
-                if (rc != THE_DATA_UDP_SIZE) {
-                    // ?
-                }
-                int sn = do_sendto(udp_send_socket, the_QdataRegisters, THE_DATA_UDP_SIZE,
-                                   &DestinationAddress);
-                if (sn != THE_DATA_UDP_SIZE) {
-                    // ?
-                }
-            }
-            pthread_mutex_unlock(&theCrosstableClientMutex);
-        } else {
+        if (!engineRunning || !threadInitOK) {
             osSleep(THE_UDP_TIMEOUT_ms);
-        }
-    }
-
-    // thread clean
-    if (udp_recv_socket != -1) {
-        shutdown(udp_recv_socket, SHUT_RDWR);
-        close(udp_recv_socket);
-        udp_recv_socket = -1;
-     }
-    if (udp_send_socket != -1) {
-        shutdown(udp_send_socket, SHUT_RDWR);
-        close(udp_send_socket);
-        udp_send_socket = -1;
-     }
-
-    // exit
-    fprintf(stderr, "EXITING: dataThread\n");
-    *threadStatusPtr = EXITING;
-    return NULL;
-}
-
-static void *syncroThread(void *statusAdr)
-{
-    int udp_recv_socket = -1;
-    int udp_send_socket = -1;
-    struct  sockaddr_in DestinationAddress;
-    struct  sockaddr_in ServerAddress;
-    int threadInitOK = FALSE;
-    enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
-
-    // thread init
-    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // syncroThread
-    udp_recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_recv_socket != -1) {
-        if (fcntl(udp_recv_socket, F_SETFL, O_NONBLOCK) >= 0) {
-            memset((char *)&ServerAddress,0,sizeof(ServerAddress));
-            ServerAddress.sin_family = AF_INET;
-            ServerAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-            ServerAddress.sin_port = htons((u_short)THE_SYNC_RECV_PORT);
-            if (bind(udp_recv_socket, (struct sockaddr *)&ServerAddress, sizeof(ServerAddress)) >= 0) {
-                udp_send_socket = socket(AF_INET, SOCK_DGRAM, 0);
-                if (udp_send_socket >= 0) {
-                    struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
-                    if (h != NULL) {
-                        memset(&DestinationAddress, 0, sizeof(DestinationAddress));
-                        DestinationAddress.sin_family = h->h_addrtype;
-                        memcpy((char *) &DestinationAddress.sin_addr.s_addr,
-                                h->h_addr_list[0], h->h_length);
-                        DestinationAddress.sin_port = htons(THE_SYNC_SEND_PORT);
-                        threadInitOK = TRUE;
-                    }
-                }
-            }
-        }
-    }
-
-    // run
-    *threadStatusPtr = RUNNING;
-    while (!engineExiting) {
-        if (engineRunning && threadInitOK) {
-            // wait on server socket, only until timeout
+        } else {
             fd_set recv_set;
             struct timeval tv;
+            int rc;
+
+            // (1) data recv, only until timeout
             FD_ZERO(&recv_set);
-            FD_SET(udp_recv_socket, &recv_set);
+            FD_SET(dataRecvSock, &recv_set);
             tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
             tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
-            if (select(udp_recv_socket + 1, &recv_set, NULL, NULL, &tv) <= 0) {
+            if (select(dataRecvSock + 1, &recv_set, NULL, NULL, &tv) <= 0) {
                 // timeout or error
                 continue;
             }
-            // ready data: receive and immediately reply
+            rc = do_recv(dataRecvSock, the_IdataBuffer, THE_DATA_UDP_SIZE);
+            if (rc != THE_DATA_UDP_SIZE) {
+                // error recovery
+                continue;
+            }
+
+            // (2) sync recv, only until timeout
+            FD_ZERO(&recv_set);
+            FD_SET(syncRecvSock, &recv_set);
+            tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
+            tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
+            if (select(syncRecvSock + 1, &recv_set, NULL, NULL, &tv) <= 0) {
+                // timeout or error
+                continue;
+            }
+            rc = do_recv(syncRecvSock, the_IsyncBuffer, THE_SYNC_UDP_SIZE);
+            if (rc != THE_SYNC_UDP_SIZE) {
+                // error recovery
+                continue;
+            }
+
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
-                int rc = do_recv(udp_recv_socket, the_IsyncRegisters, THE_SYNC_UDP_SIZE);
+            // (3) compute data sync
+                memcpy(the_IdataRegisters, the_IdataBuffer, sizeof(the_IdataRegisters));
+                memcpy(the_IsyncRegisters, the_IsyncBuffer, sizeof(the_IsyncRegisters));
+                PLCsync();
+
+            // (4) data send
+                rc = do_sendto(dataSendSock, the_QdataRegisters, THE_DATA_UDP_SIZE,
+                                   &dataSendAddr);
+                if (rc != THE_DATA_UDP_SIZE) {
+                    // FIXME: error recovery
+                }
+
+            // (5) sync send
+                rc = do_sendto(syncSendSock, the_QsyncRegisters, THE_SYNC_UDP_SIZE,
+                        &syncSendAddr);
                 if (rc != THE_SYNC_UDP_SIZE) {
                     // FIXME: error recovery
                 }
-                // PLC INTERNAL VARIABLES MANAGEMENT
-                PLCsync();
-                int sn = do_sendto(udp_send_socket, the_QsyncRegisters, THE_SYNC_UDP_SIZE,
-                        &DestinationAddress);
-                if (sn != THE_SYNC_UDP_SIZE) {
-                    // FIXME: error recovery
-                }
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
-        } else {
-            osSleep(THE_UDP_TIMEOUT_ms);
         }
     }
 
-    // thread clean
-    if (udp_recv_socket != -1) {
-        shutdown(udp_recv_socket, SHUT_RDWR);
-        close(udp_recv_socket);
-        udp_recv_socket = -1;
-     }
-    if (udp_send_socket != -1) {
-        shutdown(udp_send_socket, SHUT_RDWR);
-        close(udp_send_socket);
-        udp_send_socket = -1;
-     }
+    // thread clean (data)
+    if (dataRecvSock != -1) {
+        shutdown(dataRecvSock, SHUT_RDWR);
+        close(dataRecvSock);
+        dataRecvSock = -1;
+    }
+    if (dataSendSock != -1) {
+        shutdown(dataSendSock, SHUT_RDWR);
+        close(dataSendSock);
+        dataSendSock = -1;
+    }
+
+    // thread clean (sync)
+    if (syncRecvSock != -1) {
+        shutdown(syncRecvSock, SHUT_RDWR);
+        close(syncRecvSock);
+        syncRecvSock = -1;
+    }
+    if (syncSendSock != -1) {
+        shutdown(syncSendSock, SHUT_RDWR);
+        close(syncSendSock);
+        syncSendSock = -1;
+    }
 
     // exit
-    fprintf(stderr, "EXITING: syncroThread\n");
+    fprintf(stderr, "EXITING: datasyncThread\n");
     *threadStatusPtr = EXITING;
     return NULL;
 }
@@ -3452,10 +3587,8 @@ static void *syncroThread(void *statusAdr)
 void dataEngineStart(void)
 {
     // initialize
-    theDataThread_id = -1;
-    theDataThreadStatus = NOT_STARTED;
-    theSyncThread_id = -1;
-    theSyncThreadStatus = NOT_STARTED;
+    theDataSyncThread_id = -1;
+    theDataSyncThreadStatus = NOT_STARTED;
 
     // read the configuration file
     if (app_config_load(&system_ini)) {
@@ -3545,15 +3678,10 @@ void dataEngineStop(void)
         pthread_join(theServers[n].thread_id, &retval);
         fprintf(stderr, "joined srv(%d)\n", n);
     }
-    if (theDataThread_id != -1) {
-        pthread_join(theDataThread_id, &retval);
-        theDataThread_id = -1;
-        fprintf(stderr, "joined data\n");
-    }
-    if (theSyncThread_id != -1) {
-        pthread_join(theSyncThread_id, &retval);
-        theSyncThread_id = -1;
-        fprintf(stderr, "joined syncro\n");
+    if (theDataSyncThread_id != -1) {
+        pthread_join(theDataSyncThread_id, &retval);
+        theDataSyncThread_id = -1;
+        fprintf(stderr, "joined datasync\n");
     }
     if (theEngineThread_id != -1) {
         pthread_join(theEngineThread_id, &retval);
@@ -3668,7 +3796,12 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
 
-    if (engineRunning) {
+    if (engineInitialized) {
+        if (!engineRunning) {
+            fprintf(stderr, "dataNotifySet: called with no engine running\n");
+            uRes = ERR_NOT_CONFIGURED;
+            RETURN(uRes);
+        }
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             XX_GPIO_SET(4);
@@ -3686,27 +3819,60 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     void *pvWsegment = pIO->W.pAdr + pIO->W.ulOffs;
                     u_int32_t *values = (u_int32_t *)pvQsegment;
                     u_int32_t *flags = (u_int32_t *)pvWsegment;
-                    for (addr = 0; addr < REG_DATA_NUMBER; ++addr) {
+                    for (addr = 1; addr <= DimCrossTable; ++addr) {
                         if (flags[addr] != 0) {
                             if (CrossTable[addr].Protocol == PLC) {
+                                // PLC only, immediate writing
+                                if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
+                                    || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
+                                    // the engine seems to use only the bit#0 for bool variables
+                                    if (values[addr] & 1) {
+                                        writeQdataRegisters(addr, 1);
+                                    } else {
+                                        writeQdataRegisters(addr, 0);
+                                    }
+                                } else {
+                                    writeQdataRegisters(addr, values[addr]);
+                                }
                                 flags[addr] = 0;
-                                writeQdataRegisters(addr, values[addr]);
                             } else {
-                                // RTU, TCP, TCPRTU, CANOPEN, MECT, RTUSRV, TCPSRV, TCPRTUSRV
+                                // RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV
                                 u_int16_t d = CrossTable[addr].device;
 
                                 if (d != 0xffff && theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    register int base, size, type, n, total, offset;
+                                    register int base, size, type, node, n, offset;
+                                    register int i = theDevices[d].PLCwriteRequestPut;
 
-                                    flags[addr] = 0; // zeroes the write flag only if we can write in queue
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Addr = addr;
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[0] = values[addr];
+                                    theDevices[d].PLCwriteRequestNumber += 1;
+                                    theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
+                                    theDevices[d].PLCwriteRequests[i].Addr = addr;
+                                    theDevices[d].PLCwriteRequests[i].Number = 1;
+                                    if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
+                                        || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
+                                        // the engine seems to use only the bit#0 for bool variables
+                                        if (values[addr] & 1) {
+                                            theDevices[d].PLCwriteRequests[i].Values[0] = 1;
+                                        } else {
+                                            theDevices[d].PLCwriteRequests[i].Values[0] = 0;
+                                        }
+                                    } else {
+                                        theDevices[d].PLCwriteRequests[i].Values[0] = values[addr];
+                                    }
+                                    flags[addr] = 0;
                                     // are there any other consecutive writes to the same block?
                                     base = CrossTable[addr].BlockBase;
                                     size = CrossTable[addr].BlockSize;
                                     type = CrossTable[addr].Types;
                                     offset = CrossTable[addr].Offset;
-                                    for (n = 1, total = 1; (addr + n) < (base + size) && total < MAX_WRITES; ++n) {
+                                    node = CrossTable[addr].node;
+                                    for (n = 1; (addr + n) < (base + size); ++n) {
+                                        if (theDevices[d].PLCwriteRequests[i].Number >= MAX_WRITES) {
+                                            break;
+                                        }
+                                        // must be same device and node (should already be checked by Crosstable editor)
+                                        if (CrossTable[addr + n].device != d || CrossTable[addr + n].node != node) {
+                                            break;
+                                        }
                                         // in Modbus clients we cannot mix BIT and non BIT variables
                                         if ((type == RTU || type == TCP || type == TCPRTU)
                                             && ((type == BIT && CrossTable[addr + n].Types != BIT)
@@ -3716,20 +3882,33 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                         // only sequential writes, with the exception of *_BIT of the same offset
                                         if (flags[addr + n] == 0
                                            && !((type == BYTE_BIT || type == WORD_BIT || type == DWORD_BIT)
-                                                && type == CrossTable[addr + n].Types
-                                                && offset == CrossTable[addr + n].Offset)) {
+                                                && type == CrossTable[addr + n].Types && offset == CrossTable[addr + n].Offset)) {
                                             break;
                                         }
-                                        total += 1; // will be WRITE_MULTIPLE
-                                        flags[addr + n] = 0;
-                                        theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Values[n] = values[addr + n];
+                                        // ok, add another one
+                                        theDevices[d].PLCwriteRequests[i].Number += 1;
+                                        if (flags[addr + n] != 0) {
+                                            if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
+                                                || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
+                                                // the engine seems to use only the bit#0 for bool variables
+                                                if (values[addr + n] & 1) {
+                                                    theDevices[d].PLCwriteRequests[i].Values[n] = 1;
+                                                } else {
+                                                    theDevices[d].PLCwriteRequests[i].Values[n] = 0;
+                                                }
+                                            } else {
+                                                theDevices[d].PLCwriteRequests[i].Values[n] = values[addr + n];
+                                            }
+                                            flags[addr + n] = 0;
+                                        } else {
+                                            // in the exception of *_BIT, we get the actual value
+                                            theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
+                                        }
                                     }
-                                    theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestPut].Number = total;
-                                    addr += (total - 1);
-                                    // manage local queue
-                                    theDevices[d].PLCwriteRequestNumber += 1;
-                                    theDevices[d].PLCwriteRequestPut += 1;
-                                    theDevices[d].PLCwriteRequestPut %= MaxLocalQueue;
+                                    // manage the for index
+                                    if (theDevices[d].PLCwriteRequests[i].Number > 1) {
+                                        addr += (theDevices[d].PLCwriteRequests[i].Number - 1);
+                                    }
                                     // awake the device thread
                                     sem_post(&theDevices[d].newOperations);
                                 }
@@ -3776,7 +3955,15 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
 
-    if (engineRunning) {
+    if (!engineInitialized) {
+        fprintf(stderr, "dataNotifyGet: called with no engine initialized\n");
+        // continue anyway
+    }
+    if (engineInitialized) {
+        if (!engineRunning) {
+            fprintf(stderr, "dataNotifyGet: called with no engine running\n");
+            // continue anyway
+        }
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             XX_GPIO_SET(4);
