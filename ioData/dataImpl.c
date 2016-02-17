@@ -1966,11 +1966,18 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                    default:
                         ;
                    }
-               }
-               if (e) {
-                    retval = TimeoutError; // CommError;
+                }
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "%s: %s %s (%u)\n", theDevices[d].name, CrossTable[DataAddr + i].Tag,
+                        e ? "err" : "ok", DataValue[i]);
+#endif
+                if (e == -1) { // OTHER_ERROR
+                    retval = CommError;
+                    // break;
+                } else if (e == -2) { // TIMEOUT_ERROR
+                    retval = TimeoutError;
                     break;
-               }
+                }
             }
 #ifdef VERBOSE_DEBUG
             fprintf(stderr, "%d vars @ %d: ", DataNumber, DataAddr);
@@ -2896,7 +2903,6 @@ static void *clientThread(void *arg)
                         }
                     }
                     if (found) {
-
                         QueueIndex = indx;
                         Operation = oper; // WRITE_*
                         DataAddr = addr;
@@ -3614,7 +3620,6 @@ void dataEngineStart(void)
         fprintf(stderr, "Missing retentive file.\n");
     } else {
         retentive = (u_int32_t *)ptRetentive;
-
         if (lenRetentive == LAST_RETENTIVE * 4) {
             OS_MEMCPY(&the_QdataRegisters[1], retentive, LAST_RETENTIVE * 4);
         } else {

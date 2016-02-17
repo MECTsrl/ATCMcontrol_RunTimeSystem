@@ -192,7 +192,6 @@ void hw119_open_cross_table(STDLIBFUNCALL)
 		HASH_CLEAR(hh,var_map);
 		var_map = NULL;
 	}
-
 }
 
 /* ---------------------------------------------------------------------------- */
