@@ -68,13 +68,14 @@
 #define MAX_PRIORITY 3
 
 #define THE_CONFIG_DELAY_ms     10
-#define THE_ENGINE_DELAY_ms     5
+#define THE_ENGINE_DELAY_ms     10
 #define THE_SERVER_DELAY_ms     1000
 #define THE_CONNECTION_DELAY_ms 1000
 #define THE_DEVICE_BLACKLIST_ms 4000
 #define THE_DEVICE_SILENCE_ms   20000 // tpac boot time
 
 // -------- MANAGE THREADS: DATA & SYNCRO
+#define THE_UDP_PERIOD_ms	100
 #define THE_UDP_TIMEOUT_ms	500
 #define THE_UDP_SEND_ADDR   "127.0.0.1"
 
@@ -96,7 +97,7 @@ static int system_ini_ok;
 #define	THE_DATA_RECV_PORT	34903
 #define	THE_DATA_SEND_PORT	34902
 
-static u_int32_t the_IdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
+static u_int32_t the_UdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
 static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
 static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
@@ -113,7 +114,7 @@ static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 #define	THE_SYNC_RECV_PORT	34905
 #define	THE_SYNC_SEND_PORT	34904
 
-static u_int16_t the_IsyncBuffer[REG_SYNC_NUMBER]; // udp recv buffer
+static u_int16_t the_UsyncBuffer[REG_SYNC_NUMBER]; // udp recv buffer
 static u_int16_t the_IsyncRegisters[REG_SYNC_NUMBER]; // %I Array delle CODE in lettura
 static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in scrittura
 
@@ -214,6 +215,8 @@ enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
                UNKNOWN};
 
 static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t theAlarmsEventsCondvar;
+static pthread_mutex_t theAlarmsEventsMutex;
 
 #define MAX_IPADDR_LEN      17 // 123.567.901.345.
 #define MAX_NUMBER_LEN      12 // -2147483648. -32768.
@@ -333,6 +336,7 @@ struct  CrossTableRecord {
     int16_t Counter;
     u_int32_t OldVal;
     u_int16_t Error;
+    int usedInAlarmsEvents;
     //
     u_int16_t device;
     u_int16_t node;
@@ -396,14 +400,10 @@ static void *datasyncThread(void *statusAdr);
 static void *serverThread(void *statusAdr);
 static void *clientThread(void *statusAdr);
 
-static int do_recv(int s, void *buffer, ssize_t len);
-static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *address);
 static int ReadFields(int16_t Index);
 static int ReadAlarmsFields(int16_t Index);
 static int LoadXTable(enum TableType CTType);
 static void AlarmMngr(void);
-static void ErrorMNG(void);
-static void LocalIO(void);
 static void PLCsync(void);
 
 static void zeroNodeVariables(u_int32_t node);
@@ -414,6 +414,9 @@ static void zeroDeviceVariables(u_int32_t d);
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
 {
     the_QdataRegisters[addr] = value;
+    if (CrossTable[addr].usedInAlarmsEvents) {
+        pthread_cond_signal(&theAlarmsEventsCondvar);
+    }
 #if defined(RTS_CFG_MECT_RETAIN)
     if (retentive && addr <= LAST_RETENTIVE) {
         retentive[addr -1] = value;
@@ -481,32 +484,6 @@ static inline void set_dword_bit(u_int32_t *data, unsigned n, unsigned value)
     }
 }
 
-static int do_recv(int s, void *buffer, ssize_t len)
-{
-    int retval = 0;
-    ssize_t sent = 0;
-
-    retval = recv(s, buffer + sent, len - sent, 0);
-    if (retval < len) {
-        retval = -1;
-    }
-    return retval;
-}
-
-static int do_sendto(int s, void *buffer, ssize_t len, struct sockaddr_in *address)
-{
-    int retval = 0;
-    ssize_t sent = 0;
-
-    retval = sendto(s, buffer + sent, len - sent, 0,
-                    (struct sockaddr *) address, sizeof(struct sockaddr_in));
-    if (retval < len) {
-        retval = -1;
-    }
-    return retval;
-}
-
-// fb_HW119_ReadVarFields.st
 static int ReadFields(int16_t Index)
 {
     int ERR = 0;
@@ -961,6 +938,8 @@ static inline void setEventAlarm(int i)
     case Alarm:
         vmmSetEvent(pVMM, EVT_RESERVED_11);
         break;
+    default:
+        ;
     }
 }
 
@@ -983,11 +962,10 @@ static inline void checkThis(int i, int condition)
     }
 }
 
-// fb_HW119_AlarmsMngr.st
 static void AlarmMngr(void)
 {
     u_int32_t i, oper, bit;
-    int16_t SourceAddr;
+    u_int16_t SourceAddr;
     u_int32_t CompareVal;
     u_int32_t value, old_value;
 
@@ -1084,7 +1062,6 @@ static void AlarmMngr(void)
     }
 }
 
-// fb_HW119_PLCsync.st (NB: NOW IT'S CALLED BY SYNCRO)
 static void PLCsync(void)
 {
     u_int16_t indx;
@@ -1122,7 +1099,8 @@ static void PLCsync(void)
                     case RTU_SRV:
                     case TCP_SRV:
                     case TCPRTU_SRV:
-                        if (CrossTable[addr].device != 0xffff) {
+                        // consider only "H" variables, because the "P,S,F" are already managed by clientThread
+                        if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
                         }
                         break;
@@ -1176,56 +1154,6 @@ static void PLCsync(void)
     }
 }
 
-// fb_TPAC_tic.st
-// fb_TPAC1006_LIOsync.st
-// fb_TPAC1007_LIOsync.st
-static void LocalIO(void)
-{
-    // already in pthread_mutex_lock(&theCrosstableClientMutex)
-
-    // TICtimer
-    float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
-    u_int32_t tic_ms;
-
-    tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
-    PLC_time = tic_ms / 1000.0;
-    // PLC_timeWin    AT %QD0.21572: REAL; 5393
-    memcpy(&PLC_timeWin, &the_QdataRegisters[5393], sizeof(u_int32_t));
-    if (PLC_timeWin < 5.0) {
-        PLC_timeWin = 5.0;
-        memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
-    }
-    if (PLC_time <= PLC_timeWin) {
-        PLC_timeMin = 0;
-        PLC_timeMax = PLC_timeWin;
-    } else {
-        PLC_timeMin = PLC_time - PLC_timeWin;
-        PLC_timeMax = PLC_time;
-    }
-    // PLC_time         AT %ID0.21560: REAL; 5390
-    // PLC_timeMin      AT %ID0.21564: REAL; 5391
-    // PLC_timeMax      AT %ID0.21568: REAL; 5392
-    memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
-    memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
-    memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
-#if defined(RTS_CFG_MECT_RETAIN)
-    if (retentive) {
-        retentive[(5390 - 1)] = the_QdataRegisters[5390];
-        retentive[(5391 - 1)] = the_QdataRegisters[5391];
-        retentive[(5392 - 1)] = the_QdataRegisters[5392];
-        retentive[(5393 - 1)] = the_QdataRegisters[5393];
-    }
-#endif
-    // no more LIOSync in any TPAC (its in the Crosstable now)
-}
-
-// fb_HW119_ErrorMng.st
-static void ErrorMNG(void)
-{
-    // already in pthread_mutex_lock(&theCrosstableClientMutex)
-    // empty
-}
-
 static int checkEventsandAlarms()
 {
     int retval = 0, i;
@@ -1262,6 +1190,10 @@ static int checkEventsandAlarms()
             fprintf(stderr, "%s: bad alarm/event #%d\n", i);
             retval = -1;
             break;
+        }
+        CrossTable[ALCrossTable[i].SourceAddr].usedInAlarmsEvents = TRUE;
+        if (ALCrossTable[i].CompareAddr != 0) {
+            CrossTable[ALCrossTable[i].CompareAddr].usedInAlarmsEvents = TRUE;
         }
     }
     return retval;
@@ -1615,26 +1547,76 @@ static void *engineThread(void *statusAdr)
     }
     // run
     *threadStatusPtr = RUNNING;
+    struct timespec abstime;
+    ldiv_t x;
+    clock_gettime(CLOCK_REALTIME, &abstime);
+    pthread_mutex_lock(&theAlarmsEventsMutex);
+	XX_GPIO_SET(3);
+
     while (!engineExiting) {
-        osSleep(THE_ENGINE_DELAY_ms);
-        if (engineRunning) {
+
+        if (engineRunning && CommEnabled) {
+            // abstime.tv_sec += THE_ENGINE_DELAY_ms / 1000;
+            abstime.tv_nsec = abstime.tv_nsec + (THE_ENGINE_DELAY_ms * 1E6); // (THE_ENGINE_DELAY_ms % 1000) * 1E6;
+            if (abstime.tv_nsec >= 1E9) {
+                x = ldiv(abstime.tv_nsec, 1E9);
+                abstime.tv_sec += x.quot;
+                abstime.tv_nsec = x.rem;
+            }
+            while (TRUE) {
+                int e;
+				XX_GPIO_CLR(3);
+                e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theAlarmsEventsMutex, &abstime);
+				XX_GPIO_SET(3);
+                if (e == ETIMEDOUT) {
+                    break;
+                }
+                pthread_mutex_lock(&theCrosstableClientMutex);
+                {
+                    AlarmMngr();
+                }
+                pthread_mutex_unlock(&theCrosstableClientMutex);
+            }
+            // TICtimer
+            float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
+            u_int32_t tic_ms;
+
+            tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
+            PLC_time = tic_ms / 1000.0;
+            // PLC_timeWin    AT %QD0.21572: REAL; 5393
+            memcpy(&PLC_timeWin, &the_QdataRegisters[5393], sizeof(u_int32_t));
+            if (PLC_timeWin < 5.0) {
+                PLC_timeWin = 5.0;
+            }
+            if (PLC_time <= PLC_timeWin) {
+                PLC_timeMin = 0;
+                PLC_timeMax = PLC_timeWin;
+            } else {
+                PLC_timeMin = PLC_time - PLC_timeWin;
+                PLC_timeMax = PLC_time;
+            }
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
-                XX_GPIO_SET(3);
-                if (CommEnabled)  {
-                    AlarmMngr();
-                    LocalIO();
-                } else {
-                    ErrorMNG();
-                }
-                XX_GPIO_CLR(3);
+                // PLC_time         AT %ID0.21560: REAL; 5390
+                // PLC_timeMin      AT %ID0.21564: REAL; 5391
+                // PLC_timeMax      AT %ID0.21568: REAL; 5392
+                memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
+                memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
+                memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
+                memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
+                // NB no writeQdataRegisters();
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
+        } else {
+			XX_GPIO_CLR(3);
+            osSleep(THE_ENGINE_DELAY_ms);
+			XX_GPIO_SET(3);
         }
     }
 
     // thread clean
     // see dataEngineStop()
+    pthread_mutex_unlock(&theAlarmsEventsMutex);
 
     // exit
 
@@ -1937,30 +1919,24 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                         e = CANopenReadPDOWord(channel, offset, &a);
                         DataValue[i] = a;
                     }   break;
-                    case  UINT16BA:
-                    case   INT16BA:
-                        // FIXME: assert
-                        break;
                     case UDINT:
-                    case  DINT:
+                    case DINT:
                     case REAL: {
                         u_int32_t a;
                         e = CANopenReadPDODword(channel, offset, &a);
                         DataValue[i] = a;
                     }   break;
+                    case UINT16BA:
+                    case INT16BA:
                     case UDINTCDAB:
-                    case  DINTCDAB:
+                    case DINTCDAB:
                     case REALCDAB:
-                        // FIXME: assert
-                        break;
-                   case UDINTDCBA:
-                   case  DINTDCBA:
-                   case REALDCBA:
-                        // FIXME: assert
-                        break;
-                   case UDINTBADC:
-                   case  DINTBADC:
-                   case REALBADC:
+                    case UDINTDCBA:
+                    case DINTDCBA:
+                    case REALDCBA:
+                    case UDINTBADC:
+                    case DINTBADC:
+                    case REALBADC:
                         // FIXME: assert
                         break;
                    default:
@@ -2494,11 +2470,15 @@ static void zeroNodeVariables(u_int32_t node)
 {
     u_int16_t addr;
 
-    fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
-    for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
-            writeQdataRegisters(addr, 0);
+    if (theDevices[theNodes[node].device].protocol != CANOPEN) {
+        fprintf(stderr, "should zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
+#if 0
+        for (addr = 1; addr <= DimCrossTable; ++addr) {
+            if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
+                writeQdataRegisters(addr, 0);
+            }
         }
+#endif
     }
 }
 
@@ -2506,20 +2486,18 @@ static void zeroDeviceVariables(u_int32_t d)
 {
     u_int16_t addr;
 
-    fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
-    for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
-            writeQdataRegisters(addr, 0);
+    if (theDevices[d].protocol != CANOPEN) {
+        fprintf(stderr, "should zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
+#if 0
+        for (addr = 1; addr <= DimCrossTable; ++addr) {
+            if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
+                writeQdataRegisters(addr, 0);
+            }
         }
+#endif
     }
 }
 
-// RTU_Communication.st
-// TCP_Communication.st
-// TCPRTU_Communication.st
-// fb_HW119_Check.st (no more fb_HW119_Reconnect.st)
-// fb_HW119_MODBUS.st
-// fb_HW119_InitComm.st
 static inline void startDeviceTiming(u_int32_t d)
 {
     struct timespec abstime;
@@ -3441,28 +3419,30 @@ static void *datasyncThread(void *statusAdr)
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
 
     // thread init (datasync)
-    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // datasyncThread
+    osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_UDP_DAT); // datasyncThread
+    //osPthreadSetSched(SCHED_FIFO, 0); // datasyncThread
+    //osPthreadSetSched(SCHED_OTHER, FC_PRIO_UDP_DAT); // datasyncThread
+    //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
+    pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
 
     // thread init (data)
     dataRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
     if (dataRecvSock != -1) {
-        if (fcntl(dataRecvSock, F_SETFL, O_NONBLOCK) >= 0) {
-            memset((char *)&dataRecvAddr,0,sizeof(dataRecvAddr));
-            dataRecvAddr.sin_family = AF_INET;
-            dataRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-            dataRecvAddr.sin_port = htons((u_short)THE_DATA_RECV_PORT);
-            if (bind(dataRecvSock, (struct sockaddr *)&dataRecvAddr, sizeof(dataRecvAddr)) >= 0) {
-                dataSendSock = socket(AF_INET, SOCK_DGRAM, 0);
-                if (dataSendSock >= 0) {
-                    struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
-                    if (h != NULL) {
-                        memset(&dataSendAddr, 0, sizeof(dataSendAddr));
-                        dataSendAddr.sin_family = h->h_addrtype;
-                        memcpy((char *) &dataSendAddr.sin_addr.s_addr,
-                                h->h_addr_list[0], h->h_length);
-                        dataSendAddr.sin_port = htons(THE_DATA_SEND_PORT);
-                        threadInitOK = TRUE;
-                    }
+        memset((char *)&dataRecvAddr,0,sizeof(dataRecvAddr));
+        dataRecvAddr.sin_family = AF_INET;
+        dataRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        dataRecvAddr.sin_port = htons((u_short)THE_DATA_RECV_PORT);
+        if (bind(dataRecvSock, (struct sockaddr *)&dataRecvAddr, sizeof(dataRecvAddr)) >= 0) {
+            dataSendSock = socket(AF_INET, SOCK_DGRAM, 0);
+            if (dataSendSock >= 0) {
+                struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
+                if (h != NULL) {
+                    memset(&dataSendAddr, 0, sizeof(dataSendAddr));
+                    dataSendAddr.sin_family = h->h_addrtype;
+                    memcpy((char *) &dataSendAddr.sin_addr.s_addr,
+                            h->h_addr_list[0], h->h_length);
+                    dataSendAddr.sin_port = htons(THE_DATA_SEND_PORT);
+                    threadInitOK = TRUE;
                 }
             }
         }
@@ -3471,23 +3451,21 @@ static void *datasyncThread(void *statusAdr)
     // thread init (sync)
     syncRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
     if (syncRecvSock != -1) {
-        if (fcntl(syncRecvSock, F_SETFL, O_NONBLOCK) >= 0) {
-            memset((char *)&syncRecvAddr,0,sizeof(syncRecvAddr));
-            syncRecvAddr.sin_family = AF_INET;
-            syncRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-            syncRecvAddr.sin_port = htons((u_short)THE_SYNC_RECV_PORT);
-            if (bind(syncRecvSock, (struct sockaddr *)&syncRecvAddr, sizeof(syncRecvAddr)) >= 0) {
-                syncSendSock = socket(AF_INET, SOCK_DGRAM, 0);
-                if (syncSendSock >= 0) {
-                    struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
-                    if (h != NULL) {
-                        memset(&syncSendAddr, 0, sizeof(syncSendAddr));
-                        syncSendAddr.sin_family = h->h_addrtype;
-                        memcpy((char *) &syncSendAddr.sin_addr.s_addr,
-                                h->h_addr_list[0], h->h_length);
-                        syncSendAddr.sin_port = htons(THE_SYNC_SEND_PORT);
-                        threadInitOK = TRUE;
-                    }
+        memset((char *)&syncRecvAddr,0,sizeof(syncRecvAddr));
+        syncRecvAddr.sin_family = AF_INET;
+        syncRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        syncRecvAddr.sin_port = htons((u_short)THE_SYNC_RECV_PORT);
+        if (bind(syncRecvSock, (struct sockaddr *)&syncRecvAddr, sizeof(syncRecvAddr)) >= 0) {
+            syncSendSock = socket(AF_INET, SOCK_DGRAM, 0);
+            if (syncSendSock >= 0) {
+                struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
+                if (h != NULL) {
+                    memset(&syncSendAddr, 0, sizeof(syncSendAddr));
+                    syncSendAddr.sin_family = h->h_addrtype;
+                    memcpy((char *) &syncSendAddr.sin_addr.s_addr,
+                            h->h_addr_list[0], h->h_length);
+                    syncSendAddr.sin_port = htons(THE_SYNC_SEND_PORT);
+                    threadInitOK = TRUE;
                 }
             }
         }
@@ -3512,7 +3490,7 @@ static void *datasyncThread(void *statusAdr)
                 // timeout or error
                 continue;
             }
-            rc = do_recv(dataRecvSock, the_IdataBuffer, THE_DATA_UDP_SIZE);
+            rc = recv(dataRecvSock, the_UdataBuffer, THE_DATA_UDP_SIZE, 0);
             if (rc != THE_DATA_UDP_SIZE) {
                 // error recovery
                 continue;
@@ -3527,34 +3505,36 @@ static void *datasyncThread(void *statusAdr)
                 // timeout or error
                 continue;
             }
-            rc = do_recv(syncRecvSock, the_IsyncBuffer, THE_SYNC_UDP_SIZE);
+            rc = recv(syncRecvSock, the_UsyncBuffer, THE_SYNC_UDP_SIZE, 0);
             if (rc != THE_SYNC_UDP_SIZE) {
                 // error recovery
                 continue;
             }
 
+            // (3) compute data sync
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
-            // (3) compute data sync
-                memcpy(the_IdataRegisters, the_IdataBuffer, sizeof(the_IdataRegisters));
-                memcpy(the_IsyncRegisters, the_IsyncBuffer, sizeof(the_IsyncRegisters));
+                memcpy(the_IdataRegisters, the_UdataBuffer, sizeof(the_IdataRegisters));
+                memcpy(the_IsyncRegisters, the_UsyncBuffer, sizeof(the_IsyncRegisters));
                 PLCsync();
-
-            // (4) data send
-                rc = do_sendto(dataSendSock, the_QdataRegisters, THE_DATA_UDP_SIZE,
-                                   &dataSendAddr);
-                if (rc != THE_DATA_UDP_SIZE) {
-                    // FIXME: error recovery
-                }
-
-            // (5) sync send
-                rc = do_sendto(syncSendSock, the_QsyncRegisters, THE_SYNC_UDP_SIZE,
-                        &syncSendAddr);
-                if (rc != THE_SYNC_UDP_SIZE) {
-                    // FIXME: error recovery
-                }
+                memcpy(the_UdataBuffer, the_QdataRegisters, sizeof(the_UdataBuffer));
+                memcpy(the_UsyncBuffer, the_QsyncRegisters, sizeof(the_UsyncBuffer));
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
+
+            // (4) data send
+            rc = sendto(dataSendSock, the_UdataBuffer, THE_DATA_UDP_SIZE, 0, (struct sockaddr *)&dataSendAddr, sizeof(struct sockaddr_in));
+            if (rc != THE_DATA_UDP_SIZE) {
+                // FIXME: error recovery
+                fprintf(stderr,"data sendto rc=%d vs %d\n", rc, THE_DATA_UDP_SIZE);
+            }                       
+
+            // (5) sync send
+            rc = sendto(syncSendSock, the_UsyncBuffer, THE_SYNC_UDP_SIZE, 0, (struct sockaddr *)&syncSendAddr, sizeof(struct sockaddr_in));
+            if (rc != THE_SYNC_UDP_SIZE) {
+                // FIXME: error recovery
+                fprintf(stderr,"sync sendto rc=%d vs %d\n", rc, THE_SYNC_UDP_SIZE);
+            }
         }
     }
 
@@ -3632,6 +3612,8 @@ void dataEngineStart(void)
     PLCRevision01 = REVISION_HI;
     PLCRevision02 = REVISION_LO;
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
+    pthread_mutex_init(&theAlarmsEventsMutex, NULL);
+    pthread_cond_init(&theAlarmsEventsCondvar, NULL);
     engineInitialized	= TRUE;
 
     // start the engine thread

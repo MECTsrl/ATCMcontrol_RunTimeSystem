@@ -58,6 +58,7 @@
 #define  FC_PRIO_VM_MIN           50
 #define  FC_PRIO_LIST             48
 #define  FC_PRIO_COM              47
+#define  FC_PRIO_UDP_DAT          46
 #define  FC_PRIO_BAC_DEV          45
 #define  FC_PRIO_BAC_COV          44
 #define  FC_PRIO_BAC_SCN          43
@@ -79,6 +80,7 @@
 #define  FC_PRIO_PDP_WORK         63
 #define  FC_PRIO_VM_MAX           59
 #define  FC_PRIO_VM_MIN           50
+#define  FC_PRIO_UDP_DAT          46
 #define  FC_PRIO_BAC_DEV          45
 #define  FC_PRIO_BAC_COV          44
 #define  FC_PRIO_BAC_SCN          43
