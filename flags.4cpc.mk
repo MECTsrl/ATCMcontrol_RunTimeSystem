@@ -124,7 +124,7 @@ DED               = ../DelDir
 TFLAGS            =
 IFLAGS            = -I. -I../inc -I../inc.fc -I../inc.dp -I../inc.vis -I../vmLib -I../inc.mect -I../inc.data $(ARCH_INCLUDE)
 SFLAGS            =
-DFLAGS            = -D_SOF_4CPC_SRC_ $(ARCH_DFLAGS)
+DFLAGS            = -D_SOF_4CPC_SRC_ $(ARCH_DFLAGS) -DXENO_RTDM=0
 ifeq ($(DEBUG), 1)
   DFLAGS += -DDEBUG
   OFLAGS = -O0

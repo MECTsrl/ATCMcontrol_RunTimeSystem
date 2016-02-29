@@ -2304,7 +2304,11 @@ static void *serverThread(void *arg)
     case RTU_SRV: {
         char device[VMM_MAX_PATH];
 
+#if XENO_RTDM
+        snprintf(device, VMM_MAX_PATH, "rtser%u", theServers[s].u.serial.port);
+#else
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
+#endif
         modbus_ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
@@ -2565,7 +2569,11 @@ static void *clientThread(void *arg)
     case RTU: {
         char device[VMM_MAX_PATH];
 
+#if XENO_RTDM
+        snprintf(device, VMM_MAX_PATH, "rtser%u", theDevices[d].u.serial.port);
+#else
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theDevices[d].u.serial.port);
+#endif
         theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.serial.baudrate,
                             theDevices[d].u.serial.parity, theDevices[d].u.serial.databits, theDevices[d].u.serial.stopbits);
     }   break;

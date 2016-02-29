@@ -45,6 +45,8 @@ typedef int ssize_t;
 #endif
 #include <sys/types.h>
 
+#include <rtdm/rtserial.h>
+
 /* #include <config.h> */
 
 #define TIMEOUT_ERROR -2
@@ -512,6 +514,22 @@ const char *modbus_strerror(int errnum) {
 	}
 }
 
+/* RTDM serial port configuration */
+static struct rtser_config rt_serial_config = {
+	.config_mask       = 0xFFFF,
+	.baud_rate         = 230400,
+	.parity            = RTSER_DEF_PARITY,
+	.data_bits         = RTSER_DEF_BITS,
+	.stop_bits         = RTSER_DEF_STOPB,
+	.handshake         = RTSER_DEF_HAND,
+	.fifo_depth        = RTSER_DEF_FIFO_DEPTH,
+	.rx_timeout        = RTSER_DEF_TIMEOUT,
+	.tx_timeout        = RTSER_DEF_TIMEOUT,
+	.event_timeout     = 1000000000, /* 1 s */
+	.timestamp_history = RTSER_RX_TIMESTAMP_HISTORY,
+	.event_mask        = RTSER_EVENT_RXPEND,
+};
+
 void _error_print(modbus_t *ctx, const char *context, int line)
 {
 	if (ctx->debug) {
@@ -767,7 +785,7 @@ static int compute_data_length_after_meta(modbus_t *ctx, uint8_t *msg,
 int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 {
 	int rc;
-	int ret_val;
+	int ret_val = 0;
 	fd_set rset;
 	struct timeval tv;
 	struct timeval *p_tv;
@@ -2698,6 +2716,9 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 #else
 #if HAVE_DECL_TIOCM_RTS
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
+#if XENO_RTDM
+	assert(ctx_rtu->rts == MODBUS_RTU_RTS_NONE);	/* Not RTDM-enabled. */
+#endif
 	if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
 		ssize_t size;
 
@@ -2716,7 +2737,11 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 		return size;
 	} else {
 #endif
+#if XENO_RTDM
+		return rt_dev_write(ctx->s, req, req_length);
+#else
 		return write(ctx->s, req, req_length);
+#endif
 #if HAVE_DECL_TIOCM_RTS
 	}
 #endif
@@ -2751,7 +2776,11 @@ static ssize_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 #if defined(_WIN32)
 	return win32_ser_read(&((modbus_rtu_t *)ctx->backend_data)->w_ser, rsp, rsp_length);
 #else
+#if XENO_RTDM
+	return rt_dev_read(ctx->s, rsp, rsp_length);
+#else
 	return read(ctx->s, rsp, rsp_length);
+#endif
 #endif
 }
 
@@ -3003,6 +3032,59 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 #ifdef O_CLOEXEC
 	flags |= O_CLOEXEC;
 #endif
+
+#if XENO_RTDM
+	ctx->s = rt_dev_open(ctx_rtu->device, 0);
+	if (ctx->s == -1) {
+		fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
+				ctx_rtu->device, strerror(errno));
+		return -1;
+	}
+
+	rt_serial_config.baud_rate = ctx_rtu->baud;
+
+	/* Set data bits (5, 6, 7, 8 bits)
+	   CSIZE        Bit mask for data bits
+	 */
+	switch (ctx_rtu->data_bit) {
+		case 5:  rt_serial_config.data_bits = RTSER_5_BITS;   break;
+		case 6:  rt_serial_config.data_bits = RTSER_6_BITS;   break;
+		case 7:  rt_serial_config.data_bits = RTSER_7_BITS;   break;
+		case 8:  rt_serial_config.data_bits = RTSER_8_BITS;   break;
+		default: rt_serial_config.data_bits = RTSER_DEF_BITS; break;
+	}
+
+	/* Stop bit (1 or 2) */
+	if (ctx_rtu->stop_bit == 1)
+		rt_serial_config.stop_bits = RTSER_1_STOPB;
+	else /* 2 */
+		rt_serial_config.stop_bits = RTSER_2_STOPB;
+
+	/* PARENB       Enable parity bit
+	   PARODD       Use odd parity instead of even */
+	if (ctx_rtu->parity == 'N')
+		rt_serial_config.parity = RTSER_NO_PARITY;		/* None */
+	else if (ctx_rtu->parity == 'E')
+		rt_serial_config.parity = RTSER_EVEN_PARITY;	/* Even */
+	else
+		rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
+
+	/* Software flow control is disabled */
+	rt_serial_config.handshake = RTSER_RTSCTS_HAND;
+
+	{
+		int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+		if (err) {
+			printf("%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
+
+			rt_dev_close(ctx->s);
+			ctx->s = -1;
+
+			return -1;
+		}
+	}
+
+#else
 
 	ctx->s = open(ctx_rtu->device, flags);
 	if (ctx->s == -1) {
@@ -3308,6 +3390,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		return -1;
 	}
 #endif
+#endif
 
 	return 0;
 }
@@ -3438,8 +3521,12 @@ static void _modbus_rtu_close(modbus_t *ctx)
 				(int)GetLastError());
 #else
 	if (ctx->s != -1) {
+#if XENO_RTDM
+		rt_dev_close(ctx->s);
+#else
 		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
 		close(ctx->s);
+#endif
 	}
 #endif
 }
