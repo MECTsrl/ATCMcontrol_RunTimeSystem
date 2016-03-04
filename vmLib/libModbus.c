@@ -860,6 +860,16 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 
         if ((msg_length + length_to_read) < MAX_MESSAGE_LENGTH) {
             rc = ctx->backend->recv(ctx, msg + msg_length, length_to_read);
+#if XENO_RTDM >= 2
+			if (rc > 0) {
+				int i = 0;
+
+				printf("Got %2d bytes: ", rc);
+				for (i = 0; i < rc; i++)
+					printf("0x%02X ", (char)*(msg + msg_length + i));
+				printf("\n");
+			}
+#endif
 #if XENO_RTDM
 			if (rc < 0)
 				rc = -1;	/* Use one error code. */
@@ -3083,6 +3093,9 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
 	/* Software flow control is disabled */
 	rt_serial_config.handshake = RTSER_RTSCTS_HAND;
+
+	/* Response timeout in ns */
+	rt_serial_config.rx_timeout = ctx->response_timeout.tv_sec * 1000000000 + ctx->response_timeout.tv_usec * 1000;
 
 	{
 		int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
