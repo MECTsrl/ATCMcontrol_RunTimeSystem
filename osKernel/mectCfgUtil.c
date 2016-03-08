@@ -298,7 +298,7 @@ int app_config_load(struct system_ini *system_ini)
         if (line[line_len - 1] == '\n') {
 			line[line_len - 1] = '\0';
         }
-		ptr += strspn(ptr, " \t");  // skip blanks
+        ptr += strspn(ptr, " \t\r");  // skip blanks
 		if (*ptr == '[') {  // section start
 			if (strstr(ptr, TAG_CONF_SYSTEM) != NULL)
 				actual_section = APP_CONF_SYSTEM;

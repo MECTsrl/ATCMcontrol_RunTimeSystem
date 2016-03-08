@@ -216,7 +216,6 @@ enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
 
 static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t theAlarmsEventsCondvar;
-static pthread_mutex_t theAlarmsEventsMutex;
 
 #define MAX_IPADDR_LEN      17 // 123.567.901.345.
 #define MAX_NUMBER_LEN      12 // -2147483648. -32768.
@@ -1275,14 +1274,19 @@ static int checkServersDevicesAndNodes()
                         case 1:
                         case 2:
                         case 3:
-                            theServers[s].u.serial.port = port;
-                            theServers[s].u.serial.baudrate = system_ini.serial_port[port].baudrate;
-                            theServers[s].u.serial.parity = system_ini.serial_port[port].parity;
-                            theServers[s].u.serial.databits = system_ini.serial_port[port].databits;
-                            theServers[s].u.serial.stopbits = system_ini.serial_port[port].stopbits;
+                            if (system_ini.serial_port[port].baudrate == 0) {
+                                fprintf(stderr, "%s: missing port %u in system.ini for RTU_SRV variable #%u\n", __func__, port, i);
+                                retval = -1;
+                            } else {
+                                theServers[s].u.serial.port = port;
+                                theServers[s].u.serial.baudrate = system_ini.serial_port[port].baudrate;
+                                theServers[s].u.serial.parity = system_ini.serial_port[port].parity;
+                                theServers[s].u.serial.databits = system_ini.serial_port[port].databits;
+                                theServers[s].u.serial.stopbits = system_ini.serial_port[port].stopbits;
+                            }
                             break;
                         default:
-                            fprintf(stderr, "%s: bad RTU_SRV port %u for variable #%u", __func__, port, i);
+                            fprintf(stderr, "%s: bad RTU_SRV port %u for variable #%u\n", __func__, port, i);
                             retval = -1;
                         }
                         theServers[s].ctx = NULL;
@@ -1363,16 +1367,21 @@ static int checkServersDevicesAndNodes()
                         case 1:
                         case 2:
                         case 3:
-                            theDevices[d].u.serial.port = p;
-                            theDevices[d].u.serial.baudrate = system_ini.serial_port[p].baudrate;
-                            theDevices[d].u.serial.parity = system_ini.serial_port[p].parity;
-                            theDevices[d].u.serial.databits = system_ini.serial_port[p].databits;
-                            theDevices[d].u.serial.stopbits = system_ini.serial_port[p].stopbits;
-                            theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
-                            theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
+                            if (system_ini.serial_port[p].baudrate == 0) {
+                                fprintf(stderr, "%s: missing port %u in system.ini for RTU variable #%u\n", __func__, p, i);
+                                retval = -1;
+                            } else {
+                                theDevices[d].u.serial.port = p;
+                                theDevices[d].u.serial.baudrate = system_ini.serial_port[p].baudrate;
+                                theDevices[d].u.serial.parity = system_ini.serial_port[p].parity;
+                                theDevices[d].u.serial.databits = system_ini.serial_port[p].databits;
+                                theDevices[d].u.serial.stopbits = system_ini.serial_port[p].stopbits;
+                                theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
+                                theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
+                            }
                             break;
                         default:
-                            fprintf(stderr, "%s: bad %s port %u for variable #%u", __func__,
+                            fprintf(stderr, "%s: bad %s port %u for variable #%u\n", __func__,
                                     (theDevices[d].protocol == RTU ? "RTU" : "MECT"), p, i);
                             retval = -1;
                         }
@@ -1543,14 +1552,15 @@ static void *engineThread(void *statusAdr)
     if (CommEnabled) {
         fprintf(stderr, "PLC communication enabled\n");
     } else {
-        fprintf(stderr, "PLC communication disabled: application won't work.\n");
+        fprintf(stderr, "*******************************************************\n");
+        fprintf(stderr, "* PLC communication disabled: application won't work! *\n");
+        fprintf(stderr, "*******************************************************\n");
     }
     // run
     *threadStatusPtr = RUNNING;
     struct timespec abstime;
     ldiv_t x;
     clock_gettime(CLOCK_REALTIME, &abstime);
-    pthread_mutex_lock(&theAlarmsEventsMutex);
 	XX_GPIO_SET(3);
 
     while (!engineExiting) {
@@ -1563,20 +1573,21 @@ static void *engineThread(void *statusAdr)
                 abstime.tv_sec += x.quot;
                 abstime.tv_nsec = x.rem;
             }
-            while (TRUE) {
-                int e;
-				XX_GPIO_CLR(3);
-                e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theAlarmsEventsMutex, &abstime);
-				XX_GPIO_SET(3);
-                if (e == ETIMEDOUT) {
-                    break;
-                }
-                pthread_mutex_lock(&theCrosstableClientMutex);
-                {
+            pthread_mutex_lock(&theCrosstableClientMutex);
+            {
+                while (TRUE) {
+                    int e;
+                    XX_GPIO_CLR(3);
+                    e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
+                    XX_GPIO_SET(3);
+                    if (e == ETIMEDOUT) {
+                        break;
+                    }
                     AlarmMngr();
                 }
-                pthread_mutex_unlock(&theCrosstableClientMutex);
             }
+            pthread_mutex_unlock(&theCrosstableClientMutex);
+
             // TICtimer
             float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
             u_int32_t tic_ms;
@@ -1616,10 +1627,8 @@ static void *engineThread(void *statusAdr)
 
     // thread clean
     // see dataEngineStop()
-    pthread_mutex_unlock(&theAlarmsEventsMutex);
 
     // exit
-
     fprintf(stderr, "EXITING: engineThread\n");
     *threadStatusPtr = EXITING;
     return NULL;
@@ -1706,7 +1715,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             device = CrossTable[DataAddr].device;
             if (device != 0xffff) {
                 server = theDevices[device].server;
-                if (server != 0xffff) {
+                if (server != 0xffff && theServers[server].mb_mapping != NULL) {
                     pthread_mutex_lock(&theServers[server].mutex);
                     {
                         register u_int16_t base = CrossTable[DataAddr].Offset;
@@ -2159,7 +2168,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             device = CrossTable[DataAddr].device;
             if (device != 0xffff) {
                 server = theDevices[device].server;
-                if (server != 0xffff) {
+                if (server != 0xffff && theServers[server].mb_mapping != NULL) {
                     pthread_mutex_lock(&theServers[server].mutex);
                     {
                         register u_int16_t base = CrossTable[DataAddr].Offset;
@@ -2418,7 +2427,7 @@ static void *serverThread(void *arg)
                 } else {
                     modbus_set_socket(modbus_ctx, master_socket);
                     rc = modbus_receive(modbus_ctx, query);
-                    if (rc > 0) {
+                    if (rc > 0 && theServers[s].mb_mapping != NULL) {
                         pthread_mutex_lock(&theServers[s].mutex);
                         {
                             modbus_reply(modbus_ctx, query, rc, theServers[s].mb_mapping);
@@ -2474,15 +2483,13 @@ static void zeroNodeVariables(u_int32_t node)
 {
     u_int16_t addr;
 
-    if (theDevices[theNodes[node].device].protocol != CANOPEN) {
-        fprintf(stderr, "should zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
-#if 0
+    if (theDevices[theNodes[node].device].protocol == TCP) {
+        fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
         for (addr = 1; addr <= DimCrossTable; ++addr) {
             if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
                 writeQdataRegisters(addr, 0);
             }
         }
-#endif
     }
 }
 
@@ -2490,15 +2497,13 @@ static void zeroDeviceVariables(u_int32_t d)
 {
     u_int16_t addr;
 
-    if (theDevices[d].protocol != CANOPEN) {
-        fprintf(stderr, "should zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
-#if 0
+    if (theDevices[d].protocol == TCP) {
+        fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
         for (addr = 1; addr <= DimCrossTable; ++addr) {
             if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
                 writeQdataRegisters(addr, 0);
             }
         }
-#endif
     }
 }
 
@@ -3583,6 +3588,7 @@ void dataEngineStart(void)
     // initialize
     theDataSyncThread_id = -1;
     theDataSyncThreadStatus = NOT_STARTED;
+    int s, d;
 
     // read the configuration file
     if (app_config_load(&system_ini)) {
@@ -3620,8 +3626,13 @@ void dataEngineStart(void)
     PLCRevision01 = REVISION_HI;
     PLCRevision02 = REVISION_LO;
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
-    pthread_mutex_init(&theAlarmsEventsMutex, NULL);
     pthread_cond_init(&theAlarmsEventsCondvar, NULL);
+    for (s = 0; s < MAX_SERVERS; ++s) {
+        theServers[s].thread_id = -1;
+    }
+    for (d = 0; d < MAX_DEVICES; ++d) {
+        theDevices[d].thread_id = -1;
+    }
     engineInitialized	= TRUE;
 
     // start the engine thread
@@ -3665,13 +3676,18 @@ void dataEngineStop(void)
     void *retval;
     int n;
     for (n = 0; n < theDevicesNumber; ++n) {
-        pthread_join(theDevices[n].thread_id, &retval);
-        theDevices[n].thread_id = -1;
-        fprintf(stderr, "joined dev(%d)\n", n);
+        if (theDevices[n].thread_id != -1) {
+            pthread_join(theDevices[n].thread_id, &retval);
+            theDevices[n].thread_id = -1;
+            fprintf(stderr, "joined dev(%d)\n", n);
+        }
     }
     for (n = 0; n < theServersNumber; ++n) {
-        pthread_join(theServers[n].thread_id, &retval);
+        if (theServers[n].thread_id != -1) {
+            pthread_join(theServers[n].thread_id, &retval);
+            theServers[n].thread_id = -1;
         fprintf(stderr, "joined srv(%d)\n", n);
+        }
     }
     if (theDataSyncThread_id != -1) {
         pthread_join(theDataSyncThread_id, &retval);
