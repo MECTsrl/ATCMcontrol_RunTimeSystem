@@ -194,7 +194,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV};
-enum UpdateType { Htype = 0, Ptype, Stype, Ftype};
+enum UpdateType { Htype = 0, Ptype, Stype, Ftype, Vtype};
 enum EventAlarm { Event = 0, Alarm};
 static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "MECT", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
 
@@ -497,6 +497,10 @@ static int ReadFields(int16_t Index)
     } else {
         ERR = TRUE;
     }
+    // skip empty or disabled variables
+    if (CrossTable[Index].Enable == 0) {
+        return ERR;
+    }
 
     // Plc {H,P,S,F}
     Field.MaxLen = 1 + 1;
@@ -514,6 +518,9 @@ static int ReadFields(int16_t Index)
             break;
         case 'F':
             CrossTable[Index].Plc = Ftype;
+            break;
+        case 'V':
+            CrossTable[Index].Plc = Vtype;
             break;
         default:
             ERR = TRUE;
@@ -903,12 +910,14 @@ static int LoadXTable(enum TableType CTType)
             if (ReadFields(addr)) {
                 CrossTable[addr].Error = 100;
                 ErrorsState |= 0x04;
+                ERR = TRUE;
             }
             break;
         case Alarms_csv:
             if (ReadAlarmsFields(addr)) {
                 ALCrossTable[addr].ALError = 100;
                 ErrorsState |= 0x04;
+                ERR = TRUE;
             }
             break;
         default:
