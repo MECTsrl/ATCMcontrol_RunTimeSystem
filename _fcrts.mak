@@ -43,7 +43,6 @@ clobber: osSharedCO vmKernelCO osKernelCO vmLibCO ioTestCO ioDataCO CANopenCO fc
 
 rebuild: clean all
 
-
 # Normal build
 # -----------------------------------------------------------------------------
 
@@ -78,6 +77,7 @@ ioData:
 .PHONY : CANopen
 CANopen:
 	$(MAKE) -j1 -C $@ -f $@$(DEBREL).mak
+
 # Mostly Clean (keep library and executables)
 # -----------------------------------------------------------------------------
 
@@ -149,6 +149,7 @@ ioDataCL:
 CANopenCL:
 	echo Cleaning $(subst CL,,$@)...
 	$(MAKE) -j1 -C $(subst CL,,$@) -f $(subst CL,,$@)$(DEBREL).mak clean
+
 # Clobber
 # -----------------------------------------------------------------------------
 

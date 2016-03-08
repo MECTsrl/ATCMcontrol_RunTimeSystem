@@ -44,9 +44,9 @@
 typedef int ssize_t;
 #endif
 #include <sys/types.h>
-
+#if XENO_RTDM
 #include <rtdm/rtserial.h>
-
+#endif
 /* #include <config.h> */
 
 #define TIMEOUT_ERROR -2
@@ -513,7 +513,7 @@ const char *modbus_strerror(int errnum) {
 			return strerror(errnum);
 	}
 }
-
+#if XENO_RTDM
 /* RTDM serial port configuration */
 static struct rtser_config rt_serial_config = {
 	.config_mask       = 0xFFFF,
@@ -529,7 +529,7 @@ static struct rtser_config rt_serial_config = {
 	.timestamp_history = RTSER_RX_TIMESTAMP_HISTORY,
 	.event_mask        = RTSER_EVENT_RXPEND,
 };
-
+#endif
 void _error_print(modbus_t *ctx, const char *context, int line)
 {
 	if (ctx->debug) {
