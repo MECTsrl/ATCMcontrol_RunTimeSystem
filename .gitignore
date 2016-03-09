@@ -1,0 +1,12 @@
+.*.swp
+.*.swo
+bin
+lib
+CANopen/Release
+fcrts/Release
+ioData/Release
+ioTest/Release
+osKernel/Release
+osShared/Release
+vmKernel/Release
+vmLib/Release
