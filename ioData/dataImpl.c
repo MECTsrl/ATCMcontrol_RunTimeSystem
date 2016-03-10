@@ -51,7 +51,7 @@
 #include "libModbus.h"
 #include "CANopen.h"
 
-#define REVISION_HI  7
+#define REVISION_HI  1
 #define REVISION_LO  1
 
 #if DEBUG
