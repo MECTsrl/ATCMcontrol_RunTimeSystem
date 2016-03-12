@@ -54,7 +54,6 @@ typedef int ssize_t;
 #define TIMEOUT_ERROR -2
 #define OTHER_ERROR	-1
 
-// TODO MTL: DEBUG, disable
 #if defined(XENO_RTDM) && (XENO_RTDM >= 3)
 #define MODBUS_DEBUG
 #else
@@ -2714,6 +2713,7 @@ static int _modbus_rtu_send_msg_pre(uint8_t *req, int req_length)
 }
 
 #if defined(_WIN32)
+
 /* This simple implementation is sort of a substitute of the select() call,
  * working this way: the win32_ser_select() call tries to read some data from
  * the serial port, setting the timeout as the select() call would. Data read is
@@ -2968,7 +2968,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 {
 #if defined(_WIN32)
 	DCB dcb;
-
 #elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
 	struct termios tios;
 	speed_t speed;
