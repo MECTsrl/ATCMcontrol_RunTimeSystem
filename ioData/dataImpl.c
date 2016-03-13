@@ -47,7 +47,6 @@
 #include "mectRetentive.h"
 #endif
 
-#include "libHW119.h"
 #include "libModbus.h"
 #include "CANopen.h"
 
@@ -58,6 +57,8 @@
 #undef VERBOSE_DEBUG
 #endif
 /* ----  Target Specific Includes:	 ------------------------------------------ */
+
+#define CROSSTABLE_CSV "/local/etc/sysconfig/Crosstable.csv"
 
 #define MAX_SERVERS  5 // 3 RTU_SRV + 1 TCP_SRV + 1 TCPRTU_SRV (PLC in dataMain->dataNotifySet/Get)
 #define MAX_DEVICES 16 // 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
@@ -293,14 +294,20 @@ struct  CrossTableRecord {
 };
 static struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
 
-#define FRONTE_SALITA   1
-#define FRONTE_DISCESA  0
+#define OPER_GREATER    41
+#define OPER_GREATER_EQ 42
+#define OPER_SMALLER    43
+#define OPER_SMALLER_EQ 44
+#define OPER_EQUAL      45
+#define OPER_NOT_EQUAL  46
+#define OPER_RISING     47
+#define OPER_FALLING    48
+
 struct  Alarms {
     enum EventAlarm ALType;
-    char ALTag[MAX_IDNAME_LEN];
+    u_int16_t TagAddr;
     char ALSource[MAX_IDNAME_LEN];
     char ALCompareVar[MAX_IDNAME_LEN];
-    u_int16_t TagAddr;
     u_int16_t SourceAddr;
     u_int16_t CompareAddr;
     u_int32_t ALCompareVal;
@@ -310,6 +317,7 @@ struct  Alarms {
     u_int16_t ALError;
 };
 static struct Alarms ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
+static u_int16_t lastAlarmEvent = 0;
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
@@ -333,7 +341,7 @@ static void *clientThread(void *statusAdr);
 
 static int ReadFields(int16_t Index);
 static int ReadAlarmsFields(int16_t Index);
-static int LoadXTable(enum TableType CTType);
+static int LoadXTable(void);
 static void AlarmMngr(void);
 static void PLCsync(void);
 
@@ -514,575 +522,515 @@ static inline void set_dword_bit(u_int32_t *data, unsigned n, unsigned value)
     }
 }
 
-static int ReadFields(int16_t Index)
+static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
 {
-    int ERR = 0;
-    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
-    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
+    char * p, *r;
 
-    // Enable {0,1,2,3}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].Enable = atoi(Field.Contents);
+    if (lastAlarmEvent >= DimAlarmsCT) {
+        return -1;
+    }
+    ++lastAlarmEvent;
+    ALCrossTable[lastAlarmEvent].ALType = (isAlarm ? Alarm : Event);
+    ALCrossTable[lastAlarmEvent].TagAddr = addr;
+
+    p = strtok_r(expr, " ]", &r);
+    if (p == NULL) {
+        goto exit_error;
+    }
+    strncpy(ALCrossTable[lastAlarmEvent].ALSource, p, MAX_IDNAME_LEN);
+
+    p = strtok_r(NULL, " ]", &r);
+    if (p == NULL) {
+        goto exit_error;
+    }
+    if (strcmp(p, ">") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER;
+    } else if (strcmp(p, ">=") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER_EQ;
+    } else if (strcmp(p, "<") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER;
+    } else if (strcmp(p, "<=") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER_EQ;
+    } else if (strcmp(p, "==") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_EQUAL;
+    } else if (strcmp(p, "!=") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_NOT_EQUAL;
+    } else if (strcmp(p, "RISING") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_RISING;
+    } else if (strcmp(p, "FALLING") == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_FALLING;
     } else {
-        ERR = TRUE;
-    }
-    // skip empty or disabled variables
-    if (CrossTable[Index].Enable == 0) {
-        return ERR;
+        goto exit_error;
     }
 
-    // Plc {H,P,S,F}
-    Field.MaxLen = 1 + 1;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        switch (Field.Contents[0]) {
-        case 'H':
-            CrossTable[Index].Plc = Htype;
-            break;
-        case 'P':
-            CrossTable[Index].Plc = Ptype;
-            break;
-        case 'S':
-            CrossTable[Index].Plc = Stype;
-            break;
-        case 'F':
-            CrossTable[Index].Plc = Ftype;
-            break;
-        case 'V':
-            CrossTable[Index].Plc = Vtype;
-            break;
-        default:
-            ERR = TRUE;
+    if (ALCrossTable[lastAlarmEvent].ALOperator != OPER_FALLING && ALCrossTable[lastAlarmEvent].ALOperator != OPER_RISING) {
+        char *s;
+        float f;
+
+        p = strtok_r(NULL, " ]", &r);
+        if (p == NULL) {
+            goto exit_error;
         }
-    } else {
-        ERR = TRUE;
-    }
-
-    // Tag {identifier}
-    Field.MaxLen = MAX_IDNAME_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        strncpy(CrossTable[Index].Tag, param.field->Contents, MAX_IDNAME_LEN);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Types {UINT, UDINT, DINT, FDCBA, ...}
-    Field.MaxLen = MAX_VARTYPE_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        if (strncmp(Field.Contents, "BIT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = BIT;
-        } else if (strncmp(Field.Contents, "BYTE_BIT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = BYTE_BIT;
-        } else if (strncmp(Field.Contents, "WORD_BIT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = WORD_BIT;
-        } else if (strncmp(Field.Contents, "DWORD_BIT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DWORD_BIT;
-        } else if (strncmp(Field.Contents, "UINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16;
-        } else if (strncmp(Field.Contents, "UINTBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16BA;
-        } else if (strncmp(Field.Contents, "INT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16;
-        } else if (strncmp(Field.Contents, "INTBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16BA;
-        } else if (strncmp(Field.Contents, "UDINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINT;
-        } else if (strncmp(Field.Contents, "UDINTDCBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINTDCBA;
-        } else if (strncmp(Field.Contents, "UDINTCDAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINTCDAB;
-        } else if (strncmp(Field.Contents, "UDINTBADC", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINTBADC;
-        } else if (strncmp(Field.Contents, "DINT", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINT;
-        } else if (strncmp(Field.Contents, "DINTDCBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINTDCBA;
-        } else if (strncmp(Field.Contents, "DINTCDAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINTCDAB;
-        } else if (strncmp(Field.Contents, "DINTBADC", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINTBADC;
-        } else if (strncmp(Field.Contents, "REAL", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REAL;
-        } else if (strncmp(Field.Contents, "REALDCBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALDCBA;
-        } else if (strncmp(Field.Contents, "REALCDAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALCDAB;
-        } else if (strncmp(Field.Contents, "REALBADC", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALBADC;
-
-        } else if (strncmp(Field.Contents, "UINTAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UINT16; // backward compatibility
-        } else if (strncmp(Field.Contents, "INTAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = INT16; // backward compatibility
-        } else if (strncmp(Field.Contents, "UDINTABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = UDINT; // backward compatibility
-        } else if (strncmp(Field.Contents, "DINTABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = DINT; // backward compatibility
-        } else if (strncmp(Field.Contents, "FDCBA", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALDCBA; // backward compatibility
-        } else if (strncmp(Field.Contents, "FCDAB", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALCDAB; // backward compatibility
-        } else if (strncmp(Field.Contents, "FABCD", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REAL; // backward compatibility
-        } else if (strncmp(Field.Contents, "FBADC", Field.CurLen) == 0) {
-            CrossTable[Index].Types = REALBADC; // backward compatibility
-
+        f = strtof(p, &s);
+        if (s == p) {
+            // identifier (check later on)
+            strncpy(ALCrossTable[lastAlarmEvent].ALCompareVar, p, MAX_IDNAME_LEN);
         } else {
-            if (CrossTable[Index].Enable > 0) {
-                CrossTable[Index].Types = UNKNOWN;
-            }
+            // number
+            ALCrossTable[lastAlarmEvent].ALCompareVar[0] = 0;
+            memcpy(&ALCrossTable[lastAlarmEvent].ALCompareVal, &f, sizeof(u_int32_t));
         }
-    } else {
-        ERR = TRUE;
     }
+    return 0;
 
-    // Decimal {0, 1, 2, 3, 4, ...}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].Decimal = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Protocol {"", RTU, TCP, TCPRTU}
-    Field.MaxLen = MAX_PROTOCOL_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        if (strncmp(Field.Contents, "PLC", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = PLC;
-        } else if (strncmp(Field.Contents, "RTU", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = RTU;
-        } else if (strncmp(Field.Contents, "TCP", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCP;
-        } else if (strncmp(Field.Contents, "TCPRTU", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCPRTU;
-        } else if (strncmp(Field.Contents, "CANOPEN", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = CANOPEN;
-        } else if (strncmp(Field.Contents, "MECT", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = MECT;
-        } else if (strncmp(Field.Contents, "RTU_SRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = RTU_SRV;
-        } else if (strncmp(Field.Contents, "TCP_SRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCP_SRV;
-        } else if (strncmp(Field.Contents, "TCPRTU_SRV", Field.CurLen) == 0) {
-            CrossTable[Index].Protocol = TCPRTU_SRV;
-        } else {
-            CrossTable[Index].Protocol = PLC;
-            // FIXME: ERR ?
-        }
-    } else {
-        ERR = TRUE;
-    }
-
-    // IPAddress {identifier}
-    Field.MaxLen = MAX_IPADDR_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        strncpy(CrossTable[Index].IPAddress, param.field->Contents, MAX_IPADDR_LEN);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Port {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].Port = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // NodeId {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].NodeId = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Address {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].Offset = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Block {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].Block = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // NReg {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        CrossTable[Index].BlockSize = atoi(param.field->Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // Handle ([RO]|[RD]|[RW]){text}
-    Field.MaxLen = MAX_LINE_SIZE;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        if (strncmp(param.field->Contents, "[RW]", 4) == 0) {
-            CrossTable[Index].Output = TRUE;
-        } else {
-            CrossTable[Index].Output = FALSE;
-        }
-    } else {
-        ERR = TRUE;
-    }
-
-    return ERR;
+exit_error:
+    --lastAlarmEvent;
+    return -1;
 }
 
-// fb_HW119_ReadAlarmsFields.st
-static int ReadAlarmsFields(int16_t Index)
+static u_int16_t tagAddr(char *tag)
 {
-    int ERR = FALSE;
-    IEC_STRMAX Field = { 0, VMM_MAX_IEC_STRLEN, ""};
-    HW119_GET_CROSS_TABLE_FIELD param = {(IEC_STRING *)&Field, 0};
+    u_int16_t addr;
 
-    // ALType {0,1}
-    Field.MaxLen = 1 + 1;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        switch (atoi(Field.Contents)) {
-        case 0: ALCrossTable[Index].ALType = Event; break;
-        case 1: ALCrossTable[Index].ALType = Alarm; break;
-        default:
-            ERR = TRUE;
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        if (strncmp(tag, CrossTable[addr].Tag, MAX_IDNAME_LEN) == 0) {
+            return addr;
         }
-    } else {
-        ERR = TRUE;
     }
-
-    // ALTag {identifier}
-    Field.MaxLen = MAX_IDNAME_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        strncpy(ALCrossTable[Index].ALTag, param.field->Contents, MAX_IDNAME_LEN);
-    } else {
-        ERR = TRUE;
-    }
-
-    // ALSource {identifier}
-    Field.MaxLen = MAX_IDNAME_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        strncpy(ALCrossTable[Index].ALSource, param.field->Contents, MAX_IDNAME_LEN);
-    } else {
-        ERR = TRUE;
-    }
-
-    // ALCompareVar {identifier}
-    Field.MaxLen = MAX_IDNAME_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        strncpy(ALCrossTable[Index].ALCompareVar, param.field->Contents, MAX_IDNAME_LEN);
-    } else {
-        ERR = TRUE;
-    }
-
-    // ALCompareVal {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        ALCrossTable[Index].ALCompareVal = atoi(Field.Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // ALOperator {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        ALCrossTable[Index].ALOperator = atoi(Field.Contents);
-    } else {
-        ERR = TRUE;
-    }
-
-    // ALFilterTime {number}
-    Field.MaxLen = MAX_NUMBER_LEN;
-    hw119_get_cross_table_field(NULL, NULL, (unsigned char *)&param);
-    if (param.ret_value == 0) {
-        ALCrossTable[Index].ALFilterTime = atoi(Field.Contents);
-        ALCrossTable[Index].ALFilterCount = ALCrossTable[Index].ALFilterTime;
-    } else {
-        ERR = TRUE;
-    }
-
-    return ERR;
+    return 0;
 }
 
-// fb_HW119_Init.st
-// fb_HW119_LoadCrossTab.st
-static int LoadXTable(enum TableType CTType)
+char *strtok_csv(char *string, const char *separators, char **savedptr)
 {
-    char *CTFile;
-    int32_t CTDimension;
-    int32_t addr;
-    int ERR = FALSE;
-    IEC_STRMAX filename;
-    HW119_OPEN_CROSS_TABLE_PARAM open_param = {(IEC_STRING *)&filename, 0 };
-    HW119_READ_CROSS_TABLE_RECORD_PARAM read_param;
-    HW119_CLOSE_CROSS_TABLE_PARAM close_param;
+    char * p, *s;
+    int i;
 
-    // init table
-    switch (CTType) {
-    case Crosstable_csv:
-        CTFile = "/local/etc/sysconfig/Crosstable.csv";
-        CTDimension = DimCrossTable;
-        for (addr = 1; addr <= DimCrossTable; ++addr) {
-            CrossTable[addr].Enable = 0;
-            CrossTable[addr].Plc = FALSE;
-            CrossTable[addr].Tag[0] = UNKNOWN;
-            CrossTable[addr].Types = 0;
-            CrossTable[addr].Decimal = 0;
-            CrossTable[addr].Protocol = PLC;
-            CrossTable[addr].IPAddress[0] = '\0';
-            CrossTable[addr].Port = 0;
-            CrossTable[addr].NodeId = 0;
-            CrossTable[addr].Offset = 0;
-            CrossTable[addr].Block = 0;
-            CrossTable[addr].BlockSize = 0;
-            CrossTable[addr].Output = FALSE;
-            CrossTable[addr].OldVal = 0;
-            CrossTable[addr].Error = 1;
-            CrossTable[addr].device = 0xffff;
-            CrossTable[addr].node = 0xffff;
-            the_QsyncRegisters[addr] = QUEUE_EMPTY;
-            the_QdataStates[addr] = DATA_OK;
+    if (separators == NULL || savedptr == NULL) {
+        return NULL;
+    }
+    if (string == NULL) {
+        p = *savedptr;
+        if (p == NULL) {
+            return NULL;
         }
-        break;
-    case Alarms_csv:
-        CTFile = "/local/etc/sysconfig/Alarms.csv";
-        CTDimension = DimAlarmsCT;
-        for (addr = 0; addr <= DimAlarmsCT; ++addr) {
-            ALCrossTable[addr].ALType = FALSE;
-            ALCrossTable[addr].ALTag[0] = '\0';
-            ALCrossTable[addr].ALSource[0] = '\0';
-            ALCrossTable[addr].ALCompareVar[0] = '\0';
-            ALCrossTable[addr].TagAddr = 0;
-            ALCrossTable[addr].SourceAddr = 0;
-            ALCrossTable[addr].CompareAddr = 0;
-            ALCrossTable[addr].ALCompareVal = 0;
-            ALCrossTable[addr].ALOperator = 0;
-            ALCrossTable[addr].ALFilterTime = 0;
-        }
-        break;
-    default:
-        CTFile = "(unknown)";
-        CTDimension = -1;
+    } else {
+        p = string;
+    }
+
+    s = strstr(p, separators);
+    if (s == NULL) {
+        *savedptr = NULL;
+        return p;
+    }
+    *s = 0;
+    *savedptr = s + 1;
+
+    while (isspace(*p) && p < s) {
+        ++p;
+    }
+
+    return p;
+}
+
+
+static int LoadXTable(void)
+{
+    u_int32_t addr, indx;
+    int ERR = FALSE;
+    FILE *xtable = NULL;
+
+    // init tables
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        CrossTable[addr].Enable = 0;
+        CrossTable[addr].Plc = FALSE;
+        CrossTable[addr].Tag[0] = UNKNOWN;
+        CrossTable[addr].Types = 0;
+        CrossTable[addr].Decimal = 0;
+        CrossTable[addr].Protocol = PLC;
+        CrossTable[addr].IPAddress[0] = '\0';
+        CrossTable[addr].Port = 0;
+        CrossTable[addr].NodeId = 0;
+        CrossTable[addr].Offset = 0;
+        CrossTable[addr].Block = 0;
+        CrossTable[addr].BlockSize = 0;
+        CrossTable[addr].Output = FALSE;
+        CrossTable[addr].OldVal = 0;
+        CrossTable[addr].Error = 1;
+        CrossTable[addr].device = 0xffff;
+        CrossTable[addr].node = 0xffff;
+        the_QsyncRegisters[addr] = QUEUE_EMPTY;
+        the_QdataStates[addr] = DATA_OK;
+    }
+    lastAlarmEvent = 0;
+    for (addr = 0; addr <= DimAlarmsCT; ++addr) {
+        ALCrossTable[addr].ALType = FALSE;
+        ALCrossTable[addr].ALSource[0] = '\0';
+        ALCrossTable[addr].ALCompareVar[0] = '\0';
+        ALCrossTable[addr].TagAddr = 0;
+        ALCrossTable[addr].SourceAddr = 0;
+        ALCrossTable[addr].CompareAddr = 0;
+        ALCrossTable[addr].ALCompareVal = 0;
+        ALCrossTable[addr].ALOperator = 0;
+        ALCrossTable[addr].ALFilterTime = 0;
     }
 
     // open file
-    fprintf(stderr, "loading '%s' ...", CTFile);
-    filename.MaxLen = VMM_MAX_IEC_STRLEN; // VMM_MAX_PATH is higher than 256
-    filename.CurLen = strnlen(CTFile, VMM_MAX_IEC_STRLEN);
-    strncpy(filename.Contents, CTFile, VMM_MAX_IEC_STRLEN);
-    hw119_open_cross_table(NULL, NULL, (unsigned char *)&open_param);
-    if (open_param.ret_value)  {
+    fprintf(stderr, "loading '%s' ...", CROSSTABLE_CSV);
+    xtable = fopen(CROSSTABLE_CSV);
+    if (xtable == NULL)  {
         ERR = TRUE;
         goto exit_function;
     }
 
     // read loop
-    for (addr = 1; addr <= CTDimension; ++ addr) {
+    for (addr = 1; addr <= DimCrossTable; ++ addr) {
+        char row[1024], *p, *r;
 
-        switch (CTType) {
-        case Crosstable_csv:
-            read_param.error = FALSE;
-            break;
-        case Alarms_csv:
-            read_param.error = TRUE;
-            break;
-        default:
-            ;
-        }
-        hw119_read_cross_table_record(NULL, NULL, (unsigned char *)&read_param);
-        if (read_param.ret_value) {
-            switch (CTType) {
-            case Crosstable_csv:
-                CrossTable[addr].Error = 100;
-                break;
-            case Alarms_csv:
-                ALCrossTable[addr].ALError = 100;
-                break;
-            default:
-                ;
-            }
+        if (fgets(row, 1024, xtable) == NULL) {
+            CrossTable[addr].Error = 100;
             // no ERR = TRUE;
             continue;
         }
-        switch (CTType) {
-        case Crosstable_csv:
-            if (ReadFields(addr)) {
-                CrossTable[addr].Error = 100;
-                ERR = TRUE;
-            }
+
+        // Enable {0,1,2,3}
+        p = strtok_csv(row, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
             break;
-        case Alarms_csv:
-            if (ReadAlarmsFields(addr)) {
-                ALCrossTable[addr].ALError = 100;
-                ERR = TRUE;
-            }
+        }
+        CrossTable[addr].Enable = atoi(p);
+        // skip empty or disabled variables
+        if (CrossTable[addr].Enable == 0) {
+            CrossTable[addr].Error = 100;
+            continue;
+        }
+
+        // Plc {H,P,S,F}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        switch (p[0]) {
+        case 'H':
+            CrossTable[addr].Plc = Htype;
+            break;
+        case 'P':
+            CrossTable[addr].Plc = Ptype;
+            break;
+        case 'S':
+            CrossTable[addr].Plc = Stype;
+            break;
+        case 'F':
+            CrossTable[addr].Plc = Ftype;
+            break;
+        case 'V':
+            CrossTable[addr].Plc = Vtype;
             break;
         default:
-            ;
+            ERR = TRUE;
+        }
+        if (ERR) {
+            break;
+        }
+
+        // Tag {identifier}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        strncpy(CrossTable[addr].Tag, p, MAX_IDNAME_LEN);
+
+        // Types {UINT, UDINT, DINT, FDCBA, ...}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        if (strncmp(p, "BIT", strlen(p)) == 0) {
+            CrossTable[addr].Types = BIT;
+        } else if (strncmp(p, "BYTE_BIT", strlen(p)) == 0) {
+            CrossTable[addr].Types = BYTE_BIT;
+        } else if (strncmp(p, "WORD_BIT", strlen(p)) == 0) {
+            CrossTable[addr].Types = WORD_BIT;
+        } else if (strncmp(p, "DWORD_BIT", strlen(p)) == 0) {
+            CrossTable[addr].Types = DWORD_BIT;
+        } else if (strncmp(p, "UINT", strlen(p)) == 0) {
+            CrossTable[addr].Types = UINT16;
+        } else if (strncmp(p, "UINTBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = UINT16BA;
+        } else if (strncmp(p, "INT", strlen(p)) == 0) {
+            CrossTable[addr].Types = INT16;
+        } else if (strncmp(p, "INTBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = INT16BA;
+        } else if (strncmp(p, "UDINT", strlen(p)) == 0) {
+            CrossTable[addr].Types = UDINT;
+        } else if (strncmp(p, "UDINTDCBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = UDINTDCBA;
+        } else if (strncmp(p, "UDINTCDAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = UDINTCDAB;
+        } else if (strncmp(p, "UDINTBADC", strlen(p)) == 0) {
+            CrossTable[addr].Types = UDINTBADC;
+        } else if (strncmp(p, "DINT", strlen(p)) == 0) {
+            CrossTable[addr].Types = DINT;
+        } else if (strncmp(p, "DINTDCBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = DINTDCBA;
+        } else if (strncmp(p, "DINTCDAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = DINTCDAB;
+        } else if (strncmp(p, "DINTBADC", strlen(p)) == 0) {
+            CrossTable[addr].Types = DINTBADC;
+        } else if (strncmp(p, "REAL", strlen(p)) == 0) {
+            CrossTable[addr].Types = REAL;
+        } else if (strncmp(p, "REALDCBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALDCBA;
+        } else if (strncmp(p, "REALCDAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALCDAB;
+        } else if (strncmp(p, "REALBADC", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALBADC;
+
+        } else if (strncmp(p, "UINTAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = UINT16; // backward compatibility
+        } else if (strncmp(p, "INTAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = INT16; // backward compatibility
+        } else if (strncmp(p, "UDINTABCD", strlen(p)) == 0) {
+            CrossTable[addr].Types = UDINT; // backward compatibility
+        } else if (strncmp(p, "DINTABCD", strlen(p)) == 0) {
+            CrossTable[addr].Types = DINT; // backward compatibility
+        } else if (strncmp(p, "FDCBA", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALDCBA; // backward compatibility
+        } else if (strncmp(p, "FCDAB", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALCDAB; // backward compatibility
+        } else if (strncmp(p, "FABCD", strlen(p)) == 0) {
+            CrossTable[addr].Types = REAL; // backward compatibility
+        } else if (strncmp(p, "FBADC", strlen(p)) == 0) {
+            CrossTable[addr].Types = REALBADC; // backward compatibility
+
+        } else {
+            if (CrossTable[addr].Enable > 0) {
+                CrossTable[addr].Types = UNKNOWN;
+                ERR = TRUE;
+                break;
+            }
+        }
+
+        // Decimal {0, 1, 2, 3, 4, ...}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].Decimal = atoi(p);
+
+        // Protocol {"", RTU, TCP, TCPRTU}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        if (strncmp(p, "PLC", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = PLC;
+        } else if (strncmp(p, "RTU", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = RTU;
+        } else if (strncmp(p, "TCP", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = TCP;
+        } else if (strncmp(p, "TCPRTU", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = TCPRTU;
+        } else if (strncmp(p, "CANOPEN", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = CANOPEN;
+        } else if (strncmp(p, "MECT", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = MECT;
+        } else if (strncmp(p, "RTU_SRV", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = RTU_SRV;
+        } else if (strncmp(p, "TCP_SRV", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = TCP_SRV;
+        } else if (strncmp(p, "TCPRTU_SRV", strlen(p)) == 0) {
+            CrossTable[addr].Protocol = TCPRTU_SRV;
+        } else {
+            CrossTable[addr].Protocol = PLC;
+            ERR = TRUE;
+            break;
+        }
+
+        // IPAddress {identifier}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        strncpy(CrossTable[addr].IPAddress, p, MAX_IPADDR_LEN);
+
+        // Port {number}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].Port = atoi(p);
+
+        // NodeId {number}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].NodeId = atoi(p);
+
+        // Address {number}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].Offset = atoi(p);
+
+        // Block {number}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].Block = atoi(p);
+
+        // NReg {number}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        CrossTable[addr].BlockSize = atoi(p);
+
+        // Handle ([RO]||[RW]|[AL|EV SOURCE OP COND]){text}
+        p = strtok_csv(NULL, ";", &r);
+        if (p == NULL) {
+            ERR = TRUE;
+            break;
+        }
+        if (strncmp(param.field->Contents, "[RW]", 4) == 0) {
+            CrossTable[addr].Output = TRUE;
+        } else if (strncmp(param.field->Contents, "[RO]", 4) == 0) {
+            CrossTable[addr].Output = FALSE;
+        } else if (strncmp(param.field->Contents, "[AL ", 4) == 0) {
+            CrossTable[addr].Output = FALSE;
+            if (newAlarmEvent(1, addr, &(param.field->Contents[3]), param.field->CurLen - 3)) {
+                ERR = TRUE;
+                break;
+            }
+        } else if (strncmp(param.field->Contents, "[EV ", 4) == 0) {
+            CrossTable[addr].Output = FALSE;
+            if (newAlarmEvent(0, addr, &param.field->Contents[3], param.field->CurLen - 3)) {
+                ERR = TRUE;
+                break;
+            }
+        }
+
+    }
+    if (ERR) {
+        CrossTable[addr].Error = 100;
+        goto exit_function;
+    }
+
+    // check alarms and events
+    for (indx = 1; indx < lastAlarmEvent; ++indx) {
+        // retrieve the source variable address
+        addr = tagAddr(ALCrossTable[indx].ALSource);
+        if (addr == 0) {
+            ERR = TRUE;
+            break;
+        }
+        ALCrossTable[indx].SourceAddr = addr;
+        CrossTable[addr].usedInAlarmsEvents = TRUE;
+        // if the compare is with a variable
+        if (ALCrossTable[indx].ALCompareVar[0] != 0) {
+            // then retrieve the compare variable address
+            addr = tagAddr(ALCrossTable[indx].ALCompareVar);
+            if (addr == 0) {
+                ERR = TRUE;
+                break;
+            }
+            ALCrossTable[indx].CompareAddr = addr;
+            CrossTable[addr].usedInAlarmsEvents = TRUE;
         }
     }
 
     // close file
 exit_function:
-    hw119_close_cross_table(NULL, NULL, (unsigned char *)&close_param);
-    if (close_param.ret_value) {
-        ERR = TRUE;
+    if (xtable) {
+        fclose(xtable);
     }
     fprintf(stderr, " %s\n", (ERR) ? "ERROR" : "OK");
     return ERR;
-}
-
-static inline void setEventAlarm(int i)
-{
-    writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
-    switch (ALCrossTable[i].ALType ) {
-    case Event:
-        vmmSetEvent(pVMM, EVT_RESERVED_10);
-        break;
-    case Alarm:
-        vmmSetEvent(pVMM, EVT_RESERVED_11);
-        break;
-    default:
-        ;
-    }
-}
-
-static inline void clrEventAlarm(int i)
-{
-    writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
 }
 
 static inline void checkThis(int i, int condition)
 {
     if (condition) {
         if (ALCrossTable[i].ALFilterCount == 0) {
-            setEventAlarm(i);
+            // setting alarm/event
+            writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
+            if (ALCrossTable[i].ALType == Alarm) {
+                vmmSetEvent(pVMM, EVT_RESERVED_11);
+            } else {
+                vmmSetEvent(pVMM, EVT_RESERVED_10);
+            }
         } else {
+            // filtering alarm/event
             ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterCount - 1;
         }
     } else {
-        clrEventAlarm(i);
+        // clearing alarm/event
+        writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
         ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterTime;
     }
 }
 
 static void AlarmMngr(void)
 {
-    u_int32_t i, oper, bit;
-    u_int16_t SourceAddr;
-    u_int32_t CompareVal;
-    u_int32_t value, old_value;
-
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
-    for (i = 1; i < DimAlarmsCT; ++i) {
+    for (i = 1; i < lastAlarmEvent; ++i) {
 
-        if (ALCrossTable[i].TagAddr == 0) {
-            // last alarm
-            break;
-        }
+        register u_int16_t SourceAddr;
+        register u_int32_t SourceValue;
+        register u_int16_t Operator;
+        register u_int32_t CompareVal;
+
         SourceAddr = ALCrossTable[i].SourceAddr;
-        if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
+        if (CrossTable[SourceAddr].Error && CrossTable[SourceAddr].Protocol != PLC) {
             // unreliable values
             continue;
         }
-        oper = ALCrossTable[i].ALOperator & 0xFF00;
-        bit = ALCrossTable[i].ALOperator & 0x00FF;
-        if (ALCrossTable[i].CompareAddr == SourceAddr) {
-            // checking rising and falling edges (only bit testing)
-            if (oper == 0 && 1 <= bit && bit <= 32) {
-                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
-                old_value = get_dword_bit(CrossTable[SourceAddr].OldVal, bit);
-                switch (ALCrossTable[i].ALCompareVal) {
-                case FRONTE_SALITA:
-                    checkThis(i, old_value == 0 && value == 1);
-                    break;
-                case FRONTE_DISCESA:
-                    checkThis(i, old_value == 1 && value == 0);
-                    break;
-                default:
-                    ; // FIXME: assert
-                }
-            } else {
-                ; // FIXME: assert
-            }
-        } else {
-            // checking against either fixed or variable values
+	SourceValue = the_QdataRegisters[SourceAddr];
+	Operator = ALCrossTable[i].ALOperator;
+	if (Operator == OPER_RISING) {
+            // checking against old value
+	    CompareVal = ALCrossTable[i].OldVal;
+	    checkThis(i, CompareVal == 0 && SourceValue != 0);
+	    ALCrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+	} else if (Operator == OPER_FALLING)  {
+            // checking against old value
+	    CompareVal = ALCrossTable[i].OldVal;
+	    checkThis(i, CompareVal != 0 && SourceValue == 0);
+	    ALCrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+	} else {
             if (ALCrossTable[i].CompareAddr == 0) {
+                // checking against fixed value
                 CompareVal = ALCrossTable[i].ALCompareVal;
             } else {
+                // checking against variable value
                 CompareVal = the_QdataRegisters[ALCrossTable[i].CompareAddr];
             }
-            switch (oper) {
-            case 0x100: //  >
-                checkThis(i, the_QdataRegisters[SourceAddr] > CompareVal);
-                break;
-            case 0x200: //  >=
-                checkThis(i, the_QdataRegisters[SourceAddr] >= CompareVal);
-                break;
-            case 0x300: //  <
-                checkThis(i, the_QdataRegisters[SourceAddr] < CompareVal);
-                break;
-            case 0x400: //  <=
-                checkThis(i, the_QdataRegisters[SourceAddr] <= CompareVal);
-                break;
-            case 0x500: //  ==
-                checkThis(i, the_QdataRegisters[SourceAddr] == CompareVal);
-                break;
-            case 0x600: //  !=
-                checkThis(i, the_QdataRegisters[SourceAddr] != CompareVal);
-                break;
-            case 0x000: // bit test
-                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
-                checkThis(i, value == CompareVal);
-                break;
-            default:
-                ; // FIXME: assert
-            }
-        }
-    }
-    // save current bit values ("future" old values)
-    for (i = 1; i < DimAlarmsCT; ++i) {
-
-        if (ALCrossTable[i].TagAddr == 0) {
-            // last alarm
-            break;
-        }
-        SourceAddr = ALCrossTable[i].SourceAddr;
-        if (CrossTable[SourceAddr].Error > 0 && CrossTable[SourceAddr].Protocol != PLC) {
-            // unreliable values
-            continue;
-        }
-        oper = ALCrossTable[i].ALOperator & 0xFF00;
-        bit = ALCrossTable[i].ALOperator & 0x00FF;
-        if (ALCrossTable[i].CompareAddr == SourceAddr) {
-            // checking rising and falling edges (only bit testing)
-            if (oper == 0 && 1 <= bit && bit <= 32) {
-                value = get_dword_bit(the_QdataRegisters[SourceAddr], bit);
-                set_dword_bit(&CrossTable[SourceAddr].OldVal, bit, value);
+            if (Operator == OPER_GREATER) {
+                checkThis(i, SourceValue > CompareVal);
+            } else if (Operator == OPER_GREATER_EQ) {
+                checkThis(i, SourceValue >= CompareVal);
+            } else if (Operator == OPER_SMALLER) {
+                checkThis(i, SourceValue < CompareVal);
+            } else if (Operator == OPER_SMALLER_EQ) {
+                checkThis(i, SourceValue <= CompareVal);
+            } else if (Operator == OPER_EQUAL) {
+                checkThis(i, SourceValue == CompareVal);
+            } else if (Operator == OPER_NOT_EQUAL) {
+                checkThis(i, SourceValue != CompareVal);
             } else {
                 ; // FIXME: assert
             }
@@ -1180,51 +1128,6 @@ static void PLCsync(void)
             }
         }
     }
-}
-
-static int checkEventsandAlarms()
-{
-    int retval = 0, i;
-    IEC_STRMAX varname = { 0, MAX_IDNAME_LEN, ""};
-    HW119_GET_ADDR param = {(IEC_STRING *)&varname, 0 };
-
-    fprintf(stderr, "%s()\n", __func__);
-    for (i = 1; i < DimAlarmsCT; ++i) {
-
-        if (ALCrossTable[i].ALTag[0] == '\0') {
-            // last alarm
-            break;
-        }
-        varname.CurLen = strnlen(ALCrossTable[i].ALTag, MAX_IDNAME_LEN);
-        strncpy(varname.Contents, ALCrossTable[i].ALTag, MAX_IDNAME_LEN);
-        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-        ALCrossTable[i].TagAddr = param.ret_value;
-
-        varname.CurLen = strnlen(ALCrossTable[i].ALSource, MAX_IDNAME_LEN);
-        strncpy(varname.Contents, ALCrossTable[i].ALSource, MAX_IDNAME_LEN);
-        hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-        ALCrossTable[i].SourceAddr = param.ret_value;
-
-        if (ALCrossTable[i].ALCompareVar[0] == '\0') {
-            ALCrossTable[i].CompareAddr = 0;
-        } else {
-            varname.CurLen = strnlen(ALCrossTable[i].ALCompareVar, MAX_IDNAME_LEN);
-            strncpy(varname.Contents, ALCrossTable[i].ALCompareVar, MAX_IDNAME_LEN);
-            hw119_get_addr(NULL, NULL, (unsigned char *)&param);
-            ALCrossTable[i].CompareAddr = param.ret_value;
-        }
-
-        if (ALCrossTable[i].TagAddr == 0xffff || ALCrossTable[i].SourceAddr == 0xffff || ALCrossTable[i].CompareAddr == 0xffff) {
-            fprintf(stderr, "%s: bad alarm/event #%d\n", i);
-            retval = -1;
-            break;
-        }
-        CrossTable[ALCrossTable[i].SourceAddr].usedInAlarmsEvents = TRUE;
-        if (ALCrossTable[i].CompareAddr != 0) {
-            CrossTable[ALCrossTable[i].CompareAddr].usedInAlarmsEvents = TRUE;
-        }
-    }
-    return retval;
 }
 
 static int checkServersDevicesAndNodes()
@@ -1528,10 +1431,7 @@ static void *engineThread(void *statusAdr)
     {
         int s, d;
 
-        if (LoadXTable(Alarms_csv)) {
-            goto exit_initialization;
-        }
-        if (LoadXTable(Crosstable_csv)) {
+        if (LoadXTable()) {
             goto exit_initialization;
         }
         if (!system_ini_ok) {
@@ -1540,9 +1440,7 @@ static void *engineThread(void *statusAdr)
         if (checkServersDevicesAndNodes()) {
             goto exit_initialization;
         }
-        if (checkEventsandAlarms()) {
-            goto exit_initialization;
-        }
+
         // create servers
         for (s = 0; s < theServersNumber; ++s) {
             theServers[s].thread_status = NOT_STARTED;
