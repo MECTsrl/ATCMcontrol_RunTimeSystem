@@ -51,7 +51,7 @@ typedef int ssize_t;
 
 /* #include <config.h> */
 
-#define TIMEOUT_ERROR -2
+#define TIMEOUT_ERROR	-2
 #define OTHER_ERROR	-1
 
 #if defined(XENO_RTDM) && (XENO_RTDM >= 3)
@@ -2973,7 +2973,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 	speed_t speed;
 	int flags;
 #endif
-
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
 	if (ctx->debug) {
