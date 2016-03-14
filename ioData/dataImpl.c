@@ -51,8 +51,8 @@
 #include "libModbus.h"
 #include "CANopen.h"
 
-#define REVISION_HI  7
-#define REVISION_LO  1
+#define REVISION_HI  1
+#define REVISION_LO  2
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -523,7 +523,7 @@ static inline void set_dword_bit(u_int32_t *data, unsigned n, unsigned value)
 
 static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
 {
-    char * p, *r;
+    char *p, *r;
 
     if (lastAlarmEvent >= DimAlarmsCT) {
         return -1;
