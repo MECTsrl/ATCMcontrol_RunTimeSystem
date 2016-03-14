@@ -33,6 +33,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <semaphore.h>
+#include <ctype.h>
 
 #include "stdInc.h"
 
@@ -142,7 +143,7 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 //#define RTS_CFG_DEBUG_OUTPUT
 enum TableType {Crosstable_csv = 0, Alarms_csv};
 enum FieldbusType {PLC = 0, RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV};
-enum UpdateType { Htype = 0, Ptype, Stype, Ftype, Vtype};
+enum UpdateType { Htype = 0, Ptype, Stype, Ftype, Vtype, Xtype};
 enum EventAlarm { Event = 0, Alarm};
 static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "MECT", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
 
@@ -339,8 +340,6 @@ static void *datasyncThread(void *statusAdr);
 static void *serverThread(void *statusAdr);
 static void *clientThread(void *statusAdr);
 
-static int ReadFields(int16_t Index);
-static int ReadAlarmsFields(int16_t Index);
 static int LoadXTable(void);
 static void AlarmMngr(void);
 static void PLCsync(void);
@@ -603,7 +602,6 @@ static u_int16_t tagAddr(char *tag)
 char *strtok_csv(char *string, const char *separators, char **savedptr)
 {
     char * p, *s;
-    int i;
 
     if (separators == NULL || savedptr == NULL) {
         return NULL;
@@ -676,7 +674,7 @@ static int LoadXTable(void)
 
     // open file
     fprintf(stderr, "loading '%s' ...", CROSSTABLE_CSV);
-    xtable = fopen(CROSSTABLE_CSV);
+    xtable = fopen(CROSSTABLE_CSV, "r");
     if (xtable == NULL)  {
         ERR = TRUE;
         goto exit_function;
@@ -726,6 +724,9 @@ static int LoadXTable(void)
             break;
         case 'V':
             CrossTable[addr].Plc = Vtype;
+            break;
+        case 'X':
+            CrossTable[addr].Plc = Xtype;
             break;
         default:
             ERR = TRUE;
@@ -906,19 +907,19 @@ static int LoadXTable(void)
             ERR = TRUE;
             break;
         }
-        if (strncmp(param.field->Contents, "[RW]", 4) == 0) {
+        if (strncmp(p, "[RW]", 4) == 0) {
             CrossTable[addr].Output = TRUE;
-        } else if (strncmp(param.field->Contents, "[RO]", 4) == 0) {
+        } else if (strncmp(p, "[RO]", 4) == 0) {
             CrossTable[addr].Output = FALSE;
-        } else if (strncmp(param.field->Contents, "[AL ", 4) == 0) {
+        } else if (strncmp(p, "[AL ", 4) == 0) {
             CrossTable[addr].Output = FALSE;
-            if (newAlarmEvent(1, addr, &(param.field->Contents[3]), param.field->CurLen - 3)) {
+            if (strlen(p) < 10 || newAlarmEvent(1, addr, &(p[3]), strlen(p) - 3)) {
                 ERR = TRUE;
                 break;
             }
-        } else if (strncmp(param.field->Contents, "[EV ", 4) == 0) {
+        } else if (strncmp(p, "[EV ", 4) == 0) {
             CrossTable[addr].Output = FALSE;
-            if (newAlarmEvent(0, addr, &param.field->Contents[3], param.field->CurLen - 3)) {
+            if (strlen(p) < 10 || newAlarmEvent(0, addr, &p[3], strlen(p) - 3)) {
                 ERR = TRUE;
                 break;
             }
@@ -986,6 +987,8 @@ static inline void checkThis(int i, int condition)
 
 static void AlarmMngr(void)
 {
+    u_int16_t i;
+
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (i = 1; i < lastAlarmEvent; ++i) {
 
@@ -1003,14 +1006,14 @@ static void AlarmMngr(void)
 	Operator = ALCrossTable[i].ALOperator;
 	if (Operator == OPER_RISING) {
             // checking against old value
-	    CompareVal = ALCrossTable[i].OldVal;
+        CompareVal = CrossTable[i].OldVal;
 	    checkThis(i, CompareVal == 0 && SourceValue != 0);
-	    ALCrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+        CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
 	} else if (Operator == OPER_FALLING)  {
             // checking against old value
-	    CompareVal = ALCrossTable[i].OldVal;
+        CompareVal = CrossTable[i].OldVal;
 	    checkThis(i, CompareVal != 0 && SourceValue == 0);
-	    ALCrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+        CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
 	} else {
             if (ALCrossTable[i].CompareAddr == 0) {
                 // checking against fixed value
