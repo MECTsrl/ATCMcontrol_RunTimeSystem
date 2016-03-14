@@ -601,7 +601,7 @@ static u_int16_t tagAddr(char *tag)
 
 char *strtok_csv(char *string, const char *separators, char **savedptr)
 {
-    char * p, *s;
+    char *p, *s;
 
     if (separators == NULL || savedptr == NULL) {
         return NULL;
@@ -623,10 +623,16 @@ char *strtok_csv(char *string, const char *separators, char **savedptr)
     *s = 0;
     *savedptr = s + 1;
 
-    while (isspace(*p) && p < s) {
+    // remove spaces at head
+    while (p < s && isspace(*p)) {
         ++p;
     }
-
+    // remove spaces at tail
+    --s;
+    while (s > p && isspace(*s)) {
+        *s = 0;
+        --s;
+    }
     return p;
 }
 
@@ -932,7 +938,7 @@ static int LoadXTable(void)
     }
 
     // check alarms and events
-    for (indx = 1; indx < lastAlarmEvent; ++indx) {
+    for (indx = 1; indx <= lastAlarmEvent; ++indx) {
         // retrieve the source variable address
         addr = tagAddr(ALCrossTable[indx].ALSource);
         if (addr == 0) {
@@ -990,7 +996,7 @@ static void AlarmMngr(void)
     u_int16_t i;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
-    for (i = 1; i < lastAlarmEvent; ++i) {
+    for (i = 1; i <= lastAlarmEvent; ++i) {
 
         register u_int16_t SourceAddr;
         register u_int32_t SourceValue;
