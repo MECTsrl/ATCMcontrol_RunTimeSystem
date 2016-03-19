@@ -2901,7 +2901,6 @@ static ssize_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 	return rt_dev_read(ctx->s, rsp, rsp_length);
 
 #endif
-#endif
 }
 
 static int _modbus_rtu_flush(modbus_t *);
@@ -3155,59 +3154,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 #ifdef O_CLOEXEC
 	flags |= O_CLOEXEC;
 #endif
-
-#if XENO_RTDM
-	ctx->s = rt_dev_open(ctx_rtu->device, 0);
-	if (ctx->s == -1) {
-		fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
-				ctx_rtu->device, strerror(errno));
-		return -1;
-	}
-
-	rt_serial_config.baud_rate = ctx_rtu->baud;
-
-	/* Set data bits (5, 6, 7, 8 bits)
-	   CSIZE        Bit mask for data bits
-	 */
-	switch (ctx_rtu->data_bit) {
-		case 5:  rt_serial_config.data_bits = RTSER_5_BITS;   break;
-		case 6:  rt_serial_config.data_bits = RTSER_6_BITS;   break;
-		case 7:  rt_serial_config.data_bits = RTSER_7_BITS;   break;
-		case 8:  rt_serial_config.data_bits = RTSER_8_BITS;   break;
-		default: rt_serial_config.data_bits = RTSER_DEF_BITS; break;
-	}
-
-	/* Stop bit (1 or 2) */
-	if (ctx_rtu->stop_bit == 1)
-		rt_serial_config.stop_bits = RTSER_1_STOPB;
-	else /* 2 */
-		rt_serial_config.stop_bits = RTSER_2_STOPB;
-
-	/* PARENB       Enable parity bit
-	   PARODD       Use odd parity instead of even */
-	if (ctx_rtu->parity == 'N')
-		rt_serial_config.parity = RTSER_NO_PARITY;		/* None */
-	else if (ctx_rtu->parity == 'E')
-		rt_serial_config.parity = RTSER_EVEN_PARITY;	/* Even */
-	else
-		rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
-
-	/* Software flow control is disabled */
-	rt_serial_config.handshake = RTSER_RTSCTS_HAND;
-
-	{
-		int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
-		if (err) {
-			printf("%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
-
-			rt_dev_close(ctx->s);
-			ctx->s = -1;
-
-			return -1;
-		}
-	}
-
-#else
 
 	ctx->s = open(ctx_rtu->device, flags);
 	if (ctx->s == -1) {
@@ -3575,7 +3521,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		}
 	}
 
-#endif
 #endif
 
 	return 0;
