@@ -561,6 +561,10 @@ static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
     } else {
         goto exit_error;
     }
+    // skip empty or disabled variables
+    if (CrossTable[Index].Enable == 0) {
+        return ERR;
+    }
 
     if (ALCrossTable[lastAlarmEvent].ALOperator != OPER_FALLING && ALCrossTable[lastAlarmEvent].ALOperator != OPER_RISING) {
         char *s;
@@ -930,7 +934,6 @@ static int LoadXTable(void)
                 break;
             }
         }
-
     }
     if (ERR) {
         CrossTable[addr].Error = 100;
