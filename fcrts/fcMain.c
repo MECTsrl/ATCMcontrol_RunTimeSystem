@@ -92,7 +92,6 @@ void ReleaseResources(void);
 /* Long options */
 static struct option long_options[] = {
 	{"version", no_argument,        NULL, 'v'},
-	{"daemon",  no_argument,        NULL, 'd'},
 	{NULL,      no_argument,        NULL,  0}
 };
 
@@ -125,12 +124,6 @@ static int application_options(int argc, char *argv[])
 				exit(0);
 				break;
 
-			/* Daemonize to not be stopped when backgrounded. */
-			case 'd':
-				daemon(1, 1);	/* daemon(3): nochdir, noclose */
-
-				break;
-
 			default:
 				break;
 		}
@@ -151,13 +144,6 @@ int main(int argc, char *argv[])
 	struct stat sb;
 #endif
 
-	/* Call as early as possible to daemonize successfully. */
-	if (application_options(argc, argv) != 0) {
-		fprintf(stderr, "%s: command line option error.\n", __func__);
-
-		return 1;
-	}
-
 #ifdef __XENO__
 	printf("Xenomai enabled\n");
     struct rlimit rlimit;
@@ -166,6 +152,12 @@ int main(int argc, char *argv[])
     retval = setrlimit(RLIMIT_STACK, &rlimit);
     mlockall(MCL_CURRENT | MCL_FUTURE);
 #endif
+
+	if (application_options(argc, argv) != 0) {
+		fprintf(stderr, "%s: command line option error.\n", __func__);
+
+		return 1;
+	}
 
 	// mlockall(MCL_CURRENT | MCL_FUTURE);
 	app_name = argv[0];
