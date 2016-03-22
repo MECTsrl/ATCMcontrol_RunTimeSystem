@@ -1,7 +1,6 @@
 MAKE := make
 SCP := scp
 
-
 .PHONY: all scp tags clean clobber
 
 all:
