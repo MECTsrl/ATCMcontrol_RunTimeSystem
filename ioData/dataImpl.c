@@ -174,12 +174,12 @@ static pthread_cond_t theAlarmsEventsCondvar;
 #define MAX_VARTYPE_LEN      9 // UDINTABCD.
 #define MAX_PROTOCOL_LEN     9 // TCPRTUSRV.
 #define MAX_DEVICE_LEN      13 // /dev/ttyUSB0.
-#define MAX_THREADNAME_LEN  42 // "srv(64)TCPRTUSRV_123.567.901.345_65535"
+#define MAX_THREADNAME_LEN  42 // "srv(64)TCPRTU_SRV_101.102.103.104_65535"
 
 static struct ServerStruct {
     // for serverThread
     enum FieldbusType protocol;
-    char IPaddress[MAX_IPADDR_LEN];
+    u_int32_t IPaddress;
     u_int16_t port;
     //
     union ServerData {
@@ -191,7 +191,7 @@ static struct ServerStruct {
             u_int16_t stopbits;
         } serial;
         struct {
-            char IPaddr[MAX_IPADDR_LEN];
+            u_int32_t IPaddr;
             u_int16_t port;
         } tcp_ip;
     } u;
@@ -211,7 +211,7 @@ static u_int16_t theServersNumber = 0;
 static struct ClientStruct {
     // for clientThread
     enum FieldbusType protocol;
-    char IPaddress[MAX_IPADDR_LEN];
+    u_int32_t IPaddress;
     u_int16_t port;
     //
     union ClientData {
@@ -224,7 +224,7 @@ static struct ClientStruct {
             u_int16_t stopbits;
         } serial; // RTU, MECT
         struct {
-            char IPaddr[MAX_IPADDR_LEN];
+            u_int32_t IPaddr;
             u_int16_t port;
         } tcp_ip; // TCP, TCPRTU
         struct {
@@ -258,6 +258,7 @@ static struct ClientStruct {
     u_int16_t diagnosticAddr;
 } theDevices[MAX_DEVICES];
 static u_int16_t theDevicesNumber = 0;
+static u_int16_t theTcpDevicesNumber = 0;
 
 struct NodeStruct {
     u_int16_t device;
@@ -277,7 +278,7 @@ struct  CrossTableRecord {
     enum varTypes Types;
     u_int16_t Decimal;
     enum FieldbusType Protocol;
-    char IPAddress[MAX_IPADDR_LEN];
+    u_int32_t IPAddress;
     u_int16_t Port;
     u_int8_t NodeId;
     u_int16_t Offset;
@@ -405,7 +406,13 @@ static inline void initDeviceDiagnostic(u_int16_t d)
     } else if (theDevices[d].protocol == CANOPEN && theDevices[d].port == 1) {
         addr = 5040;
     } else if (theDevices[d].protocol == TCP_SRV && theDevices[d].port == 502) {
-        addr = 5010;
+        addr = 5050;
+    } else if (theDevices[d].protocol == TCP && theDevices[d].port == 502) {
+        if (theTcpDevicesNumber >= 10) {
+            addr = 0;
+        } else {
+            addr = 5060 + 10 * (theTcpDevicesNumber - 1);
+        }
     } else {
         addr = 0; // FIXME: add TCP others
     }
@@ -421,7 +428,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
         } else if (theDevices[d].protocol == CANOPEN) {
             value = theDevices[d].u.serial.baudrate; // FIXME: use real baudrate
         } else if (theDevices[d].protocol == TCP) {
-            value = 0x01020304; // FIXME: compute from theDevices[d].u.tcp_ip.IPaddr;
+            value = theDevices[d].u.tcp_ip.IPaddr;
         } else {
             value = 0;
         }
@@ -599,7 +606,7 @@ static u_int16_t tagAddr(char *tag)
     return 0;
 }
 
-char *strtok_csv(char *string, const char *separators, char **savedptr)
+static char *strtok_csv(char *string, const char *separators, char **savedptr)
 {
     char *p, *s;
 
@@ -636,6 +643,39 @@ char *strtok_csv(char *string, const char *separators, char **savedptr)
     return p;
 }
 
+static u_int32_t str2ipaddr(char *str)
+{
+    u_int32_t ipaddr = 0;
+    char buffer[17];
+    char *s, *r;
+    int i;
+
+    strncpy(buffer, str, 17);
+    buffer[16] = 0;
+
+    s = strtok_csv(buffer, ".", &r);
+    for (i = 3; i >= 0; --i) {
+        if (s == NULL) {
+            return 0x00000000;
+        }
+        ipaddr += (strtoul(s, NULL, 10) % 255) << (i * 8);
+        s = strtok_csv(NULL, ".", &r);
+    }
+    return ipaddr;
+}
+
+static char *ipaddr2str(u_int32_t ipaddr, char *buffer)
+{
+    if (buffer != NULL) {
+        register u_int8_t a, b, c, d;
+        a = (ipaddr & 0xFF000000) >> 24;
+        b = (ipaddr & 0x00FF0000) >> 16;
+        c = (ipaddr & 0x0000FF00) >> 8;
+        d = (ipaddr & 0x000000FF);
+        sprintf(buffer, "%u.%u.%u.%u", a, b, c, d);
+    }
+    return buffer;
+}
 
 static int LoadXTable(void)
 {
@@ -651,7 +691,7 @@ static int LoadXTable(void)
         CrossTable[addr].Types = 0;
         CrossTable[addr].Decimal = 0;
         CrossTable[addr].Protocol = PLC;
-        CrossTable[addr].IPAddress[0] = '\0';
+        CrossTable[addr].IPAddress = 0x00000000;
         CrossTable[addr].Port = 0;
         CrossTable[addr].NodeId = 0;
         CrossTable[addr].Offset = 0;
@@ -865,7 +905,7 @@ static int LoadXTable(void)
             ERR = TRUE;
             break;
         }
-        strncpy(CrossTable[addr].IPAddress, p, MAX_IPADDR_LEN);
+        CrossTable[addr].IPAddress = str2ipaddr(p);
 
         // Port {number}
         p = strtok_csv(NULL, ";", &r);
@@ -1181,7 +1221,7 @@ static int checkServersDevicesAndNodes()
                 // add unique variable's server
                 for (s = 0; s < theServersNumber; ++s) {
                     if (CrossTable[i].Protocol == theServers[s].protocol
-                     && strncmp(CrossTable[i].IPAddress, theServers[s].IPaddress, MAX_IPADDR_LEN) == 0
+                     && CrossTable[i].IPAddress == theServers[s].IPaddress
                      && CrossTable[i].Port == theServers[s].port) {
                         // already present
                         break;
@@ -1196,7 +1236,7 @@ static int checkServersDevicesAndNodes()
                     // new server entry
                     ++theServersNumber;
                     theServers[s].protocol = CrossTable[i].Protocol;
-                    strncpy(theServers[s].IPaddress, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                    theServers[s].IPaddress = CrossTable[i].IPAddress;
                     theServers[s].port = CrossTable[i].Port;
                     switch (theServers[s].protocol) {
                     case PLC:
@@ -1232,12 +1272,12 @@ static int checkServersDevicesAndNodes()
                         theServers[s].ctx = NULL;
                     }   break;
                     case TCP_SRV:
-                        strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theServers[s].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
                         break;
                     case TCPRTU_SRV:
-                        strncpy(theServers[s].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theServers[s].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
                         theServers[s].ctx = NULL;
                         break;
@@ -1248,7 +1288,7 @@ static int checkServersDevicesAndNodes()
                     theServers[s].thread_id = 0;
                     theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
-                    snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_%s_%d", s, fieldbusName[theServers[s].protocol], theServers[s].IPaddress, theServers[s].port);
+                    snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_0x%08x_%d", s, fieldbusName[theServers[s].protocol], theServers[s].IPaddress, theServers[s].port);
                 }
                 break;
             default:
@@ -1276,7 +1316,7 @@ static int checkServersDevicesAndNodes()
                 // add unique variable's device
                 for (d = 0; d < theDevicesNumber; ++d) {
                     if (CrossTable[i].Protocol == theDevices[d].protocol
-                     && strncmp(CrossTable[i].IPAddress, theDevices[d].IPaddress, MAX_IPADDR_LEN) == 0
+                     && CrossTable[i].IPAddress == theDevices[d].IPaddress
                      && CrossTable[i].Port == theDevices[d].port) {
                         // already present
                         break;
@@ -1293,7 +1333,7 @@ static int checkServersDevicesAndNodes()
                     CrossTable[i].device = theDevicesNumber;
                     ++theDevicesNumber;
                     theDevices[d].protocol = CrossTable[i].Protocol;
-                    strncpy(theDevices[d].IPaddress, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                    theDevices[d].IPaddress = CrossTable[i].IPAddress;
                     theDevices[d].port = p = CrossTable[i].Port;
                     theDevices[d].server = 0xffff;
                     switch (theDevices[d].protocol) {
@@ -1327,13 +1367,14 @@ static int checkServersDevicesAndNodes()
                         }
                         break;
                     case TCP:
-                        strncpy(theDevices[d].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        ++theTcpDevicesNumber;
+                        theDevices[d].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
                         theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
                         theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
                         break;
                     case TCPRTU:
-                        strncpy(theDevices[d].u.tcp_ip.IPaddr, CrossTable[i].IPAddress, MAX_IPADDR_LEN);
+                        theDevices[d].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
                         theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
                         theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
@@ -1366,7 +1407,7 @@ static int checkServersDevicesAndNodes()
                     default:
                         ;
                     }
-                    snprintf(theDevices[d].name, MAX_THREADNAME_LEN, "dev(%d)%s_%s_%u", d, fieldbusName[theDevices[d].protocol], theDevices[d].IPaddress, theDevices[d].port);
+                    snprintf(theDevices[d].name, MAX_THREADNAME_LEN, "dev(%d)%s_0x%08x_%u", d, fieldbusName[theDevices[d].protocol], theDevices[d].IPaddress, theDevices[d].port);
                     if (theDevices[d].timeout_ms == 0 && theDevices[d].protocol == RTU) {
                         theDevices[d].timeout_ms = 300;
                         fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].timeout_ms);
@@ -2273,14 +2314,18 @@ static void *serverThread(void *arg)
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
-    case TCP_SRV:
-        modbus_ctx = modbus_new_tcp(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
+    case TCP_SRV: {
+        char buffer[MAX_IPADDR_LEN];
+
+        modbus_ctx = modbus_new_tcp(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
-        break;
-    case TCPRTU_SRV:
-        modbus_ctx = modbus_new_tcprtu(theServers[s].u.tcp_ip.IPaddr, theServers[s].u.tcp_ip.port);
+    }   break;
+    case TCPRTU_SRV: {
+        char buffer[MAX_IPADDR_LEN];
+
+        modbus_ctx = modbus_new_tcprtu(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
-        break;
+    }   break;
     default:
         ;
     }
@@ -2535,12 +2580,16 @@ static void *clientThread(void *arg)
         theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.serial.baudrate,
                             theDevices[d].u.serial.parity, theDevices[d].u.serial.databits, theDevices[d].u.serial.stopbits);
     }   break;
-    case TCP:
-        theDevices[d].modbus_ctx = modbus_new_tcp(theDevices[d].u.tcp_ip.IPaddr, theDevices[d].u.tcp_ip.port);
-        break;
-    case TCPRTU:
-        theDevices[d].modbus_ctx = modbus_new_tcprtu(theDevices[d].u.tcp_ip.IPaddr, theDevices[d].u.tcp_ip.port);
-        break;
+    case TCP: {
+        char buffer[MAX_IPADDR_LEN];
+
+        theDevices[d].modbus_ctx = modbus_new_tcp(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+    }   break;
+    case TCPRTU: {
+        char buffer[MAX_IPADDR_LEN];
+
+        theDevices[d].modbus_ctx = modbus_new_tcprtu(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+    }   break;
     case CANOPEN: {
         u_int16_t addr;
         CANopenStart(theDevices[d].u.can.bus); // may start more threads
