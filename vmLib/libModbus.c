@@ -520,11 +520,6 @@ const char *modbus_strerror(int errnum) {
 	}
 }
 
-#if defined(XENO_RTDM) && (XENO_RTDM != 0)
-/* RTDM serial port configuration */
-static struct rtser_config rt_serial_config;
-#endif
-
 void _error_print(modbus_t *ctx, const char *context, int line)
 {
 	if (ctx->debug) {
@@ -781,9 +776,7 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 {
 	int rc;
 	int ret_val = 0;
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
 	fd_set rset;
-#endif
 	struct timeval tv;
 	struct timeval *p_tv;
 	int length_to_read;
@@ -798,11 +791,9 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 		}
 	}
 
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
-	/* Add a file descriptor to the set */
+    /* Add a file descriptor to the set */
 	FD_ZERO(&rset);
 	FD_SET(ctx->s, &rset);
-#endif
 
 	/* We need to analyse the message step by step.  At the first step, we want
 	 * to reach the function code because all packets contain this
@@ -820,27 +811,28 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 		p_tv = &tv;
 	}
 
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
+    while (length_to_read != 0) {
+#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+      if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
+#endif
+        rc = ctx->backend->select(ctx, &rset, p_tv, length_to_read);
+        if (rc == -1) {
+            _error_print(ctx, "select", __LINE__);
+            if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
+                int saved_errno = errno;
 
-	while (length_to_read != 0) {
-		rc = ctx->backend->select(ctx, &rset, p_tv, length_to_read);
-		if (rc == -1) {
-			_error_print(ctx, "select", __LINE__);
-			if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
-				int saved_errno = errno;
+                if (errno == ETIMEDOUT) {
+                    _sleep_response_timeout(ctx);
+                    DBG_PRINT("Going to flush socket....\n");
+                    modbus_flush(ctx);
+                    ret_val = TIMEOUT_ERROR;
 
-				if (errno == ETIMEDOUT) {
-					_sleep_response_timeout(ctx);
-					DBG_PRINT("Going to flush socket....\n");
-					modbus_flush(ctx);
-					ret_val = TIMEOUT_ERROR;
-
-				} else if (errno == EBADF) {
-					modbus_close(ctx);
-					modbus_connect(ctx);
-					ret_val = OTHER_ERROR;
-				}
-				errno = saved_errno;
+                } else if (errno == EBADF) {
+                    modbus_close(ctx);
+                    modbus_connect(ctx);
+                    ret_val = OTHER_ERROR;
+                }
+                errno = saved_errno;
             } else {
                 if (errno == ETIMEDOUT) {
                     ret_val = TIMEOUT_ERROR;
@@ -848,190 +840,133 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
                 ret_val = OTHER_ERROR;
                 }
             }
-			return ret_val;
-		}
-
+            return ret_val;
+        }
+#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+      }
+#endif
         if ((msg_length + length_to_read) < MAX_MESSAGE_LENGTH) {
             rc = ctx->backend->recv(ctx, msg + msg_length, length_to_read);
+#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+            if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
+                if (rc < 0) {
+                    errno = -rc;	/* Set errno to error code. */
+                    rc = -1;		/* Flag the error condition. */
+                }
+            }
+#endif
         } else {
             rc = -1;
         }
-		if (rc == 0) {
-			errno = ECONNRESET;
-			rc = -1;
-		}
-
-		if (rc == -1) {
-			_error_print(ctx, "read", __LINE__);
-			if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
-					(errno == ECONNRESET || errno == ECONNREFUSED ||
-					 errno == EBADF)) {
-				int saved_errno = errno;
-				modbus_close(ctx);
-				modbus_connect(ctx);
-				/* Could be removed by previous calls */
-				errno = saved_errno;
-			}
-			ret_val = OTHER_ERROR;
-			return ret_val;
-		}
-
-		/* Display the hex code of each character received */
-		if (ctx->debug) {
-			int i;
-			for (i=0; i < rc; i++)
-				fprintf(stderr,"<%.2X>", msg[msg_length + i]);
-		}
-
-		/* Sums bytes received */
-		msg_length += rc;
-		/* Computes remaining bytes */
-		length_to_read -= rc;
-
-		if (length_to_read == 0) {
-			switch (step) {
-				case _STEP_FUNCTION:
-					/* Function code position */
-					length_to_read = compute_meta_length_after_function(
-							msg[ctx->backend->header_length],
-							msg_type);
-					if (length_to_read != 0) {
-						step = _STEP_META;
-						break;
-					} /* else switches straight to the next step */
-				case _STEP_META:
-					length_to_read = compute_data_length_after_meta(
-							ctx, msg, msg_type);
-					if ((msg_length + length_to_read) > (int)ctx->backend->max_adu_length) {
-						errno = EMBBADDATA;
-						_error_print(ctx, "too many data", __LINE__);
-						ret_val = OTHER_ERROR;
-						return ret_val;
-					}
-					step = _STEP_DATA;
-					break;
-				default:
-					break;
-			}
-		}
-
-		if (length_to_read > 0 && ctx->byte_timeout.tv_sec != -1) {
-			/* If there is no character in the buffer, the allowed timeout
-			   interval between two consecutive bytes is defined by
-			   byte_timeout */
-			tv.tv_sec = ctx->byte_timeout.tv_sec;
-			tv.tv_usec = ctx->byte_timeout.tv_usec;
-			p_tv = &tv;
-		}
-	}
-
-#else
-
-	while (length_to_read != 0) {
-        if ((msg_length + length_to_read) < MAX_MESSAGE_LENGTH) {
-            rc = ctx->backend->recv(ctx, msg + msg_length, length_to_read);
-#if defined(XENO_RTDM) && (XENO_RTDM >= 2)
-			fprintf(stderr, "rc %d\n", rc);		// TODO MTL: Remove.
-#endif
-			if (rc < 0) {
-				errno = -rc;	/* Set errno to error code. */
-				rc = -1;		/* Flag the error condition. */
-			}
-		}
-		else
+        if (rc == 0) {
+            errno = ECONNRESET;
             rc = -1;
+        }
 
-		if (rc == 0) {
-			errno = ECONNRESET;
-
-			rc = -1;
-		}
-
-		if (rc == -1) {
-			_error_print(ctx, "read", __LINE__);
-			if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
-				int saved_errno = errno;
-
-				if (errno == ETIMEDOUT) {
-					_sleep_response_timeout(ctx);
-
-					DBG_PRINT("Going to flush driver buffers...\n");
-					modbus_flush(ctx);
-
-					ret_val = TIMEOUT_ERROR;
-				}
-				else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
-					modbus_close(ctx);
-					modbus_connect(ctx);
-
-					ret_val = OTHER_ERROR;
-				}
-				else
-					ret_val = OTHER_ERROR;
-
-				errno = saved_errno;	/* May have been changed by previous calls. */
+        if (rc == -1) {
+            _error_print(ctx, "read", __LINE__);
+#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
+            if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
+                    (errno == ECONNRESET || errno == ECONNREFUSED ||
+                     errno == EBADF)) {
+                int saved_errno = errno;
+                modbus_close(ctx);
+                modbus_connect(ctx);
+                /* Could be removed by previous calls */
+                errno = saved_errno;
             }
-			else if (errno == ETIMEDOUT)
-				ret_val = TIMEOUT_ERROR;
-			else
-				ret_val = OTHER_ERROR;
+            ret_val = OTHER_ERROR;
+#else
+          if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
+            if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
+                    (errno == ECONNRESET || errno == ECONNREFUSED ||
+                     errno == EBADF)) {
+                int saved_errno = errno;
+                modbus_close(ctx);
+                modbus_connect(ctx);
+                /* Could be removed by previous calls */
+                errno = saved_errno;
+            }
+            ret_val = OTHER_ERROR;
+          } else {
+            if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
+                int saved_errno = errno;
 
-			return ret_val;
-		}
+                if (errno == ETIMEDOUT) {
+                    _sleep_response_timeout(ctx);
 
-		/* Done handling the errors. */
-		if (ctx->debug) {
-			int i;
+                    DBG_PRINT("Going to flush driver buffers...\n");
+                    modbus_flush(ctx);
 
-			for (i = 0; i < rc; i++)
-				fprintf(stderr, "<%.2X>", msg[msg_length + i]);	/* All received bytes */
-		}
+                    ret_val = TIMEOUT_ERROR;
+                }
+                else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
+                    modbus_close(ctx);
+                    modbus_connect(ctx);
 
-		/* Account for all received bytes. */
-		msg_length += rc;
-		length_to_read -= rc;
-		if (length_to_read == 0) {
-			switch (step) {
-				case _STEP_FUNCTION:	/* Position of function code */
-					length_to_read = compute_meta_length_after_function(msg[ctx->backend->header_length], msg_type);
-					if (length_to_read != 0) {
-						step = _STEP_META;
+                    ret_val = OTHER_ERROR;
+                }
+                else
+                    ret_val = OTHER_ERROR;
 
-						break;
-					}
-					/* else switches to next step */
-
-				case _STEP_META:
-					length_to_read = compute_data_length_after_meta(ctx, msg, msg_type);
-					if ((msg_length + length_to_read) > (int)ctx->backend->max_adu_length) {
-						_error_print(ctx, "too many data", __LINE__);
-
-						errno = EMBBADDATA;
-
-						ret_val = OTHER_ERROR;
-
-						return ret_val;
-					}
-
-					step = _STEP_DATA;
-
-					break;
-
-				default:
-
-					break;
-			}
-		}
-
-		if ((length_to_read > 0) && (ctx->byte_timeout.tv_sec != -1)) {
-			/* With no character in buffer, inter-byte timeout is byte_timeout */
-			tv.tv_sec = ctx->byte_timeout.tv_sec;
-			tv.tv_usec = ctx->byte_timeout.tv_usec;
-			p_tv = &tv;
-		}
-	}
-
+                errno = saved_errno;	/* May have been changed by previous calls. */
+            }
+            else if (errno == ETIMEDOUT)
+                ret_val = TIMEOUT_ERROR;
+            else
+                ret_val = OTHER_ERROR;
+          }
 #endif
+            return ret_val;
+        }
+
+        /* Display the hex code of each character received */
+        if (ctx->debug) {
+            int i;
+            for (i=0; i < rc; i++)
+                fprintf(stderr,"<%.2X>", msg[msg_length + i]);
+        }
+
+        /* Account for all received bytes */
+        msg_length += rc;
+        length_to_read -= rc;
+
+        if (length_to_read == 0) {
+            switch (step) {
+                case _STEP_FUNCTION:
+                    /* Function code position */
+                    length_to_read = compute_meta_length_after_function(
+                            msg[ctx->backend->header_length],
+                            msg_type);
+                    if (length_to_read != 0) {
+                        step = _STEP_META;
+                        break;
+                    } /* else switches straight to the next step */
+                case _STEP_META:
+                    length_to_read = compute_data_length_after_meta(
+                            ctx, msg, msg_type);
+                    if ((msg_length + length_to_read) > (int)ctx->backend->max_adu_length) {
+                        errno = EMBBADDATA;
+                        _error_print(ctx, "too many data", __LINE__);
+                        ret_val = OTHER_ERROR;
+                        return ret_val;
+                    }
+                    step = _STEP_DATA;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (length_to_read > 0 && ctx->byte_timeout.tv_sec != -1) {
+            /* If there is no character in the buffer, the allowed timeout
+               interval between two consecutive bytes is defined by
+               byte_timeout */
+            tv.tv_sec = ctx->byte_timeout.tv_sec;
+            tv.tv_usec = ctx->byte_timeout.tv_usec;
+            p_tv = &tv;
+        }
+    }
 
 	if (ctx->debug)
 		fprintf(stderr,"\n");
@@ -3460,6 +3395,8 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 	}
 
 #else
+    /* RTDM serial port configuration */
+    struct rtser_config rt_serial_config;
 
 	ctx->s = rt_dev_open(ctx_rtu->device, 0);
 	if (ctx->s < 0) {
