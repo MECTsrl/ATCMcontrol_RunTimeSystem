@@ -433,36 +433,31 @@ void termination_handler(int signum)
 #endif
 	/* Avoid recursive call of this handler
 	 */
-	if (term_handler_active != 0)
-	{
-		raise(signum);
-	}
-
-	term_handler_active = 1;
+    if (term_handler_active == 0) {
+        term_handler_active = 1;
 
 #if defined(RTS_CFG_MECT_RETAIN)
-	/* Save the retentive variables
-	 */
-	dump_ret_handler(signum, NULL, NULL);
+        /* Save the retentive variables
+         */
+        dump_ret_handler(signum, NULL, NULL);
 #endif
-	
-	/* Clean Up
-	 */
-	/* ... */
 
-	ReleaseResources();
+        /* Clean Up
+         */
+        /* ... */
 
-	//ByeBye();
+        ReleaseResources();
+        //ByeBye();
+    }
 
 	/* Forward the signal
 	 */
-	new_action.sa_flags = 0;
+    new_action.sa_flags = 0;
 	sigemptyset (&new_action.sa_mask);
 	new_action.sa_handler = SIG_DFL;
 	
 	sigaction(signum, &new_action, NULL);
 	raise(signum);
-
 }
 
 
