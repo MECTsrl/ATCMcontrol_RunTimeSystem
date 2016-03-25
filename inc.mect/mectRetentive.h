@@ -25,7 +25,6 @@
 
 #include "stdInc.h"
 
-#define RETENTIVE_FILE_DEFAULT 	"/local/etc/sysconfig/retentive"
 #define RETENTIVE_FILE 			"/local/retentive"
 
 char 					*ptRetentive;

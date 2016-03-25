@@ -286,12 +286,8 @@ int main(int argc, char *argv[])
 	fd = open (RETENTIVE_FILE, O_RDWR | O_SYNC);
 	if(fd == -1) 
 	{
-		fd = open (RETENTIVE_FILE_DEFAULT, O_RDWR | O_SYNC);
-		if(fd == -1) 
-		{
-			perror ("open");
-			RETURN(ERR_ERROR);
-		}
+        perror ("open");
+        RETURN(ERR_ERROR);
 	}
 
         if(fstat (fd, &sb) == -1) {
