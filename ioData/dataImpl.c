@@ -2939,6 +2939,14 @@ static void *clientThread(void *arg)
             case PLC: // FIXME: assert
                 break;
             case RTU:
+                if (modbus_connect(theDevices[d].modbus_ctx) >= 0) {
+                    modbus_set_response_timeout(theDevices[d].modbus_ctx, &response_timeout);
+                    changeDeviceStatus(d, CONNECTED);
+                } else {
+                    changeDeviceStatus(d, DEVICE_BLACKLIST);
+                    zeroDeviceVariables(d);
+                }
+                break;
             case TCP:
             case TCPRTU:
                 if (modbus_connect(theDevices[d].modbus_ctx) >= 0) {
