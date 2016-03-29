@@ -2288,7 +2288,6 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
 static void *serverThread(void *arg)
 {
     u_int32_t s = (u_int32_t)arg;
-    modbus_t * modbus_ctx = NULL;
     u_int8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int master_socket;
     int rc;
@@ -2310,27 +2309,27 @@ static void *serverThread(void *arg)
 #else
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
 #endif
-        modbus_ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
+        theServers[s].ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     case TCP_SRV: {
         char buffer[MAX_IPADDR_LEN];
 
-        modbus_ctx = modbus_new_tcp(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
+        theServers[s].ctx = modbus_new_tcp(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     case TCPRTU_SRV: {
         char buffer[MAX_IPADDR_LEN];
 
-        modbus_ctx = modbus_new_tcprtu(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
+        theServers[s].ctx = modbus_new_tcprtu(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     default:
         ;
     }
-    if (modbus_ctx != NULL && theServers[s].mb_mapping != NULL
-     && modbus_set_slave(modbus_ctx, theServers[s].NodeId) == 0) {
+    if (theServers[s].ctx != NULL && theServers[s].mb_mapping != NULL
+     && modbus_set_slave(theServers[s].ctx, theServers[s].NodeId) == 0) {
         threadInitOK = TRUE;
     }
 
@@ -2349,13 +2348,17 @@ static void *serverThread(void *arg)
         if (server_socket == -1) {
             switch (theServers[s].protocol) {
             case RTU_SRV:
-                server_socket = modbus_get_socket(modbus_ctx); // here socket is file descriptor
+                if (modbus_connect(theServers[s].ctx)) {
+                    server_socket = -1;
+                } else {
+                    server_socket = modbus_get_socket(theServers[s].ctx); // here socket is file descriptor
+                }
                 break;
             case TCP_SRV:
-                server_socket = modbus_tcp_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
+                server_socket = modbus_tcp_listen(theServers[s].ctx, THE_SRV_MAX_CLIENTS);
                 break;
             case TCPRTU_SRV:
-                server_socket = modbus_tcprtu_listen(modbus_ctx, THE_SRV_MAX_CLIENTS);
+                server_socket = modbus_tcprtu_listen(theServers[s].ctx, THE_SRV_MAX_CLIENTS);
                 break;
             default:
                 ;
@@ -2386,11 +2389,11 @@ static void *serverThread(void *arg)
         switch (theServers[s].protocol) {
         case RTU_SRV:
             // unique client (serial line)
-            rc = modbus_receive(modbus_ctx, query);
+            rc = modbus_receive(theServers[s].ctx, query);
             if (rc > 0) {
                 pthread_mutex_lock(&theServers[s].mutex);
                 {
-                    modbus_reply(modbus_ctx, query, rc, theServers[s].mb_mapping);
+                    modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
                 }
                 pthread_mutex_unlock(&theServers[s].mutex);
             }
@@ -2422,12 +2425,12 @@ static void *serverThread(void *arg)
                             inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, newfd);
                     }
                 } else {
-                    modbus_set_socket(modbus_ctx, master_socket);
-                    rc = modbus_receive(modbus_ctx, query);
+                    modbus_set_socket(theServers[s].ctx, master_socket);
+                    rc = modbus_receive(theServers[s].ctx, query);
                     if (rc > 0 && theServers[s].mb_mapping != NULL) {
                         pthread_mutex_lock(&theServers[s].mutex);
                         {
-                            modbus_reply(modbus_ctx, query, rc, theServers[s].mb_mapping);
+                            modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
                         }
                         pthread_mutex_unlock(&theServers[s].mutex);
                     } else if (rc == -1) {
@@ -2461,9 +2464,9 @@ static void *serverThread(void *arg)
             close(server_socket);
             server_socket = -1;
          }
-        if (modbus_ctx != NULL) {
-            modbus_close(modbus_ctx);
-            modbus_free(modbus_ctx);
+        if (theServers[s].ctx != NULL) {
+            modbus_close(theServers[s].ctx);
+            modbus_free(theServers[s].ctx);
         }
         break;
     default:
