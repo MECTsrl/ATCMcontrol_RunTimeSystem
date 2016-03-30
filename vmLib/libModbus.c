@@ -2736,6 +2736,17 @@ static int win32_ser_read(struct win32_ser *ws, uint8_t *p_msg,
 static void _modbus_rtu_ioctl_rts(int fd, int on)
 {
 #if HAVE_DECL_TIOCM_RTS
+#if defined(XENO_RTDM) && (XENO_RTDM != 0)
+	struct rtser_config config;
+
+	config.config_mask = RTSER_SET_MECT_RTS_MASK;
+	if (on) {
+		config.mect_rts = RTSER_MECT_RTS_CLR; // is inverted in i.MX28 UART
+	} else {
+		config.mect_rts = RTSER_MECT_RTS_SET;
+	}
+	rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &config);
+#else
 	int flags;
 
 	ioctl(fd, TIOCMGET, &flags);
@@ -2745,6 +2756,7 @@ static void _modbus_rtu_ioctl_rts(int fd, int on)
 		flags &= ~TIOCM_RTS;
 	}
 	ioctl(fd, TIOCMSET, &flags);
+#endif
 #endif
 }
 
@@ -2762,13 +2774,10 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 #if HAVE_DECL_TIOCM_RTS
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
-#if defined(XENO_RTDM) && (XENO_RTDM != 0)
-	assert(ctx_rtu->rts == MODBUS_RTU_RTS_NONE);	/* Not RTDM-enabled. */
-#endif
 
 	if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
 		ssize_t size;
-
+#else
 		if (ctx->debug) {
 			fprintf(stderr, "Sending request using RTS signal\n");
 		}
@@ -2776,11 +2785,29 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
 		// usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 
+#if defined(XENO_RTDM) && (XENO_RTDM != 0)
+		size = rt_dev_write(ctx->s, req, req_length);
+		{
+		    // us delay instead of osSleep(ms)
+		    struct timespec rqtp, rmtp;
+		    ldiv_t q;
+		    u_int32_t delay_us = ctx_rtu->onebyte_time * req_length; // _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH is in the RTDM driver
+
+		    q = ldiv(delay_us, 1E6); // us =--> s
+		    rqtp.tv_sec = q.quot;
+		    rqtp.tv_nsec = q.rem * 1E3; // us =--> ns
+
+		    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
+			rqtp.tv_sec = rmtp.tv_sec;
+			rqtp.tv_nsec = rmtp.tv_nsec;
+		    }
+		}
+#else
 		size = write(ctx->s, req, req_length);
-
 		// usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+#endif
 		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
-
+#endif
 		return size;
 	} else {
 #endif
@@ -3747,7 +3774,7 @@ modbus_t* modbus_new_rtu(const char *device,
 
 #if HAVE_DECL_TIOCM_RTS
 	/* The RTS use has been set by default */
-	ctx_rtu->rts = MODBUS_RTU_RTS_NONE;
+	ctx_rtu->rts = MODBUS_RTU_RTS_UP;
 
 	/* Calculate estimated time in micro second to send one byte */
 	ctx_rtu->onebyte_time = (1000 * 1000) * (1 + data_bit + (parity == 'N' ? 0 : 1) + stop_bit) / baud;
