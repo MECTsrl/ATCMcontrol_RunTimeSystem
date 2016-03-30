@@ -2777,7 +2777,7 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 
 	if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
 		ssize_t size;
-#else
+
 		if (ctx->debug) {
 			fprintf(stderr, "Sending request using RTS signal\n");
 		}
@@ -2807,7 +2807,7 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 		// usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 #endif
 		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
-#endif
+
 		return size;
 	} else {
 #endif
