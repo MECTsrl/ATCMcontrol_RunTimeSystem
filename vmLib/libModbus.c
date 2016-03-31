@@ -848,10 +848,28 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
         if ((msg_length + length_to_read) < MAX_MESSAGE_LENGTH) {
             rc = ctx->backend->recv(ctx, msg + msg_length, length_to_read);
 #if defined(XENO_RTDM) && (XENO_RTDM > 0)
-            if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
+            if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
                 if (rc < 0) {
                     errno = -rc;	/* Set errno to error code. */
                     rc = -1;		/* Flag the error condition. */
+#if 0
+                } else {
+                    // FIXME: remove me
+                    if (msg_length == 0 && length_to_read == 2 && rc > 0 && msg[0] == 0) {
+                        register int rr;
+                        if (rc == 2) {
+                            msg[0] = msg[1];
+                        }
+                        --rc;
+                        rr = 2 - rc;
+                        rc = ctx->backend->recv(ctx, msg + rc, rr);
+                        if (rc != rr) {
+                            rc = -1;
+                        } else {
+                            rc = 2;
+                        }
+                    }
+#endif
                 }
             }
 #endif
@@ -894,21 +912,17 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 
                 if (errno == ETIMEDOUT) {
                     _sleep_response_timeout(ctx);
-
                     DBG_PRINT("Going to flush driver buffers...\n");
                     modbus_flush(ctx);
-
                     ret_val = TIMEOUT_ERROR;
                 }
                 else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
                     modbus_close(ctx);
                     modbus_connect(ctx);
-
                     ret_val = OTHER_ERROR;
                 }
                 else
                     ret_val = OTHER_ERROR;
-
                 errno = saved_errno;	/* May have been changed by previous calls. */
             }
             else if (errno == ETIMEDOUT)
@@ -2137,6 +2151,21 @@ void modbus_get_response_timeout(modbus_t *ctx, struct timeval *timeout)
 void modbus_set_response_timeout(modbus_t *ctx, const struct timeval *timeout)
 {
 	ctx->response_timeout = *timeout;
+#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+    if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
+        /* Response timeout in ns */
+        struct rtser_config rt_serial_config;
+        int err;
+
+        rt_serial_config.config_mask = RTSER_SET_TIMEOUT_RX;
+        rt_serial_config.rx_timeout = ctx->response_timeout.tv_sec * 1E9 + ctx->response_timeout.tv_usec * 1E3;
+        err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+        if (err) {
+            fprintf(stderr, "%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
+
+        }
+    }
+#endif
 }
 
 /* Get the timeout interval between two consecutive bytes of a message */
@@ -2739,13 +2768,13 @@ static void _modbus_rtu_ioctl_rts(int fd, int on)
 #if defined(XENO_RTDM) && (XENO_RTDM != 0)
 	struct rtser_config config;
 
-	config.config_mask = RTSER_SET_MECT_RTS_MASK;
-	if (on) {
-		config.mect_rts = RTSER_MECT_RTS_CLR; // is inverted in i.MX28 UART
-	} else {
-		config.mect_rts = RTSER_MECT_RTS_SET;
-	}
-	rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &config);
+    config.config_mask = RTSER_SET_MECT_RTS_MASK;
+    if (on) {
+        config.mect_rts = RTSER_MECT_RTS_CLR; // RTDM on i.MX28
+    } else {
+        config.mect_rts = RTSER_MECT_RTS_SET;
+    }
+    rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &config);
 #else
 	int flags;
 
@@ -2782,33 +2811,33 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 			fprintf(stderr, "Sending request using RTS signal\n");
 		}
 
-		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
-		// usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+        _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
+        // usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 
 #if defined(XENO_RTDM) && (XENO_RTDM != 0)
-		size = rt_dev_write(ctx->s, req, req_length);
-		{
+        size = rt_dev_write(ctx->s, req, req_length);
+        {
 		    // us delay instead of osSleep(ms)
 		    struct timespec rqtp, rmtp;
 		    ldiv_t q;
-		    u_int32_t delay_us = ctx_rtu->onebyte_time * req_length; // _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH is in the RTDM driver
+            u_int32_t delay_us = ctx_rtu->onebyte_time * req_length; // _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH is in the RTDM driver
 
 		    q = ldiv(delay_us, 1E6); // us =--> s
 		    rqtp.tv_sec = q.quot;
 		    rqtp.tv_nsec = q.rem * 1E3; // us =--> ns
 
 		    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
-			rqtp.tv_sec = rmtp.tv_sec;
-			rqtp.tv_nsec = rmtp.tv_nsec;
+                rqtp.tv_sec = rmtp.tv_sec;
+                rqtp.tv_nsec = rmtp.tv_nsec;
 		    }
 		}
 #else
 		size = write(ctx->s, req, req_length);
 		// usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 #endif
-		_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
+        _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
 
-		return size;
+        return size;
 	} else {
 #endif
 
@@ -3438,7 +3467,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		| RTSER_SET_STOP_BITS
 		| RTSER_SET_PARITY
 		| RTSER_SET_HANDSHAKE
-		| RTSER_SET_TIMEOUT_RX
 		;
 
 	/* Set Baud rate */
@@ -3470,21 +3498,13 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 	/* Disable software flow control */
 	rt_serial_config.handshake = RTSER_RTSCTS_HAND;
 
-	/* Response timeout in ns */
-	rt_serial_config.rx_timeout = ctx->response_timeout.tv_sec * 1000000000 + ctx->response_timeout.tv_usec * 1000;
-
-	{
-		int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
-		if (err) {
-			printf("%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
-
-			rt_dev_close(ctx->s);
-			ctx->s = -1;
-
-			return -1;
-		}
-	}
-
+    int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+    if (err) {
+        fprintf(stderr, "%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
+        rt_dev_close(ctx->s);
+        ctx->s = -1;
+        return -1;
+    }
 #endif
 
 	return 0;
