@@ -852,24 +852,6 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
                 if (rc < 0) {
                     errno = -rc;	/* Set errno to error code. */
                     rc = -1;		/* Flag the error condition. */
-#if 0
-                } else {
-                    // FIXME: remove me
-                    if (msg_length == 0 && length_to_read == 2 && rc > 0 && msg[0] == 0) {
-                        register int rr;
-                        if (rc == 2) {
-                            msg[0] = msg[1];
-                        }
-                        --rc;
-                        rr = 2 - rc;
-                        rc = ctx->backend->recv(ctx, msg + rc, rr);
-                        if (rc != rr) {
-                            rc = -1;
-                        } else {
-                            rc = 2;
-                        }
-                    }
-#endif
                 }
             }
 #endif
