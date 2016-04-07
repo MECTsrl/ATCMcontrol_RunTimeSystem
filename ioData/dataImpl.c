@@ -3082,8 +3082,12 @@ static void *clientThread(void *arg)
                     }
                     break;
                 case CommError:
+                    for (i = 0; i < DataNumber; ++i) {
+                       CrossTable[DataAddr + i].Error = 1;
+                       the_QdataStates[DataAddr + i] = DATA_ERR; // DATA_RUN;
+                    }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
-                    // no break, continue with TimeoutError case
+                    break;
                 case TimeoutError:
                     for (i = 0; i < DataNumber; ++i) {
                        CrossTable[DataAddr + i].Error = 1;
@@ -3117,7 +3121,7 @@ static void *clientThread(void *arg)
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
                         theNodes[Data_node].status = NODE_OK;
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        DataAddr = 0; // i.e. get next
                         break;
                     case WRITE_PREPARE:
                     default:
@@ -3150,7 +3154,7 @@ static void *clientThread(void *arg)
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
                         theNodes[Data_node].status = NODE_OK;
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        DataAddr = 0; // i.e. get next
                         break;
                     case WRITE_PREPARE:
                     default:

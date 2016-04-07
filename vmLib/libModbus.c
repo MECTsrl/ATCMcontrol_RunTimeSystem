@@ -3478,7 +3478,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
 
 	/* Disable software flow control */
-	rt_serial_config.handshake = RTSER_RTSCTS_HAND;
+    rt_serial_config.handshake = RTSER_NO_HAND;
 
     int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
     if (err) {
