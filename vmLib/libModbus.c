@@ -2793,11 +2793,14 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 			fprintf(stderr, "Sending request using RTS signal\n");
 		}
 
+#undef RTS_IS_MANAGED_HERE
+#ifdef RTS_IS_MANAGED_HERE
         _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
         // usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
-
+#endif
 #if defined(XENO_RTDM) && (XENO_RTDM != 0)
         size = rt_dev_write(ctx->s, req, req_length);
+#ifdef RTS_IS_MANAGED_HERE
         {
 		    // us delay instead of osSleep(ms)
 		    struct timespec rqtp, rmtp;
@@ -2813,12 +2816,14 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
                 rqtp.tv_nsec = rmtp.tv_nsec;
 		    }
 		}
+#endif
 #else
 		size = write(ctx->s, req, req_length);
 		// usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 #endif
+#ifdef RTS_IS_MANAGED_HERE
         _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
-
+#endif
         return size;
 	} else {
 #endif
