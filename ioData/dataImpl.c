@@ -147,8 +147,9 @@ enum UpdateType { Htype = 0, Ptype, Stype, Ftype, Vtype, Xtype};
 enum EventAlarm { Event = 0, Alarm};
 static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "MECT", "RTU_SRV", "TCP_SRV", "TCPRTU_SRV" };
 
-enum threadStatus  {NOT_STARTED = 0, RUNNING, EXITING};
-enum DeviceStatus  {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
+enum threadStatus {NOT_STARTED = 0, RUNNING, EXITING};
+enum ServerStatus {SRV_RUNNING0 = 0, SRV_RUNNING1, SRV_RUNNING2, SRV_RUNNING3, SRV_RUNNING4};
+enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 #ifdef VERBOSE_DEBUG
 static const char *statusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
 #endif
@@ -195,15 +196,19 @@ static struct ServerStruct {
             u_int16_t port;
         } tcp_ip;
     } u;
+    u_int16_t silence_ms;
+    u_int16_t timeout_ms;
     u_int16_t NodeId;
     //
     char name[MAX_THREADNAME_LEN]; // "(64)TCPRTUSRV_123.567.901.345_65535"
+    enum ServerStatus status;
     pthread_t thread_id;
     enum threadStatus thread_status;
     pthread_mutex_t mutex;
     modbus_t * ctx;
     modbus_mapping_t *mb_mapping;
     u_int8_t *can_buffer;
+    u_int16_t diagnosticAddr;
 } theServers[MAX_SERVERS];
 static u_int16_t theServersNumber = 0;
 
@@ -391,30 +396,89 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
 //1;P;TCP9_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5150;10  ;[RO]
 
 
+static inline void initServerDiagnostic(u_int16_t s)
+{
+    u_int16_t addr = 0;
+
+    switch (theServers[s].protocol) {
+    case RTU_SRV:
+        switch (theServers[s].port) {
+        case 0: addr = 5000; break;
+        case 1: addr = 5010; break;
+        case 3: addr = 5020; break;
+        default: ;
+        }
+        break;
+    case TCP_SRV:
+        switch (theServers[s].port) {
+        case 502: addr = 5050; break;
+        default: ;
+        }
+        break;
+    case TCPRTU_SRV:
+        break;
+    default:
+        ;
+    }
+    theServers[s].diagnosticAddr = addr;
+    if (addr) {
+        u_int32_t value;
+
+        value = (theServers[s].protocol << 16) + theServers[s].port;
+        writeQdataRegisters(addr + 0, value); // TYPE_PORT
+
+        switch (theServers[s].protocol) {
+        case RTU_SRV:
+            value = theServers[s].u.serial.baudrate;
+            break;
+        case TCP_SRV:
+            value = theServers[s].u.tcp_ip.IPaddr;
+            break;
+        case TCPRTU_SRV:
+            break;
+        default:
+            value = 0;
+        }
+        writeQdataRegisters(addr + 1, value); // IP_ADDRESS/BAUDRATE
+    }
+}
+
 static inline void initDeviceDiagnostic(u_int16_t d)
 {
     u_int16_t addr = 0;
 
-    if (theDevices[d].protocol == RTU && theDevices[d].port == 0) {
-        addr = 5000;
-    } else if (theDevices[d].protocol == RTU && theDevices[d].port == 1) {
-        addr = 5010;
-    } else if (theDevices[d].protocol == RTU && theDevices[d].port == 3) {
-        addr = 5020;
-    } else if (theDevices[d].protocol == CANOPEN && theDevices[d].port == 0) {
-        addr = 5030;
-    } else if (theDevices[d].protocol == CANOPEN && theDevices[d].port == 1) {
-        addr = 5040;
-    } else if (theDevices[d].protocol == TCP_SRV && theDevices[d].port == 502) {
-        addr = 5050;
-    } else if (theDevices[d].protocol == TCP && theDevices[d].port == 502) {
-        if (theTcpDevicesNumber >= 10) {
-            addr = 0;
-        } else {
-            addr = 5060 + 10 * (theTcpDevicesNumber - 1);
+    switch (theDevices[d].protocol) {
+    case RTU:
+        switch (theDevices[d].port) {
+        case 0: addr = 5000; break;
+        case 1: addr = 5010; break;
+        case 3: addr = 5020; break;
+        default: ;
         }
-    } else {
-        addr = 0; // FIXME: add TCP others
+        break;
+    case RTU_SRV:
+        break;
+    case CANOPEN:
+        switch (theDevices[d].port) {
+        case 0: addr = 5030; break;
+        case 1: addr = 5040; break;
+        default: ;
+        }
+        break;
+    case TCP_SRV:
+        break;
+    case TCP:
+        switch (theDevices[d].port) {
+        case 502:
+            if (theTcpDevicesNumber < 10) {
+                addr = 5060 + 10 * (theTcpDevicesNumber - 1);
+            }
+            break;
+        default: ;
+        }
+        break;
+    default:
+        ;
     }
     theDevices[d].diagnosticAddr = addr;
     if (addr) {
@@ -423,13 +487,17 @@ static inline void initDeviceDiagnostic(u_int16_t d)
         value = (theDevices[d].protocol << 16) + theDevices[d].port;
         writeQdataRegisters(addr + 0, value); // TYPE_PORT
 
-        if (theDevices[d].protocol == RTU) {
+        switch (theDevices[d].protocol) {
+        case RTU:
             value = theDevices[d].u.serial.baudrate;
-        } else if (theDevices[d].protocol == CANOPEN) {
+            break;
+        case CANOPEN:
             value = theDevices[d].u.serial.baudrate; // FIXME: use real baudrate
-        } else if (theDevices[d].protocol == TCP) {
+            break;
+        case TCP:
             value = theDevices[d].u.tcp_ip.IPaddr;
-        } else {
+            break;
+        default:
             value = 0;
         }
         writeQdataRegisters(addr + 1, value); // IP_ADDRESS/BAUDRATE
@@ -1263,6 +1331,8 @@ static int checkServersDevicesAndNodes()
                                 theServers[s].u.serial.parity = system_ini.serial_port[port].parity;
                                 theServers[s].u.serial.databits = system_ini.serial_port[port].databits;
                                 theServers[s].u.serial.stopbits = system_ini.serial_port[port].stopbits;
+                                theServers[s].silence_ms = system_ini.serial_port[port].silence_ms;
+                                theServers[s].timeout_ms = system_ini.serial_port[port].timeout_ms;
                             }
                             break;
                         default:
@@ -1274,11 +1344,15 @@ static int checkServersDevicesAndNodes()
                     case TCP_SRV:
                         theServers[s].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
+                        theServers[s].silence_ms = system_ini.tcp_ip_port.silence_ms;
+                        theServers[s].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
                         theServers[s].ctx = NULL;
                         break;
                     case TCPRTU_SRV:
                         theServers[s].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theServers[s].u.tcp_ip.port = CrossTable[i].Port;
+                        theServers[s].silence_ms = system_ini.tcp_ip_port.silence_ms;
+                        theServers[s].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
                         theServers[s].ctx = NULL;
                         break;
                     default:
@@ -1286,9 +1360,11 @@ static int checkServersDevicesAndNodes()
                     }
                     theServers[s].NodeId = CrossTable[i].NodeId;
                     theServers[s].thread_id = 0;
+                    theServers[s].status = SRV_RUNNING0;
                     theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
                     snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_0x%08x_%d", s, fieldbusName[theServers[s].protocol], theServers[s].IPaddress, theServers[s].port);
+                    initServerDiagnostic(s);
                 }
                 break;
             default:
@@ -1420,7 +1496,6 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].writeOperations = 0;
                     theDevices[d].writeResetIndex = 0;
                     theDevices[d].PLCwriteRequestNumber = 0;
-                    setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
                     theDevices[d].PLCwriteRequestGet = 0;
                     theDevices[d].PLCwriteRequestPut = 0;
                     // theDevices[d].modbus_ctx .last_good_ms, PLCwriteRequests, PLCwriteRequestNumber, PLCwriteRequestGet, PLCwriteRequestPut
@@ -2285,6 +2360,15 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
     return retval;
 }
 
+static inline void changeServerStatus(u_int32_t s, enum ServerStatus status)
+{
+    theServers[s].status = status;
+    setQdataRegisters(theServers[s].diagnosticAddr, 2, status); // STATUS
+#ifdef VERBOSE_DEBUG
+    fprintf(stderr, "%s: status = %d\n", theServers[s].name, status);
+#endif
+}
+
 static void *serverThread(void *arg)
 {
     u_int32_t s = (u_int32_t)arg;
@@ -2296,10 +2380,13 @@ static void *serverThread(void *arg)
     int fdmax = 0;
     int server_socket = -1;
     int threadInitOK = FALSE;
+    struct timeval timeout_tv;
 
     // thread init
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // serverThread
     pthread_mutex_init(&theServers[s].mutex, NULL);
+    timeout_tv.tv_sec = theServers[s].timeout_ms  / 1000;
+    timeout_tv.tv_usec = (theServers[s].timeout_ms % 1000) * 1000;
     switch (theServers[s].protocol) {
     case RTU_SRV: {
         char device[VMM_MAX_PATH];
@@ -2335,6 +2422,10 @@ static void *serverThread(void *arg)
 
     // run
     theServers[s].thread_status = RUNNING;
+    if (!threadInitOK)
+        changeServerStatus(s, SRV_RUNNING1);
+    else
+        changeServerStatus(s, SRV_RUNNING2);
 
     while (engineStatus != enExiting) {
 
@@ -2352,6 +2443,7 @@ static void *serverThread(void *arg)
                     server_socket = -1;
                 } else {
                     server_socket = modbus_get_socket(theServers[s].ctx); // here socket is file descriptor
+                    modbus_set_response_timeout(theServers[s].ctx, &timeout_tv);
                 }
                 break;
             case TCP_SRV:
@@ -2367,6 +2459,7 @@ static void *serverThread(void *arg)
                 FD_ZERO(&refset);
                 FD_SET(server_socket, &refset);
                 fdmax = server_socket;
+                changeServerStatus(s, SRV_RUNNING3);
             }
         }
         if (server_socket < 0) {
@@ -2374,18 +2467,33 @@ static void *serverThread(void *arg)
             continue;
         }
 
-        // wait on server socket, only until timeout
-        struct timeval tv;
-        rdset = refset;
-        tv.tv_sec = THE_SERVER_DELAY_ms / 1000;
-        tv.tv_usec = THE_SERVER_DELAY_ms % 1000;
-        if (select(fdmax+1, &rdset, NULL, NULL, &tv) <= 0) {
-            // timeout or error
-            osSleep(THE_SERVER_DELAY_ms);
-            continue;
+        if (theServers[s].protocol == RTU_SRV) {
+            // (single connection) force silence then read with timeout
+            osSleep(theServers[s].silence_ms);
+        } else {
+            // (multiple connection) wait on server socket, only until timeout
+            rdset = refset;
+            if (select(fdmax+1, &rdset, NULL, NULL, &timeout_tv) <= 0) {
+                // timeout or error
+                osSleep(THE_SERVER_DELAY_ms);
+                continue;
+            }
         }
 
+        changeServerStatus(s, SRV_RUNNING4);
         // accept requests
+#define _FC_READ_COILS                0x01
+#define _FC_READ_DISCRETE_INPUTS      0x02
+#define _FC_READ_HOLDING_REGISTERS    0x03
+#define _FC_READ_INPUT_REGISTERS      0x04
+#define _FC_WRITE_SINGLE_COIL         0x05
+#define _FC_WRITE_SINGLE_REGISTER     0x06
+#define _FC_READ_EXCEPTION_STATUS     0x07
+#define _FC_WRITE_MULTIPLE_COILS      0x0F
+#define _FC_WRITE_MULTIPLE_REGISTERS  0x10
+#define _FC_REPORT_SLAVE_ID           0x11
+#define _FC_MASK_WRITE_REGISTER       0x16
+#define _FC_WRITE_AND_READ_REGISTERS  0x17
         switch (theServers[s].protocol) {
         case RTU_SRV:
             // unique client (serial line)
@@ -2393,6 +2501,29 @@ static void *serverThread(void *arg)
             if (rc > 0) {
                 pthread_mutex_lock(&theServers[s].mutex);
                 {
+                    switch (query[1]) {
+                    case _FC_READ_COILS:
+                    case _FC_READ_DISCRETE_INPUTS:
+                    case _FC_READ_HOLDING_REGISTERS:
+                    case _FC_READ_INPUT_REGISTERS:
+                    case _FC_READ_EXCEPTION_STATUS:
+                    case _FC_REPORT_SLAVE_ID:
+                        incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                        break;
+                    case _FC_WRITE_SINGLE_COIL:
+                    case _FC_WRITE_SINGLE_REGISTER:
+                    case _FC_WRITE_MULTIPLE_COILS:
+                    case _FC_WRITE_MULTIPLE_REGISTERS:
+                    case _FC_MASK_WRITE_REGISTER:
+                        incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                        break;
+                    case _FC_WRITE_AND_READ_REGISTERS:
+                        incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                        incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                        break;
+                    default:
+                        break;
+                    }
                     modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
                 }
                 pthread_mutex_unlock(&theServers[s].mutex);
@@ -2430,6 +2561,29 @@ static void *serverThread(void *arg)
                     if (rc > 0 && theServers[s].mb_mapping != NULL) {
                         pthread_mutex_lock(&theServers[s].mutex);
                         {
+                            switch (query[(theServers[s].protocol == TCP_SRV) ? 7 : 1]) {
+                            case _FC_READ_COILS:
+                            case _FC_READ_DISCRETE_INPUTS:
+                            case _FC_READ_HOLDING_REGISTERS:
+                            case _FC_READ_INPUT_REGISTERS:
+                            case _FC_READ_EXCEPTION_STATUS:
+                            case _FC_REPORT_SLAVE_ID:
+                                incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                                break;
+                            case _FC_WRITE_SINGLE_COIL:
+                            case _FC_WRITE_SINGLE_REGISTER:
+                            case _FC_WRITE_MULTIPLE_COILS:
+                            case _FC_WRITE_MULTIPLE_REGISTERS:
+                            case _FC_MASK_WRITE_REGISTER:
+                                incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                                break;
+                            case _FC_WRITE_AND_READ_REGISTERS:
+                                incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                                incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                                break;
+                            default:
+                                break;
+                            }
                             modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
                         }
                         pthread_mutex_unlock(&theServers[s].mutex);
@@ -2448,6 +2602,7 @@ static void *serverThread(void *arg)
         default:
             ;
         }
+        changeServerStatus(s, SRV_RUNNING3);
     }
 
     // thread clean
@@ -2484,7 +2639,9 @@ static void zeroNodeVariables(u_int32_t node)
     u_int16_t addr;
 
     if (theDevices[theNodes[node].device].protocol == TCP) {
+#ifdef VERBOSE_DEBUG
         fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
+#endif
         for (addr = 1; addr <= DimCrossTable; ++addr) {
             if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
                 writeQdataRegisters(addr, 0);
@@ -2498,7 +2655,9 @@ static void zeroDeviceVariables(u_int32_t d)
     u_int16_t addr;
 
     if (theDevices[d].protocol == TCP) {
+#ifdef VERBOSE_DEBUG
         fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
+#endif
         for (addr = 1; addr <= DimCrossTable; ++addr) {
             if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
                 writeQdataRegisters(addr, 0);
