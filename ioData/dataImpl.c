@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  5
+#define REVISION_LO  6
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -154,7 +154,7 @@ enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DE
 static const char *statusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
 #endif
 enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
-enum fieldbusError {NoError = 0, CommError, TimeoutError};
+enum fieldbusError {NoError = 0, CommError, TimeoutError, ConnReset};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
                UINT16, UINT16BA,
@@ -1740,6 +1740,32 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
     return retval;
 }
 
+static void fieldbusReset(u_int16_t d)
+{
+    switch (theDevices[d].protocol) {
+    case PLC:
+        // FIXME: assert
+        break;
+    case RTU:
+    case TCP:
+    case TCPRTU:
+        modbus_close(theDevices[d].modbus_ctx);
+        break;
+    case CANOPEN:
+        // CANopenResetChannel(theDevices[d].u.can.bus);
+        break;
+    case MECT:
+        // FIXME: check state
+        break;
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
+        break;
+    default:
+        ;
+    }
+}
+
 static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_t DataValue[], u_int16_t DataNumber)
 {
     enum fieldbusError retval = NoError;
@@ -1928,7 +1954,11 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 #endif
             }
         } else if (e == -1) { // OTHER_ERROR
-            retval = CommError;
+            if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
+                retval = ConnReset;
+            } else {
+                retval = CommError;
+            }
         } else if (e == -2) { // TIMEOUT_ERROR
             retval = TimeoutError;
         } else {
@@ -1937,6 +1967,15 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 #endif
             retval = CommError;
         }
+#ifdef VERBOSE_DEBUG
+        if (e != regs) {
+            int saved_errno = errno;
+            char line[80];
+            sprintf(line, "fieldbusRead(%u): regs=%d, e=%d", d, regs, e);
+            errno = saved_errno;
+            perror(line);
+        }
+#endif
         break;
     case CANOPEN:
         device = CrossTable[DataAddr].device;
@@ -2248,20 +2287,34 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     pthread_mutex_unlock(&theServers[server].mutex);
                 }
             }
+            e = regs;
             break;
         default:
             ; //FIXME: assert
         }
-        switch (e) {
-        case -1: // OTHER_ERROR
-            retval = CommError;
-            break;
-        case -2: // TIMEOUT_ERROR
-            retval = TimeoutError;
-            break;
-        default:
+        if (e == regs) {
             retval = NoError;
+        } else if (e == -1) { // OTHER_ERROR
+            if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
+                retval = ConnReset;
+            } else {
+                retval = CommError;
+            }
+        } else if (e == -2) { // TIMEOUT_ERROR
+            retval = TimeoutError;
+        } else {
+            retval = CommError;
         }
+#ifdef VERBOSE_DEBUG
+        if (e != regs) {
+            int saved_errno = errno;
+            char line[80];
+            sprintf(line, "fieldbusWrite(%u): addr=%u, num=%u, value=0x%08x, regs=%d, e=%d",
+                                                 d, DataAddr, DataNumber, DataValue[0], regs, e);
+            errno = saved_errno;
+            perror(line);
+        }
+#endif
         break;
     case CANOPEN:
         device = CrossTable[DataAddr].device;
@@ -2475,7 +2528,7 @@ static void *serverThread(void *arg)
             rdset = refset;
             if (select(fdmax+1, &rdset, NULL, NULL, &timeout_tv) <= 0) {
                 // timeout or error
-                osSleep(THE_SERVER_DELAY_ms);
+                osSleep(theServers[s].timeout_ms);
                 continue;
             }
         }
@@ -2545,15 +2598,19 @@ static void *serverThread(void *arg)
                     memset(&clientaddr, 0, sizeof(clientaddr));
                     newfd = accept(server_socket, (struct sockaddr *)&clientaddr, &addrlen);
                     if (newfd == -1) {
+#ifdef VERBOSE_DEBUG
                         perror("Server accept() error");
+#endif
                     } else {
                         FD_SET(newfd, &refset);
 
                         if (newfd > fdmax) {
                             fdmax = newfd;
                         }
+#ifdef VERBOSE_DEBUG
                         fprintf(stderr, "New connection from %s:%d on socket %d\n",
                             inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, newfd);
+#endif
                     }
                 } else {
                     modbus_set_socket(theServers[s].ctx, master_socket);
@@ -3248,6 +3305,7 @@ static void *clientThread(void *arg)
                     incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
                     break;
                 case TimeoutError:
+                case ConnReset:
                     for (i = 0; i < DataNumber; ++i) {
                        CrossTable[DataAddr + i].Error = 1;
                        the_QdataStates[DataAddr + i] = DATA_ERR;
@@ -3288,6 +3346,7 @@ static void *clientThread(void *arg)
                     }
                     break;
                 case TimeoutError:
+                case ConnReset:
                     theNodes[Data_node].RetryCounter = 0;
                     theNodes[Data_node].status = TIMEOUT;
                     DataAddr = DataAddr; // i.e. RETRY this immediately
@@ -3321,6 +3380,7 @@ static void *clientThread(void *arg)
                     }
                     break;
                 case TimeoutError:
+                case ConnReset:
                     theNodes[Data_node].RetryCounter += 1;
                     if (theNodes[Data_node].RetryCounter < system_ini.system.retries) {
                         theNodes[Data_node].status = TIMEOUT;
@@ -3377,45 +3437,24 @@ static void *clientThread(void *arg)
             // ok proceed with the fieldbus operations
             if (error == TimeoutError) {
                 changeDeviceStatus(d, CONNECTED_WITH_ERRORS);
+            } else if (error == ConnReset) {
+                fieldbusReset(d);
+                changeDeviceStatus(d, NOT_CONNECTED);
             }
             break;
         case CONNECTED_WITH_ERRORS:
             // ok proceed with the fieldbus operations
             if (error == NoError || error == CommError) {
                 changeDeviceStatus(d, CONNECTED);
-            } else {
-                // error == TimeoutError
+            } else if (error == ConnReset) {
+                fieldbusReset(d);
+                changeDeviceStatus(d, NOT_CONNECTED);
+            } else if (error == TimeoutError) {
                 updateDeviceTiming(d);
-                if (theDevices[d].elapsed_time_ms <= THE_DEVICE_SILENCE_ms) {
-                    // do nothing
-                } else {
+                if (theDevices[d].elapsed_time_ms > THE_DEVICE_SILENCE_ms) {
                     // too much silence
-                    switch (theDevices[d].protocol) {
-                    case PLC:
-                        // FIXME: assert
-                        break;
-                    case RTU:
-                    case TCP:
-                    case TCPRTU:
-                        modbus_close(theDevices[d].modbus_ctx);
-                        break;
-                    case CANOPEN:
-                        // CANopenResetChannel(theDevices[d].u.can.bus);
-                        break;
-                    case MECT:
-                        // FIXME: check state
-                        break;
-                    case RTU_SRV:
-                    case TCP_SRV:
-                    case TCPRTU_SRV:
-                        break;
-                    default:
-                        ;
-                    }
+                    fieldbusReset(d);
                     changeDeviceStatus(d, NOT_CONNECTED);
-                    XX_GPIO_CLR(5);
-                    osSleep(THE_CONNECTION_DELAY_ms);
-                    XX_GPIO_SET(5);
                 }
             }
             break;
