@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2011 Mect s.r.l
  *
  * This file is part of FarosPLC.
@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  6
+#define REVISION_LO  7
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -105,9 +105,9 @@ static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
 static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 // Qdata states
-#define DATA_OK            0    // read and ok
-#define DATA_ERR           1    // read and failure
-#define DATA_RUN           2    // still reading
+#define DATA_OK            0    // reading/writing success
+#define DATA_ERR           1    // reading/writing failure
+#define DATA_BUSY          2    // still reading/writing
 
 // -------- SYNC MANAGE FROM HMI ---------------------------------------------
 #define REG_SYNC_NUMBER 	6144 // 1+5472+...
@@ -1194,6 +1194,8 @@ static void PLCsync(void)
                         // consider only "H" variables, because the "P,S,F" are already managed by clientThread
                         if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
                             sem_post(&theDevices[CrossTable[addr].device].newOperations);
+                        } else {
+                            the_QsyncRegisters[indx] = QUEUE_EMPTY;
                         }
                         break;
                     default:
@@ -1238,6 +1240,7 @@ static void PLCsync(void)
                 }
                 break;
             case WRITE_PREPARE:
+                the_QsyncRegisters[indx] = QUEUE_EMPTY;
                 break; // nop
             default:
                 ;
@@ -2552,6 +2555,7 @@ static void *serverThread(void *arg)
             // unique client (serial line)
             rc = modbus_receive(theServers[s].ctx, query);
             if (rc > 0) {
+                osSleep(theServers[s].silence_ms);
                 pthread_mutex_lock(&theServers[s].mutex);
                 {
                     switch (query[1]) {
@@ -2771,7 +2775,7 @@ static void *clientThread(void *arg)
     u_int32_t read_time_ms[MAX_PRIORITY];   // next read time for each priority
 
     // data for each fieldbus operation
-    u_int16_t QueueIndex;    // command index in the queue
+    u_int16_t QueueIndex = 0;// command index in the queue
     u_int16_t Operation;     // read/write normal/recipe single/multiple
     u_int16_t DataAddr = 0;  // variable address in the crosstable
     u_int32_t DataValue[64]; // max 64 reads and 16 writes
@@ -3022,7 +3026,8 @@ static void *clientThread(void *arg)
                         if (oper == 0 && addr == 0) {
                             // queue tail, jump to the array end
                             indx = DimCrossTable;
-                        } else if (CrossTable[addr].device == d
+                        } else if (the_QsyncRegisters[indx] == QUEUE_BUSY_WRITE
+                               && CrossTable[addr].device == d
                                && (oper == WRITE_SINGLE || oper == WRITE_MULTIPLE
                                 || oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE)) {
                             found = TRUE;
@@ -3069,7 +3074,7 @@ static void *clientThread(void *arg)
                                  && CrossTable[addr].Enable == (prio + 1)
                                  && CrossTable[addr].Plc > Htype
                                  && addr == CrossTable[addr].BlockBase // reading by block only
-                                 && the_QdataStates[addr] != DATA_RUN) {
+                                 ) {
                                     found = TRUE;
                                     break;
                                 }
@@ -3098,15 +3103,12 @@ static void *clientThread(void *arg)
                                 if (oper == 0 && addr == 0) {
                                     // queue tail, jump to the array end
                                     indx = DimCrossTable;
-                                } else if (CrossTable[addr].device == d && oper == READ
+                                } else if (the_QsyncRegisters[indx] == QUEUE_BUSY_READ
+                                        && CrossTable[addr].device == d && oper == READ
                                         && CrossTable[addr].Enable == (prio + 1)
                                         && CrossTable[addr].Plc == Htype
                                         && addr == CrossTable[addr].BlockBase // reading by block only
-                                        && the_QdataStates[addr] != DATA_RUN) {
-                                    // NB: DATA_RUN is active while processing the read,
-                                    //     while DATA_OK and DATA_ERR are the possible output when finished
-                                    //     do not check Qsync for QUEUE_BUSY_READ, that is an acknowledge
-                                    //     and that never changes for "P,S,F" variables (and "H" while in page)
+                                        ) {
                                     found = TRUE;
                                     break;
                                 }
@@ -3234,7 +3236,7 @@ static void *clientThread(void *arg)
 
             for (i = 0; i < DataNumber; ++i) {
                 // CrossTable[DataAddr + i].Error = 0;
-                the_QdataStates[DataAddr + i] = DATA_RUN;
+                the_QdataStates[DataAddr + i] = DATA_BUSY;
             }
             XX_GPIO_CLR(5);
             switch (Operation) {
@@ -3330,9 +3332,6 @@ static void *clientThread(void *arg)
                 case CommError:
                     switch (Operation) {
                     case READ:
-                        theNodes[Data_node].status = NODE_OK;
-                        DataAddr = 0; // i.e. get next
-                        break;
                     case WRITE_SINGLE:
                     case WRITE_MULTIPLE:
                     case WRITE_RIC_MULTIPLE:
@@ -3364,9 +3363,6 @@ static void *clientThread(void *arg)
                 case CommError:
                     switch (Operation) {
                     case READ:
-                        theNodes[Data_node].status = NODE_OK;
-                        DataAddr = 0; // i.e. get next
-                        break;
                     case WRITE_SINGLE:
                     case WRITE_MULTIPLE:
                     case WRITE_RIC_MULTIPLE:
@@ -3391,18 +3387,17 @@ static void *clientThread(void *arg)
                         switch (Operation) {
                         case READ:
                             zeroNodeVariables(Data_node);
-                            break;
+                            // no break
                         case WRITE_SINGLE:
                         case WRITE_MULTIPLE:
                         case WRITE_RIC_MULTIPLE:
                         case WRITE_RIC_SINGLE:
+                            DataAddr = 0; // i.e. get next
                             break;
                         case WRITE_PREPARE:
                         default:
                             ;
                         }
-                        DataAddr = 0; // i.e. retry this after the others
-                        sem_post(&theDevices[d].newOperations);
                     }
                     break;
                 default:
@@ -3415,7 +3410,6 @@ static void *clientThread(void *arg)
                 if (theNodes[Data_node].JumpRead > 0) {
                     theNodes[Data_node].status = BLACKLIST;
                     DataAddr = 0; // i.e. retry this after the others
-                    sem_post(&theDevices[d].newOperations);
                 } else {
                     theNodes[Data_node].status = NODE_OK;
                     DataAddr = DataAddr; // i.e. RETRY this immediately
