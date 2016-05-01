@@ -1054,7 +1054,7 @@ static int LoadXTable(void)
         }
         ALCrossTable[indx].SourceAddr = addr;
         CrossTable[addr].usedInAlarmsEvents = TRUE;
-        // if the compare is with a variable
+        // if the comparison is with a variable
         if (ALCrossTable[indx].ALCompareVar[0] != 0) {
             // then retrieve the compare variable address
             addr = tagAddr(ALCrossTable[indx].ALCompareVar);
@@ -1064,6 +1064,63 @@ static int LoadXTable(void)
             }
             ALCrossTable[indx].CompareAddr = addr;
             CrossTable[addr].usedInAlarmsEvents = TRUE;
+        } else {
+            // the comparison is with a fixed value, now check for the vartype
+            // since we saved the value as float before and we wish to check
+            // directly afterwards using u_int32_t values
+            float fvalue = *(float *)&ALCrossTable[indx].ALCompareVal;
+            int n;
+
+            switch (CrossTable[addr].Types) {
+            case BIT:
+            case BYTE_BIT:
+            case WORD_BIT:
+            case DWORD_BIT:
+                if (fvalue <= 0) {
+                    ALCrossTable[indx].ALCompareVal = 0;
+                } else if (fvalue <= 1) {
+                    ALCrossTable[indx].ALCompareVal = 1;
+                } else {
+                    ALCrossTable[indx].ALCompareVal = 2;
+                }
+                break;
+            case INT16:
+            case INT16BA:
+            case DINT:
+            case DINTDCBA:
+            case DINTCDAB:
+            case DINTBADC:
+                for (n = 0; n < CrossTable[addr].Decimal; ++n) {
+                    fvalue *= 10;
+                }
+                // NB this may either overflow or underflow
+                ALCrossTable[indx].ALCompareVal = fvalue;
+                break;
+            case UINT16:
+            case UINT16BA:
+            case UDINT:
+            case UDINTDCBA:
+            case UDINTCDAB:
+            case UDINTBADC:
+                if (fvalue <= 0) {
+                    fvalue = 0; // why check unsigned with a negative value?
+                } else {
+                    for (n = 0; n < CrossTable[addr].Decimal; ++n) {
+                        fvalue *= 10;
+                    }
+                }
+                // NB this may overflow
+                ALCrossTable[indx].ALCompareVal = fvalue;
+                break;
+            case REAL:
+            case REALDCBA:
+            case REALCDAB:
+            case REALBADC:
+                // the value is already stored as a float, comparisons will be ok
+                break;
+            default:
+                ; // FIXME: assert
+            }
         }
     }
 
