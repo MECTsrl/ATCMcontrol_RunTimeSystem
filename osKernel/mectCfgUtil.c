@@ -205,6 +205,8 @@ int get_system_conf(char *ptr, struct system_conf *system, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "trace_window_s", &system->trace_window_s, line_num, filename);
     if (r) { return r; }
+    r = get_name(ptr, "language", system->language, line_num, filename);
+    if (r) { return r; }
     if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_SYSTEM);
         return -1;
@@ -386,6 +388,7 @@ void app_config_dump(struct system_ini *system_ini)
     fprintf(stderr, "fast_log_period_s = %u\n", system_ini->system.fast_log_period_s);
     fprintf(stderr, "max_log_space_MB = %u\n", system_ini->system.max_log_space_MB);
     fprintf(stderr, "trace_window_s = %u\n", system_ini->system.trace_window_s);
+    fprintf(stderr, "language = %s\n", system_ini->system.language);
 
     for (n = 0; n < MAX_SERIAL_PORT; ++n) {
         fprintf(stderr, "%s %d\n", TAG_CONF_SERIAL_PORT_n, n);

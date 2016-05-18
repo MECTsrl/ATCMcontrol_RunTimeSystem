@@ -72,6 +72,7 @@ struct system_conf {
     u_int16_t fast_log_period_s;            // fast_log_period_s = 1
     u_int16_t max_log_space_MB;             // max_log_space_MB = 5
     u_int16_t trace_window_s;               // trace_window_s = 60
+    char language[MAX_NAMELEN];             // language = en
 };
 
 struct system_ini {
