@@ -625,7 +625,8 @@ static int send_msg(modbus_t *ctx, uint8_t *msg, int msg_length)
 					modbus_close(ctx);
 					_sleep_response_timeout(ctx);
 					modbus_connect(ctx);
-				} else {
+                    modbus_set_response_timeout(ctx, &ctx->response_timeout);
+                } else {
 					_sleep_response_timeout(ctx);
 					modbus_flush(ctx);
 				}
@@ -829,7 +830,9 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 
                 } else if (errno == EBADF) {
                     modbus_close(ctx);
+                    _sleep_response_timeout(ctx);
                     modbus_connect(ctx);
+                    modbus_set_response_timeout(ctx, &ctx->response_timeout);
                     ret_val = OTHER_ERROR;
                 }
                 errno = saved_errno;
@@ -883,7 +886,9 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
                      errno == EBADF)) {
                 int saved_errno = errno;
                 modbus_close(ctx);
+                _sleep_response_timeout(ctx);
                 modbus_connect(ctx);
+                modbus_set_response_timeout(ctx, &ctx->response_timeout);
                 /* Could be removed by previous calls */
                 errno = saved_errno;
             }
@@ -900,7 +905,9 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
                 }
                 else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
                     modbus_close(ctx);
+                    _sleep_response_timeout(ctx);
                     modbus_connect(ctx);
+                    modbus_set_response_timeout(ctx, &ctx->response_timeout);
                     ret_val = OTHER_ERROR;
                 }
                 else
@@ -2132,7 +2139,9 @@ void modbus_get_response_timeout(modbus_t *ctx, struct timeval *timeout)
 
 void modbus_set_response_timeout(modbus_t *ctx, const struct timeval *timeout)
 {
-	ctx->response_timeout = *timeout;
+    if (timeout != &ctx->response_timeout) {
+        ctx->response_timeout = *timeout;
+    }
 #if defined(XENO_RTDM) && (XENO_RTDM > 0)
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
         /* Response timeout in ns */
@@ -3490,8 +3499,10 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         fprintf(stderr, "%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
         rt_dev_close(ctx->s);
         ctx->s = -1;
+        fprintf(stderr, "%s(%d) error\n", __func__, ctx->s);
         return -1;
     }
+    fprintf(stderr, "%s(%d) ok\n", __func__, ctx->s);
 #endif
 
 	return 0;
@@ -3629,7 +3640,8 @@ static void _modbus_rtu_close(modbus_t *ctx)
 		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
 		close(ctx->s);
 #else
-		rt_dev_close(ctx->s);
+        fprintf(stderr, "%s(%d)\n", __func__, ctx->s);
+        rt_dev_close(ctx->s);
 #endif
 	}
 #endif
@@ -3653,8 +3665,9 @@ static int _modbus_rtu_flush(modbus_t *ctx)
 
 	/* Emulate an IO flush by reopening the port. */
 	_modbus_rtu_close(ctx);
+	_sleep_response_timeout(ctx);
 	_modbus_rtu_connect(ctx);
-
+    modbus_set_response_timeout(ctx, &ctx->response_timeout);
 	return 0;
 
 #endif

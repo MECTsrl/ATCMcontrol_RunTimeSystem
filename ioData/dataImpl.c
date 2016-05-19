@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  10
+#define REVISION_LO  11
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -2013,29 +2013,28 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 }
 #endif
             }
-        } else if (e == -1) { // OTHER_ERROR
-            if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
-                retval = ConnReset;
+        } else {
+#ifdef VERBOSE_DEBUG
+            int saved_errno = errno;
+            char line[80];
+#endif
+            if (e == -1) { // OTHER_ERROR
+                if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
+                    retval = ConnReset;
+                } else {
+                    retval = CommError;
+                }
+            } else if (e == -2) { // TIMEOUT_ERROR
+                retval = TimeoutError;
             } else {
                 retval = CommError;
             }
-        } else if (e == -2) { // TIMEOUT_ERROR
-            retval = TimeoutError;
-        } else {
 #ifdef VERBOSE_DEBUG
-			fprintf(stderr, "fieldbusRead(): regs = %d, e = %d\n", regs, e); 
-#endif
-            retval = CommError;
-        }
-#ifdef VERBOSE_DEBUG
-        if (e != regs) {
-            int saved_errno = errno;
-            char line[80];
-            sprintf(line, "fieldbusRead(%u): regs=%d, e=%d", d, regs, e);
+            sprintf(line, "fieldbusWrite(%d, %u, %u): %d,%d --> %d", d, DataAddr, DataNumber, e, errno, retval);
             errno = saved_errno;
             perror(line);
-        }
 #endif
+        }
         break;
     case CANOPEN:
         device = CrossTable[DataAddr].device;
@@ -2354,27 +2353,28 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         }
         if (e == regs) {
             retval = NoError;
-        } else if (e == -1) { // OTHER_ERROR
-            if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
-                retval = ConnReset;
+        } else {
+#ifdef VERBOSE_DEBUG
+            int saved_errno = errno;
+            char line[80];
+#endif
+            if (e == -1) { // OTHER_ERROR
+                if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
+                    retval = ConnReset;
+                } else {
+                    retval = CommError;
+                }
+            } else if (e == -2) { // TIMEOUT_ERROR
+                retval = TimeoutError;
             } else {
                 retval = CommError;
             }
-        } else if (e == -2) { // TIMEOUT_ERROR
-            retval = TimeoutError;
-        } else {
-            retval = CommError;
-        }
 #ifdef VERBOSE_DEBUG
-        if (e != regs) {
-            int saved_errno = errno;
-            char line[80];
-            sprintf(line, "fieldbusWrite(%u): addr=%u, num=%u, value=0x%08x, regs=%d, e=%d",
-                                                 d, DataAddr, DataNumber, DataValue[0], regs, e);
+            sprintf(line, "fieldbusWrite(%d, %u, %u): %d,%d --> %d", d, DataAddr, DataNumber, e, errno, retval);
             errno = saved_errno;
             perror(line);
-        }
 #endif
+        }
         break;
     case CANOPEN:
         device = CrossTable[DataAddr].device;
