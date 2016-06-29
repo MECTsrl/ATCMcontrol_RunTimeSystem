@@ -37,6 +37,7 @@
  * ----------------------------------------------------------------------------
  */
 
+void dataGetVersionInfo(char *szVersion);
 void dataEngineStart(void);
 void dataEngineStop(void);
 IEC_UINT dataInitialize(IEC_UINT uIOLayer);

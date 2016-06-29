@@ -355,6 +355,13 @@ static void zeroDeviceVariables(u_int32_t d);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
+void dataGetVersionInfo(char *szVersion)
+{
+    if (szVersion) {
+        sprintf(szVersion, "v%d.%03d", REVISION_HI, REVISION_LO);
+    }
+}
+
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
 {
     the_QdataRegisters[addr] = value;

@@ -117,9 +117,13 @@ static int application_options(int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'v':
+#if 0
                 if (sysGetVersionInfo(version) != OK) {
                     sprintf(version, "(unknown)");
                 }
+#else
+                dataGetVersionInfo(version);
+#endif
                 printf("%s version: %s\n", argv[0], version);
 				exit(0);
 				break;
