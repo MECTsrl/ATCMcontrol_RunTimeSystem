@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  12
+#define REVISION_LO  13
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -63,7 +63,7 @@
 
 #define MAX_SERVERS  5 // 3 RTU_SRV + 1 TCP_SRV + 1 TCPRTU_SRV (PLC in dataMain->dataNotifySet/Get)
 #define MAX_DEVICES 16 // 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
-#define MAX_NODES   16 //
+#define MAX_NODES   64 //
 
 #define MAX_WRITES  64 // 16
 #define MAX_READS   64
