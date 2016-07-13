@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  13
+#define REVISION_LO  14
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -168,6 +168,7 @@ enum EngineStatus { enIdle = 0, enInitialized, enRunning, enError, enExiting };
 static enum EngineStatus engineStatus = enIdle;
 static pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t theAlarmsEventsCondvar;
+static sem_t newOperations[MAX_DEVICES];
 
 #define MAX_IPADDR_LEN      17 // 123.567.901.345.
 #define MAX_NUMBER_LEN      12 // -2147483648. -32768.
@@ -246,7 +247,6 @@ static struct ClientStruct {
     enum threadStatus thread_status;
     u_int32_t current_time_ms;
     u_int32_t elapsed_time_ms;
-    sem_t newOperations;
     u_int16_t writeOperations;
     u_int16_t writeResetIndex;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
@@ -1257,7 +1257,7 @@ static void PLCsync(void)
                     case TCPRTU_SRV:
                         // consider only "H" variables, because the "P,S,F" are already managed by clientThread
                         if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
-                            sem_post(&theDevices[CrossTable[addr].device].newOperations);
+                            sem_post(&newOperations[CrossTable[addr].device]);
                         } else {
                             the_QsyncRegisters[indx] = QUEUE_EMPTY;
                         }
@@ -1295,7 +1295,7 @@ static void PLCsync(void)
                             if (oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE) {
                                 theDevices[CrossTable[addr].device].writeResetIndex = 1;
                             }
-                            sem_post(&theDevices[CrossTable[addr].device].newOperations);
+                            sem_post(&newOperations[CrossTable[addr].device]);
                         }
                         break;
                     default:
@@ -1559,7 +1559,7 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].status = ZERO;
                     // theDevices[d].thread_id = 0;
                     theDevices[d].thread_status = NOT_STARTED;
-                    sem_init(&theDevices[d].newOperations, 0, 0);
+                    sem_init(&newOperations[d], 0, 0);
                     theDevices[d].writeOperations = 0;
                     theDevices[d].writeResetIndex = 0;
                     theDevices[d].PLCwriteRequestNumber = 0;
@@ -2834,6 +2834,7 @@ static void *clientThread(void *arg)
     // device queue management by priority and periods
     u_int16_t prio;                         // priority of variables
     u_int16_t write_index;                  // current write index in queue
+    int we_have_variables[MAX_PRIORITY];    // do we have variables at that priority?
     u_int16_t read_addr[MAX_PRIORITY];      // current read address in crosstable for each priority
     u_int16_t read_index[MAX_PRIORITY];     // current read indexes in queue for each priority
     u_int32_t read_time_ms[MAX_PRIORITY];   // next read time for each priority
@@ -2967,7 +2968,24 @@ static void *clientThread(void *arg)
         read_time_ms[prio] = theDevices[d].current_time_ms;
         read_addr[prio] = 1;
         read_index[prio] = 1;
+        we_have_variables[prio] = 0;
     }
+    // for each priority check if we have variables at that priority
+    for (DataAddr = 1; DataAddr <= DimCrossTable; ++DataAddr) {
+        if (CrossTable[DataAddr].device == d
+         && CrossTable[DataAddr].Enable > 0 && CrossTable[DataAddr].Enable <= MAX_PRIORITY
+         ) {
+            prio = CrossTable[DataAddr].Enable - 1;
+            we_have_variables[prio] = 1;
+        }
+    }
+    fprintf(stderr, "%s: checking in priorities {", theDevices[d].name);
+    for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+        if (we_have_variables[prio]) {
+            fprintf(stderr, " %u", prio + 1);
+        }
+    }
+    fprintf(stderr, "}\n");
 
     // start the fieldbus operations loop
     DataAddr = 0;
@@ -2975,7 +2993,7 @@ static void *clientThread(void *arg)
     Operation = NOP;
     error = NoError;
     theDevices[d].thread_status = RUNNING;
-    XX_GPIO_SET(5);
+    if (d == 0) { XX_GPIO_SET(6); }
 
     while (engineStatus != enExiting) {
 
@@ -2983,9 +3001,9 @@ static void *clientThread(void *arg)
 
         // trivial scenario
         if (engineStatus != enRunning || theDevices[d].status == NO_HOPE) {
-            XX_GPIO_CLR(5);
+            if (d == 0) { XX_GPIO_CLR(6); }
             osSleep(THE_CONNECTION_DELAY_ms);
-            XX_GPIO_SET(5);
+            if (d == 0) { XX_GPIO_SET(6); }
             continue;
         }
 
@@ -2997,11 +3015,13 @@ static void *clientThread(void *arg)
             // wait for next operation or next programmed read
             next_ms = theDevices[d].current_time_ms + THE_UDP_TIMEOUT_ms;
             for (prio = 0; prio < MAX_PRIORITY; ++prio) {
-                if (read_time_ms[prio] < theDevices[d].current_time_ms) {
-                    read_time_ms[prio] = theDevices[d].current_time_ms;
-                }
-                if (read_time_ms[prio] < next_ms) {
-                    next_ms = read_time_ms[prio];
+                if (we_have_variables[prio]) {
+                    if (read_time_ms[prio] < theDevices[d].current_time_ms) {
+                        read_time_ms[prio] = theDevices[d].current_time_ms;
+                    }
+                    if (read_time_ms[prio] < next_ms) {
+                        next_ms = read_time_ms[prio];
+                    }
                 }
             }
             if (next_ms > theDevices[d].current_time_ms) {
@@ -3011,23 +3031,30 @@ static void *clientThread(void *arg)
                 q = ldiv(next_ms, 1000);
                 abstime.tv_sec = q.quot;
                 abstime.tv_nsec = q.rem * 1E6; // ms -> ns
+
+                if (d == 0) { XX_GPIO_CLR(6);}
                 do {
-                    XX_GPIO_CLR(5);
-                    rc = sem_timedwait(&theDevices[d].newOperations, &abstime);
-                    XX_GPIO_SET(5);
+                    int saved_errno;
+                    if (d == 0) { XX_GPIO_SET(7);}
+                    rc = sem_timedwait(&newOperations[d], &abstime);
+                    saved_errno = errno;
+                    if (d == 0) { XX_GPIO_CLR(7);}
                     timeout = invalid_timeout = invalid_permission = other_error = FALSE;
-                    if (rc == 0) {
+                    errno = saved_errno;
+                    if (errno ==  EINVAL) {
+                        fprintf(stderr, "%s@%09u ms: problem with (%us, %ldns).\n",
+                            theDevices[d].name, theDevices[d].current_time_ms, abstime.tv_sec, abstime.tv_nsec);
+                        invalid_timeout = TRUE;
                         break;
                     }
                     if (errno == EINTR) {
                         continue;
                     }
-                    if (errno ==  ETIMEDOUT) {
-                        timeout = TRUE;
+                    if (rc == 0) {
                         break;
                     }
-                    if (errno ==  EINVAL) {
-                        invalid_timeout = TRUE;
+                    if (errno ==  ETIMEDOUT) {
+                        timeout = TRUE;
                         break;
                     }
                     if (errno ==  EPERM) {
@@ -3037,12 +3064,15 @@ static void *clientThread(void *arg)
                     other_error = TRUE;
                     break;
                 } while (TRUE);
+                if (d == 0) { XX_GPIO_SET(6);}
                 // what time is it please?
                 updateDeviceTiming(d);
 #ifdef VERBOSE_DEBUG
-                fprintf(stderr, "%s@%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", theDevices[d].name, theDevices[d].current_time_ms,
-                    timeout?"timeout":(invalid_timeout?"invalid_timeout":(invalid_permission?"invalid_permission":(other_error?"other_error":"signal"))),
-                    next_ms, abstime.tv_sec, abstime.tv_nsec);
+                if (invalid_timeout || invalid_permission || other_error) {
+                    fprintf(stderr, "%s@%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", theDevices[d].name, theDevices[d].current_time_ms,
+                        timeout?"timeout":(invalid_timeout?"invalid_timeout":(invalid_permission?"invalid_permission":(other_error?"other_error":"signal"))),
+                        next_ms, abstime.tv_sec, abstime.tv_nsec);
+                }
 #endif
             } else {
 #ifdef VERBOSE_DEBUG
@@ -3055,6 +3085,7 @@ static void *clientThread(void *arg)
         if (DataAddr == 0) {
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
+if (d == 0) { XX_GPIO_SET(4); }
                 // is it there an immediate write requests from PLC to this device?
                 if (theDevices[d].PLCwriteRequestNumber > 0) {
                     u_int16_t n;
@@ -3126,6 +3157,10 @@ static void *clientThread(void *arg)
                     // -- {P,S,F} automatically enabled from Crosstable
                     // -- {H} enabled from HMI when the page is displayed
                     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+                        // avoid checking if we know it's pointless
+                        if (! we_have_variables[prio]) {
+                            continue;
+                        }
                         // only when the timer expires
                         if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
 
@@ -3203,6 +3238,7 @@ static void *clientThread(void *arg)
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
         }
+if (d == 0) { XX_GPIO_CLR(4); }
 
         if (DataAddr == 0) {
             // nothing to do
@@ -3294,6 +3330,14 @@ static void *clientThread(void *arg)
         // check the node status
         if (Data_node == 0xffff || theNodes[Data_node].status == BLACKLIST) {
             error = TimeoutError;
+#ifdef VERBOSE_DEBUG
+              if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
+                fprintf(stderr, "%s@%09u ms: %s (blacklist) %u vars @ %u\n",
+                        theDevices[d].name, theDevices[d].current_time_ms,
+                        Operation == READ ? "read" : "write",
+                        DataNumber, DataAddr);
+              }
+#endif
         } else {
             // the device is connected, so operate, without locking the mutex
             u_int16_t i;
@@ -3302,7 +3346,7 @@ static void *clientThread(void *arg)
                 // CrossTable[DataAddr + i].Error = 0;
                 the_QdataStates[DataAddr + i] = DATA_BUSY;
             }
-            XX_GPIO_CLR(5);
+            if (d == 0) { XX_GPIO_CLR(6 + d); }
             switch (Operation) {
             case READ:
                 incQdataRegisters(theDevices[d].diagnosticAddr, 3); // READS
@@ -3328,17 +3372,19 @@ static void *clientThread(void *arg)
                 ;
             }
             setQdataRegisters(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
-            XX_GPIO_SET(5);
+            if (d == 0) { XX_GPIO_SET(6 + d); }
             // check error and set values and flags
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
                 u_int16_t i;
 
 #ifdef VERBOSE_DEBUG
+              if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
                 fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevices[d].name, theDevices[d].current_time_ms,
                         Operation == READ ? "read" : "write",
                         error == NoError ? "ok" : "error",
                         DataNumber, DataAddr);
+              }
 #endif
                 // manage the data values
                 switch (error) {
@@ -3529,9 +3575,9 @@ static void *clientThread(void *arg)
             break;
         case RTU:
             if (theDevices[d].silence_ms > 0) {
-                XX_GPIO_CLR(5);
+                if (d == 0) { XX_GPIO_CLR(6); }
                 osSleep(theDevices[d].silence_ms);
-                XX_GPIO_SET(5);
+                if (d == 0) { XX_GPIO_SET(6); }
             }
             break;
         case TCP:
@@ -3985,7 +4031,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
         }
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
-            XX_GPIO_SET(4);
+            //XX_GPIO_SET(4);
 			if (pNotify->uTask != 0xffffu) {
                 // notify from a plc task
 
@@ -4092,7 +4138,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                                         addr += (theDevices[d].PLCwriteRequests[i].Number - 1);
                                     }
                                     // awake the device thread
-                                    sem_post(&theDevices[d].newOperations);
+                                    sem_post(&newOperations[d]);
                                 }
                             }
                          }
@@ -4121,7 +4167,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     // FIXME: create a write request
                 }
             }
-            XX_GPIO_CLR(4);
+            //XX_GPIO_CLR(4);
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
     }
@@ -4145,7 +4191,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
         }
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
-            XX_GPIO_SET(4);
+            //XX_GPIO_SET(4);
             if (pNotify->uTask != 0xffffu) {
                 // notify from a plc task
 
@@ -4220,7 +4266,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     *(IEC_DATA *)dest = byte;
                 }
             }
-            XX_GPIO_CLR(4);
+            //XX_GPIO_CLR(4);
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
     }
