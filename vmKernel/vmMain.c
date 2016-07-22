@@ -134,30 +134,30 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
 		RETURN(uRes);
 	}		 
 
-    if (pVM->usTask <= 1) {
-		XX_GPIO_SET(pVM->usTask + 1);
-	}
+//    if (pVM->usTask <= 1) {
+//		XX_GPIO_SET(pVM->usTask + 1);
+//	}
 
 	for ( ; ; )
 	{
-        if (pVM->usTask <= 1) {
-            XX_GPIO_CLR(pVM->usTask + 1);
-        }
+//        if (pVM->usTask <= 1) {
+//            XX_GPIO_CLR(pVM->usTask + 1);
+//        }
 
 		if (msgRecv(&Message, pVM->usTask, VMM_WAIT_FOREVER) != OK)
 		{
 			osSleep(50);
 
-            if (pVM->usTask <= 1) {
-                XX_GPIO_SET(pVM->usTask + 1);
-            }
+//            if (pVM->usTask <= 1) {
+//                XX_GPIO_SET(pVM->usTask + 1);
+//            }
 
 			continue;
 		}
 
-        if (pVM->usTask <= 1) {
-            XX_GPIO_SET(pVM->usTask + 1);
-        }
+//        if (pVM->usTask <= 1) {
+//            XX_GPIO_SET(pVM->usTask + 1);
+//        }
 
 		uRespQueue			= Message.uRespQueue;
 		Message.uRespQueue	= IPC_Q_NONE;
