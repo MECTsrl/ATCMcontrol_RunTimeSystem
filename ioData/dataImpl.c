@@ -52,11 +52,26 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  14
+#define REVISION_LO  15
 
 #if DEBUG
 #undef VERBOSE_DEBUG
 #endif
+
+#if 0
+// enabling FGPIO output (for client#0)
+#define XX_GPIO_SET_DEV0(n) if (d == 0) { XX_GPIO_SET(n) }
+#define XX_GPIO_CLR_DEV0(n) if (d == 0) { XX_GPIO_CLR(n) }
+#else
+// disabling FGPIO output
+#undef XX_GPIO_SET
+#undef XX_GPIO_CLR
+#define XX_GPIO_SET(n)
+#define XX_GPIO_CLR(n)
+#define XX_GPIO_SET_DEV0(n)
+#define XX_GPIO_CLR_DEV0(n)
+#endif
+
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 #define CROSSTABLE_CSV "/local/etc/sysconfig/Crosstable.csv"
@@ -220,6 +235,8 @@ static struct ClientStruct {
     u_int32_t IPaddress;
     u_int16_t port;
     //
+    u_int16_t var_num;
+    u_int16_t *var_addr;
     union ClientData {
         // no plc client
         struct {
@@ -1467,6 +1484,9 @@ static int checkServersDevicesAndNodes()
                 }
                 if (d < theDevicesNumber) {
                     CrossTable[i].device = d; // found
+                    if (CrossTable[i].Plc > Htype) {
+                        theDevices[d].var_num += 1; // this one
+                    }
                 } else if (theDevicesNumber >= MAX_DEVICES) {
                     CrossTable[i].device = 0xffff; // FIXME: error
                     fprintf(stderr, "%s() too many devices\n", __func__, MAX_DEVICES);
@@ -1478,6 +1498,11 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].protocol = CrossTable[i].Protocol;
                     theDevices[d].IPaddress = CrossTable[i].IPAddress;
                     theDevices[d].port = p = CrossTable[i].Port;
+                    theDevices[d].var_num = 0;
+                    theDevices[d].var_addr = NULL; // calloc later on
+                    if (CrossTable[i].Plc > Htype) {
+                        theDevices[d].var_num += 1; // this one
+                    }
                     theDevices[d].server = 0xffff;
                     switch (theDevices[d].protocol) {
                     case PLC:
@@ -1598,6 +1623,45 @@ static int checkServersDevicesAndNodes()
             }
         }
     }
+
+  {
+    u_int16_t d;
+    u_int16_t var_max[MAX_DEVICES];
+
+    for (i = 1; i <= DimCrossTable; ++i) {
+        if (CrossTable[i].Enable > 0) {
+
+            // client variables =---> create and fill the variables addresses array
+            switch (CrossTable[i].Protocol) {
+            case PLC:
+                // no plc client
+                break;
+            case RTU:
+            case TCP:
+            case TCPRTU:
+            case CANOPEN:
+            case MECT:
+            case RTU_SRV:
+            case TCP_SRV:
+            case TCPRTU_SRV:
+                d = CrossTable[i].device;
+                if (d != 0xffff) {
+                    if (theDevices[d].var_addr == NULL) {
+                        theDevices[d].var_addr = calloc(theDevices[d].var_num, sizeof(u_int16_t));
+                        var_max[d] = 0;
+                    }
+                    if (var_max[d] < theDevices[d].var_num) {
+                        theDevices[d].var_addr[var_max[d]] = i;
+                        ++var_max[d];
+                    }
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+  }
     return retval;
 }
 
@@ -1682,14 +1746,17 @@ static void *engineThread(void *statusAdr)
     struct timespec abstime;
     ldiv_t x;
     clock_gettime(CLOCK_REALTIME, &abstime);
-	XX_GPIO_SET(3);
+    XX_GPIO_SET(3);
 
+    pthread_mutex_lock(&theCrosstableClientMutex);
     while (engineStatus != enExiting) {
 
         // trivial scenario
         if (engineStatus != enRunning) {
             XX_GPIO_CLR(3);
+            pthread_mutex_unlock(&theCrosstableClientMutex);
             osSleep(THE_ENGINE_DELAY_ms);
+            pthread_mutex_lock(&theCrosstableClientMutex);
             XX_GPIO_SET(3);
             continue;
         }
@@ -1701,20 +1768,16 @@ static void *engineThread(void *statusAdr)
             abstime.tv_sec += x.quot;
             abstime.tv_nsec = x.rem;
         }
-        pthread_mutex_lock(&theCrosstableClientMutex);
-        {
-            while (TRUE) {
-                int e;
-                XX_GPIO_CLR(3);
-                e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
-                XX_GPIO_SET(3);
-                if (e == ETIMEDOUT) {
-                    break;
-                }
-                AlarmMngr();
+        while (TRUE) {
+            int e;
+            XX_GPIO_CLR(3);
+            e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
+            XX_GPIO_SET(3);
+            if (e == ETIMEDOUT) {
+                break;
             }
+            AlarmMngr();
         }
-        pthread_mutex_unlock(&theCrosstableClientMutex);
 
         // TICtimer
         float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
@@ -1734,30 +1797,27 @@ static void *engineThread(void *statusAdr)
             PLC_timeMin = PLC_time - PLC_timeWin;
             PLC_timeMax = PLC_time;
         }
-        pthread_mutex_lock(&theCrosstableClientMutex);
-        {
-            // PLC_time         AT %ID0.21560: REAL; 5390
-            // PLC_timeMin      AT %ID0.21564: REAL; 5391
-            // PLC_timeMax      AT %ID0.21568: REAL; 5392
-            memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
-            // NB no writeQdataRegisters();
-            if (the_QdataRegisters[5396]) { // PLC_ResetValues
-                u_int16_t addr;
-                for (addr = 5000; addr < 5160; addr += 10) {
-                    the_QdataRegisters[addr + 3] = 0; // READS
-                    the_QdataRegisters[addr + 4] = 0; // WRITES
-                    the_QdataRegisters[addr + 5] = 0; // TIMEOUTS
-                    the_QdataRegisters[addr + 6] = 0; // COMM_ERRORS
-                    the_QdataRegisters[addr + 7] = 0; // LAST_ERROR
-                }
-                the_QdataRegisters[5396] = 0;
+        // PLC_time         AT %ID0.21560: REAL; 5390
+        // PLC_timeMin      AT %ID0.21564: REAL; 5391
+        // PLC_timeMax      AT %ID0.21568: REAL; 5392
+        memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
+        memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
+        memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
+        memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
+        // NB no writeQdataRegisters();
+        if (the_QdataRegisters[5396]) { // PLC_ResetValues
+            u_int16_t addr;
+            for (addr = 5000; addr < 5160; addr += 10) {
+                the_QdataRegisters[addr + 3] = 0; // READS
+                the_QdataRegisters[addr + 4] = 0; // WRITES
+                the_QdataRegisters[addr + 5] = 0; // TIMEOUTS
+                the_QdataRegisters[addr + 6] = 0; // COMM_ERRORS
+                the_QdataRegisters[addr + 7] = 0; // LAST_ERROR
             }
+            the_QdataRegisters[5396] = 0;
         }
-        pthread_mutex_unlock(&theCrosstableClientMutex);
     }
+    pthread_mutex_unlock(&theCrosstableClientMutex);
 
     // thread clean
     // see dataEngineStop()
@@ -2827,6 +2887,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 static void *clientThread(void *arg)
 {
     u_int32_t d = (u_int32_t)arg;
+    u_int16_t v;
 
     // device connection management
     struct timeval response_timeout;
@@ -2966,26 +3027,28 @@ static void *clientThread(void *arg)
     write_index = 1;
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
         read_time_ms[prio] = theDevices[d].current_time_ms;
-        read_addr[prio] = 1;
+        read_addr[prio] = 0;
         read_index[prio] = 1;
         we_have_variables[prio] = 0;
     }
     // for each priority check if we have variables at that priority
-    for (DataAddr = 1; DataAddr <= DimCrossTable; ++DataAddr) {
-        if (CrossTable[DataAddr].device == d
-         && CrossTable[DataAddr].Enable > 0 && CrossTable[DataAddr].Enable <= MAX_PRIORITY
-         ) {
+    for (v = 0; v < theDevices[d].var_num; ++v) {
+        DataAddr = theDevices[d].var_addr[v];
+        if (CrossTable[DataAddr].Enable <= MAX_PRIORITY) {
             prio = CrossTable[DataAddr].Enable - 1;
             we_have_variables[prio] = 1;
         }
     }
-    fprintf(stderr, "%s: checking in priorities {", theDevices[d].name);
+    fprintf(stderr, "%s: reading variables {", theDevices[d].name);
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
         if (we_have_variables[prio]) {
-            fprintf(stderr, " %u", prio + 1);
+            fprintf(stderr, "\n\t%u:", prio + 1);
+            for (v = 0; v < theDevices[d].var_num; ++v) {
+                fprintf(stderr, " %u", theDevices[d].var_addr[v]);
+            }
         }
     }
-    fprintf(stderr, "}\n");
+    fprintf(stderr, "\n}\n");
 
     // start the fieldbus operations loop
     DataAddr = 0;
@@ -2993,7 +3056,7 @@ static void *clientThread(void *arg)
     Operation = NOP;
     error = NoError;
     theDevices[d].thread_status = RUNNING;
-    if (d == 0) { XX_GPIO_SET(6); }
+    XX_GPIO_SET_DEV0(6);
 
     while (engineStatus != enExiting) {
 
@@ -3001,9 +3064,9 @@ static void *clientThread(void *arg)
 
         // trivial scenario
         if (engineStatus != enRunning || theDevices[d].status == NO_HOPE) {
-            if (d == 0) { XX_GPIO_CLR(6); }
+            XX_GPIO_CLR_DEV0(6);
             osSleep(THE_CONNECTION_DELAY_ms);
-            if (d == 0) { XX_GPIO_SET(6); }
+            XX_GPIO_SET_DEV0(6);
             continue;
         }
 
@@ -3032,13 +3095,13 @@ static void *clientThread(void *arg)
                 abstime.tv_sec = q.quot;
                 abstime.tv_nsec = q.rem * 1E6; // ms -> ns
 
-                if (d == 0) { XX_GPIO_CLR(6);}
+                XX_GPIO_CLR_DEV0(6);
                 do {
                     int saved_errno;
-                    if (d == 0) { XX_GPIO_SET(7);}
+                    XX_GPIO_SET_DEV0(7);
                     rc = sem_timedwait(&newOperations[d], &abstime);
                     saved_errno = errno;
-                    if (d == 0) { XX_GPIO_CLR(7);}
+                    XX_GPIO_CLR_DEV0();
                     timeout = invalid_timeout = invalid_permission = other_error = FALSE;
                     errno = saved_errno;
                     if (errno ==  EINVAL) {
@@ -3064,7 +3127,7 @@ static void *clientThread(void *arg)
                     other_error = TRUE;
                     break;
                 } while (TRUE);
-                if (d == 0) { XX_GPIO_SET(6);}
+                XX_GPIO_SET_DEV0(6);
                 // what time is it please?
                 updateDeviceTiming(d);
 #ifdef VERBOSE_DEBUG
@@ -3085,7 +3148,7 @@ static void *clientThread(void *arg)
         if (DataAddr == 0) {
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
-if (d == 0) { XX_GPIO_SET(4); }
+                XX_GPIO_SET_DEV0(4);
                 // is it there an immediate write requests from PLC to this device?
                 if (theDevices[d].PLCwriteRequestNumber > 0) {
                     u_int16_t n;
@@ -3168,12 +3231,9 @@ if (d == 0) { XX_GPIO_SET(4); }
                             int found = FALSE;
 
                             // {P,S,F} from Crosstable
-                            for (addr = read_addr[prio]; addr <= DimCrossTable; ++addr) {
-                                if (CrossTable[addr].device == d
-                                 && CrossTable[addr].Enable == (prio + 1)
-                                 && CrossTable[addr].Plc > Htype
-                                 && addr == CrossTable[addr].BlockBase // reading by block only
-                                 ) {
+                            for (v = read_addr[prio]; v < theDevices[d].var_num; ++v) {
+                                addr = theDevices[d].var_addr[v];
+                                if (CrossTable[addr].Enable == (prio + 1) && addr == CrossTable[addr].BlockBase) {
                                     found = TRUE;
                                     break;
                                 }
@@ -3185,14 +3245,14 @@ if (d == 0) { XX_GPIO_SET(4); }
                                 Operation = READ;
                                 // data values will be available after the fieldbus access
                                 // keep the index for the next loop
-                                read_addr[prio] = DataAddr + DataNumber; // may overlap DimCrossTable, it's ok
+                                read_addr[prio] = v + DataNumber; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%s@%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, addr, read_addr[prio]);
 #endif
                                 break;
                             } else {
                                 // read_time_ms[prio] only set if no H as well
-                                read_addr[prio] = 1;
+                                read_addr[prio] = 0;
                             }
 
                             // {H} from HMI
@@ -3238,7 +3298,7 @@ if (d == 0) { XX_GPIO_SET(4); }
             }
             pthread_mutex_unlock(&theCrosstableClientMutex);
         }
-if (d == 0) { XX_GPIO_CLR(4); }
+        XX_GPIO_CLR_DEV0(4);
 
         if (DataAddr == 0) {
             // nothing to do
@@ -3346,7 +3406,7 @@ if (d == 0) { XX_GPIO_CLR(4); }
                 // CrossTable[DataAddr + i].Error = 0;
                 the_QdataStates[DataAddr + i] = DATA_BUSY;
             }
-            if (d == 0) { XX_GPIO_CLR(6 + d); }
+            XX_GPIO_CLR_DEV0(6);
             switch (Operation) {
             case READ:
                 incQdataRegisters(theDevices[d].diagnosticAddr, 3); // READS
@@ -3372,7 +3432,7 @@ if (d == 0) { XX_GPIO_CLR(4); }
                 ;
             }
             setQdataRegisters(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
-            if (d == 0) { XX_GPIO_SET(6 + d); }
+            XX_GPIO_SET_DEV0(6);
             // check error and set values and flags
             pthread_mutex_lock(&theCrosstableClientMutex);
             {
@@ -3575,9 +3635,9 @@ if (d == 0) { XX_GPIO_CLR(4); }
             break;
         case RTU:
             if (theDevices[d].silence_ms > 0) {
-                if (d == 0) { XX_GPIO_CLR(6); }
+                XX_GPIO_CLR_DEV0(6);
                 osSleep(theDevices[d].silence_ms);
-                if (d == 0) { XX_GPIO_SET(6); }
+                XX_GPIO_SET_DEV0(6);
             }
             break;
         case TCP:

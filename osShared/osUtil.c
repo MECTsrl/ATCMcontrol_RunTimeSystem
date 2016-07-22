@@ -838,16 +838,14 @@ xx_gpio_init(void)
 		*reg_ptr = xx_gpio_enabler[i].value;
 	}
 
-	// Toggle all output pins.
-
-	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
+    // Toggle all output pins, leaving them ON
+    for (i = 0; i < XX_MAX_OUT_BIT; ++i) {
 		xx_gpio_clr(i);
-
-	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
 		xx_gpio_set(i);
+        xx_gpio_clr(i);
+        xx_gpio_set(i);
+    }
 
-	for (i = 0; i < XX_MAX_OUT_BIT; ++i)
-		xx_gpio_clr(i);
 }
 
 void
