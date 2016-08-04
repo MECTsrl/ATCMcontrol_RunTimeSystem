@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 2.8.1, 2016-03-23T19:07:48. -->
+<!-- Written by QtCreator 2.8.1, 2016-08-04T17:19:32. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -65,7 +65,7 @@
        <value type="QString">all</value>
       </valuelist>
       <value type="bool" key="GenericProjectManager.GenericMakeStep.Clean">false</value>
-      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments"></value>
+      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments">-f _fcrts.mak TARGET=4CPC DEBUG=0 GDB=0</value>
       <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeCommand"></value>
       <value type="bool" key="ProjectExplorer.BuildStep.Enabled">true</value>
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Make</value>
@@ -79,11 +79,9 @@
     </valuemap>
     <valuemap type="QVariantMap" key="ProjectExplorer.BuildConfiguration.BuildStepList.1">
      <valuemap type="QVariantMap" key="ProjectExplorer.BuildStepList.Step.0">
-      <valuelist type="QVariantList" key="GenericProjectManager.GenericMakeStep.BuildTargets">
-       <value type="QString">clean</value>
-      </valuelist>
+      <valuelist type="QVariantList" key="GenericProjectManager.GenericMakeStep.BuildTargets"/>
       <value type="bool" key="GenericProjectManager.GenericMakeStep.Clean">true</value>
-      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments"></value>
+      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments">-f _fcrts.mak TARGET=4CPC DEBUG=0 GDB=0 clobber</value>
       <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeCommand"></value>
       <value type="bool" key="ProjectExplorer.BuildStep.Enabled">true</value>
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Make</value>
