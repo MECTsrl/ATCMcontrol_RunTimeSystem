@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  16
+#define REVISION_LO  18
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -268,6 +268,7 @@ static struct ClientStruct {
     u_int16_t writeResetIndex;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
+    int mect_fd; // for MECT
     // local queue
     struct PLCwriteRequestStruct {
         u_int16_t Addr;
@@ -369,6 +370,10 @@ static void PLCsync(void);
 
 static void zeroNodeVariables(u_int32_t node);
 static void zeroDeviceVariables(u_int32_t d);
+
+static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits);
+static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_ms);
+static void mect_close(int fd);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -641,21 +646,21 @@ static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
     if (p == NULL) {
         goto exit_error;
     }
-    if (strcmp(p, ">") == 0) {
+    if (strncmp(p, ">", 1) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER;
-    } else if (strcmp(p, ">=") == 0) {
+    } else if (strncmp(p, ">=", 2) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER_EQ;
-    } else if (strcmp(p, "<") == 0) {
+    } else if (strncmp(p, "<", 1) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER;
-    } else if (strcmp(p, "<=") == 0) {
+    } else if (strncmp(p, "<=", 2) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER_EQ;
-    } else if (strcmp(p, "==") == 0) {
+    } else if (strncmp(p, "==", 2) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_EQUAL;
-    } else if (strcmp(p, "!=") == 0) {
+    } else if (strncmp(p, "!=", 2) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_NOT_EQUAL;
-    } else if (strcmp(p, "RISING") == 0) {
+    } else if (strncmp(p, "RISING", 6) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_RISING;
-    } else if (strcmp(p, "FALLING") == 0) {
+    } else if (strncmp(p, "FALLING", 7) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_FALLING;
     } else {
         goto exit_error;
@@ -1718,7 +1723,7 @@ static void *engineThread(void *statusAdr)
                 fprintf(stderr, "[%s] ERROR creating device thread %s: %s.\n", __func__, theDevices[d].name, strerror(errno));
             }
         }
-        // create udp servers
+        // create udp server
         if (osPthreadCreate(&theDataSyncThread_id, NULL, &datasyncThread, &theDataSyncThreadStatus, "datasync", 0) == 0) {
             do {
                 osSleep(THE_CONFIG_DELAY_ms); // not sched_yield();
@@ -1881,8 +1886,8 @@ static void fieldbusReset(u_int16_t d)
     case CANOPEN:
         // CANopenResetChannel(theDevices[d].u.can.bus);
         break;
-    case MECT:
-        // FIXME: check state
+    case MECT: // fieldbusReset()
+        mect_close(theDevices[d].mect_fd);
         break;
     case RTU_SRV:
     case TCP_SRV:
@@ -2205,8 +2210,20 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 #endif
         }
         break;
-    case MECT:
-        // FIXME: TODO
+    case MECT: // fieldbusRead()
+        for (i = 0; i < DataNumber; ++i) {
+            float value;
+
+            e = mect_read_node(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, &value, theDevices[d].timeout_ms);
+            if (e == -1) {
+                retval = CommError;
+                break;
+            } else if (e == -2) {
+                retval = TimeoutError;
+                break;
+            }
+            memcpy(&DataValue[i], &value, sizeof(u_int32_t));
+        }
         break;
     default:
         ;
@@ -2531,8 +2548,8 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             }
         }
         break;
-    case MECT:
-        // FIXME: TODO
+    case MECT: // fieldbusWrite()
+        retval = TimeoutError;
         break;
     default:
         ;
@@ -2914,6 +2931,7 @@ static void *clientThread(void *arg)
     // ------------------------------------------ thread init
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // clientThread
     theDevices[d].modbus_ctx = NULL;
+    theDevices[d].mect_fd = -1;
     // "new"
     switch (theDevices[d].protocol) {
     case PLC: // FIXME: assert
@@ -2954,8 +2972,8 @@ static void *clientThread(void *arg)
             }
         }
     }   break;
-    case MECT:
-        break; // FIXME: check can state
+    case MECT: // new (nothing to do)
+        break;
     case RTU_SRV:
     case TCP_SRV:
     case TCPRTU_SRV:
@@ -2986,8 +3004,8 @@ static void *clientThread(void *arg)
             changeDeviceStatus(d, NO_HOPE);
         }
     }   break;
-    case MECT:
-        changeDeviceStatus(d, NOT_CONNECTED); // FIXME: check state
+    case MECT: // check state (nothing to do)
+        changeDeviceStatus(d, NOT_CONNECTED);
         break;
     case RTU_SRV:
     case TCP_SRV:
@@ -3004,14 +3022,13 @@ static void *clientThread(void *arg)
     case PLC: // FIXME: assert
         break;
     case RTU:
+    case MECT:
         fprintf(stderr, "@%u/%u/%c/%u, ", theDevices[d].u.serial.baudrate, theDevices[d].u.serial.databits, theDevices[d].u.serial.parity, theDevices[d].u.serial.stopbits);
         break;
     case TCP:
     case TCPRTU:
         break;
     case CANOPEN:
-        break;
-    case MECT:
         break;
     case RTU_SRV:
     case TCP_SRV:
@@ -3079,9 +3096,6 @@ static void *clientThread(void *arg)
             next_ms = theDevices[d].current_time_ms + THE_UDP_TIMEOUT_ms;
             for (prio = 0; prio < MAX_PRIORITY; ++prio) {
                 if (we_have_variables[prio]) {
-                    if (read_time_ms[prio] < theDevices[d].current_time_ms) {
-                        read_time_ms[prio] = theDevices[d].current_time_ms;
-                    }
                     if (read_time_ms[prio] < next_ms) {
                         next_ms = read_time_ms[prio];
                     }
@@ -3225,7 +3239,7 @@ static void *clientThread(void *arg)
                             continue;
                         }
                         // only when the timer expires
-                        if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
+                        if (read_time_ms[prio] <= (theDevices[d].current_time_ms + 1)) {
 
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
@@ -3286,7 +3300,9 @@ static void *clientThread(void *arg)
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
-                                read_time_ms[prio] += system_ini.system.read_period_ms[prio];
+                                while (read_time_ms[prio] <= theDevices[d].current_time_ms) {
+                                    read_time_ms[prio] += system_ini.system.read_period_ms[prio];
+                                }
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%s@%09u ms: no read %uHPSF will restart at %09u ms\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, read_time_ms[prio]);
@@ -3354,8 +3370,18 @@ static void *clientThread(void *arg)
                     zeroDeviceVariables(d);
                 }
             }   break;
-            case MECT:
-                changeDeviceStatus(d, CONNECTED); // FIXME: check bus status
+            case MECT: // connect()
+                theDevices[d].mect_fd = mect_connect(
+                    theDevices[d].u.serial.port,
+                    theDevices[d].u.serial.baudrate,
+                    theDevices[d].u.serial.parity,
+                    theDevices[d].u.serial.databits,
+                    theDevices[d].u.serial.stopbits);
+                if (theDevices[d].mect_fd >= 0) {
+                    changeDeviceStatus(d, CONNECTED);
+                } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
+                    changeDeviceStatus(d, DEVICE_BLACKLIST);
+                }
                 break;
             case RTU_SRV:
             case TCP_SRV:
@@ -3634,6 +3660,7 @@ static void *clientThread(void *arg)
             // FIXME: assert
             break;
         case RTU:
+        case MECT:
             if (theDevices[d].silence_ms > 0) {
                 XX_GPIO_CLR_DEV0(6);
                 osSleep(theDevices[d].silence_ms);
@@ -3644,9 +3671,6 @@ static void *clientThread(void *arg)
         case TCPRTU:
         case CANOPEN:
             // nothing to do
-            break;
-        case MECT:
-            // FIXME: check state
             break;
         case RTU_SRV:
         case TCP_SRV:
@@ -3674,8 +3698,8 @@ static void *clientThread(void *arg)
     case CANOPEN:
         CANopenStop(theDevices[d].u.can.bus);
         break;
-    case MECT:
-        // FIXME: check state
+    case MECT: // close()
+        mect_close(theDevices[d].mect_fd);
         break;
     case RTU_SRV:
     case TCP_SRV:
@@ -3685,6 +3709,11 @@ static void *clientThread(void *arg)
         ;
     }
 
+    // cleanup
+    if (theDevices[d].var_addr != NULL) {
+        free(theDevices[d].var_addr);
+        theDevices[d].var_addr = NULL;
+    }
     // exit
     fprintf(stderr, "EXITING: %s\n", theDevices[d].name);
     theDevices[d].thread_status = EXITING;
@@ -3923,34 +3952,15 @@ void dataEngineStart(void)
 
 void dataEngineStop(void)
 {
+    void *retval;
+    int n;
+
     if (engineStatus == enIdle) {
         // SIGINT arrived before initialization
         return;
     }
     setEngineStatus(enExiting);
-#if 0
-    int still_running;
-    do {
-        do_sleep_ms(1);
-        int n;
-        still_running = FALSE;
-        for (n = 0; n < theDevicesNumber && ! still_running; ++n) {
-            if (theDevices[n].thread_status == RUNNING) {
-                still_running = TRUE;
-            }
-        }
-        for (n = 0; n < theServersNumber && ! still_running; ++n) {
-            if (theServers[n].thread_status == RUNNING) {
-                still_running = TRUE;
-            }
-        }
-    } while (theEngineThreadStatus == RUNNING
-          || theDataThreadStatus == RUNNING
-          || theSyncThreadStatus == RUNNING
-          || still_running);
-#else
-    void *retval;
-    int n;
+
     for (n = 0; n < theDevicesNumber; ++n) {
         if (theDevices[n].thread_id != -1) {
             pthread_join(theDevices[n].thread_id, &retval);
@@ -3975,8 +3985,6 @@ void dataEngineStop(void)
         theEngineThread_id = -1;
         fprintf(stderr, "joined engine\n");
     }
-
-#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -4331,6 +4339,161 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
         pthread_mutex_unlock(&theCrosstableClientMutex);
     }
 	RETURN(uRes);
+}
+
+#include <rtdm/rtserial.h>
+
+static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits)
+{
+    int fd;
+    char devname[VMM_MAX_PATH];
+    struct rtser_config rt_serial_config;
+
+    snprintf(devname, VMM_MAX_PATH, "rtser%u", devnum);
+    fd = rt_dev_open(devname, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    rt_serial_config.config_mask =
+        RTSER_SET_BAUD
+        | RTSER_SET_DATA_BITS
+        | RTSER_SET_STOP_BITS
+        | RTSER_SET_PARITY
+        | RTSER_SET_HANDSHAKE
+        ;
+    /* Set Baud rate */
+    rt_serial_config.baud_rate = baudrate;
+
+    /* Set data bits (5, 6, 7, 8 bits) */
+    switch (databits) {
+        case 5:  rt_serial_config.data_bits = RTSER_5_BITS; break;
+        case 6:  rt_serial_config.data_bits = RTSER_6_BITS; break;
+        case 7:  rt_serial_config.data_bits = RTSER_7_BITS; break;
+        case 8:  rt_serial_config.data_bits = RTSER_8_BITS; break;
+        default: rt_serial_config.data_bits = RTSER_8_BITS; break;
+    }
+
+    /* Stop bit (1 or 2) */
+    if (stopbits == 1)
+        rt_serial_config.stop_bits = RTSER_1_STOPB;
+    else /* 2 */
+        rt_serial_config.stop_bits = RTSER_2_STOPB;
+
+    /* Parity bit */
+    if (parity == 'N')
+        rt_serial_config.parity = RTSER_NO_PARITY;		/* None */
+    else if (parity == 'E')
+        rt_serial_config.parity = RTSER_EVEN_PARITY;	/* Even */
+    else
+        rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
+
+    /* Disable software flow control */
+    rt_serial_config.handshake = RTSER_NO_HAND;
+
+    int err = rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+    if (err) {
+        fprintf(stderr, "%s(uart%u) error: %s\n", __func__, devnum, strerror(-err));
+        rt_dev_close(fd);
+        fd = -1;
+        return -1;
+    }
+    fprintf(stderr, "%s(%d=uart%u) ok\n", __func__, fd, devnum);
+
+    return fd;
+}
+
+static int mect_bcc(char *buf, unsigned len)
+{
+    int i, bcc = buf[0];
+
+    for (i = 1; i < len; ++i) {
+        bcc ^= buf[i];
+    }
+
+    return bcc;
+}
+static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_ms)
+{
+    char nn[2+1];
+    char buf[13+1];
+    unsigned offset = 0, len = 13, elapsed_ms = 0;
+    int retval;
+    char *p;
+
+    if (fd < 0 || value == NULL) {
+        return -1;
+    }
+
+    // requesting value from node "12" and obtaining "1234.678"
+
+    // question: EOT '1' '1' '2' '2' 'R' 'O' ENQ
+    snprintf(nn, 2+1, "%02u", node);
+    snprintf(buf, 8+1, "\004%c%c%c%cRO\005", nn[0], nn[0], nn[1], nn[1]);
+    rt_dev_write(fd, buf, 8);
+#ifdef VERBOSE_DEBUG
+    fprintf(stderr, "mect_read_node: wrote %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+#endif
+    // answer: STX 'R' 'O' '1' '2' '3' '4' '.' '6' '7' '8' ETX BCC
+    //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
+    do {
+        retval = rt_dev_read(fd, &buf[offset], len);
+#ifdef VERBOSE_DEBUG
+{
+        int i;
+        fprintf(stderr, "mect_read_node: read %d", retval);
+        for (i = 0; i < retval && i < 14; ++i) {
+            fprintf(stderr, " %d+%d:%02x", offset, i, buf[offset + i]);
+        }
+        fprintf(stderr, "\n");
+}
+#endif
+        if (retval > 0) {
+            offset += retval;
+            len -= retval;
+        } else if (retval == 0) {
+            osSleep(1);
+            elapsed_ms += 1;
+        } else {
+            break;
+        }
+    } while (len > 0 && elapsed_ms < timeout_ms);
+
+    // return value
+    if (elapsed_ms >= timeout_ms) {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_read_node: error elapsed_ms=%u\n", elapsed_ms);
+#endif
+        return -2;
+    }
+    if (retval < 0 || buf[0] != '\002' || buf[1] != 'R' || buf[2] != 'O' || buf[11] != '\003'
+        || buf[12] != mect_bcc(&buf[1], 11)) {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_read_node: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
+            retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
+#endif
+        return -1;
+    }
+    buf[11] = '\0';
+    *value = strtof(&buf[3], &p);
+    if (p == &buf[3]) {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_read_node: error float\n");
+#endif
+        return -1;
+    }
+#ifdef VERBOSE_DEBUG
+    fprintf(stderr, "mect_read_node: value=%f\n", *value);
+#endif
+    return 0;
+}
+
+static void mect_close(int fd)
+{
+    if (fd >= 0) {
+        rt_dev_close(fd);
+    }
+    fprintf(stderr, "%s(%d)\n", __func__, fd);
 }
 
 #endif /* RTS_CFG_IODAT */
