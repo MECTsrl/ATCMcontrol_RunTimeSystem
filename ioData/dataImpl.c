@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  18
+#define REVISION_LO  19
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -2193,11 +2193,16 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 fprintf(stderr, "%s: %s %s (%u)\n", theDevices[d].name, CrossTable[DataAddr + i].Tag,
                         e ? "err" : "ok", DataValue[i]);
 #endif
-                if (e == -1) { // OTHER_ERROR
-                    retval = CommError;
-                    // break;
-                } else if (e == -2) { // TIMEOUT_ERROR
-                    retval = TimeoutError;
+                if (e) {
+                    if (e == -1) { // OTHER_ERROR
+                        retval = CommError;
+                    } else if (e == -2) { // TIMEOUT_ERROR
+                        retval = TimeoutError;
+                    } else if (e == -3) { // RESET_ERROR
+                        retval = ConnReset;
+                    } else {
+                        retval = CommError;
+                    }
                     break;
                 }
             }
@@ -2542,7 +2547,15 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     ;
                 }
                 if (e) {
-                    retval = TimeoutError; // CommError;
+                    if (e == -1) { // OTHER_ERROR
+                        retval = CommError;
+                    } else if (e == -2) { // TIMEOUT_ERROR
+                        retval = TimeoutError;
+                    } else if (e == -3) { // RESET_ERROR
+                        retval = ConnReset;
+                    } else {
+                        retval = CommError;
+                    }
                     break;
                 }
             }
@@ -3239,7 +3252,7 @@ static void *clientThread(void *arg)
                             continue;
                         }
                         // only when the timer expires
-                        if (read_time_ms[prio] <= (theDevices[d].current_time_ms + 1)) {
+                        if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
 
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
@@ -3300,8 +3313,10 @@ static void *clientThread(void *arg)
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
-                                while (read_time_ms[prio] <= theDevices[d].current_time_ms) {
-                                    read_time_ms[prio] += system_ini.system.read_period_ms[prio];
+                                read_time_ms[prio] += system_ini.system.read_period_ms[prio];
+                                if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
+                                    u_int32_t n = theDevices[d].current_time_ms / system_ini.system.read_period_ms[prio];
+                                    read_time_ms[prio] = (n + 1) * system_ini.system.read_period_ms[prio];
                                 }
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
