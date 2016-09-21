@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  19
+#define REVISION_LO  20
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -371,8 +371,11 @@ static void PLCsync(void);
 static void zeroNodeVariables(u_int32_t node);
 static void zeroDeviceVariables(u_int32_t d);
 
-static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits);
-static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_ms);
+static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms);
+static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value);
+static int mect_write_ascii(int fd, unsigned node, unsigned command, float value);
+static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *value);
+static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned value);
 static void mect_close(int fd);
 
 /* ----  Implementations:	--------------------------------------------------- */
@@ -478,6 +481,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
 
     switch (theDevices[d].protocol) {
     case RTU:
+    case MECT:
         switch (theDevices[d].port) {
         case 0: addr = 5000; break;
         case 1: addr = 5010; break;
@@ -518,6 +522,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
 
         switch (theDevices[d].protocol) {
         case RTU:
+        case MECT:
             value = theDevices[d].u.serial.baudrate;
             break;
         case CANOPEN:
@@ -2217,9 +2222,16 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
         break;
     case MECT: // fieldbusRead()
         for (i = 0; i < DataNumber; ++i) {
-            float value;
 
-            e = mect_read_node(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, &value, theDevices[d].timeout_ms);
+            if (CrossTable[DataAddr + i].Types == REAL) {
+                float value;
+                e = mect_read_ascii(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, &value);
+                memcpy(&DataValue[i], &value, sizeof(u_int32_t));
+            } else if (CrossTable[DataAddr + i].Types == UINT16) {
+                unsigned value;
+                e = mect_read_hexad(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, &value);
+                DataValue[i] = value;
+            }
             if (e == -1) {
                 retval = CommError;
                 break;
@@ -2227,7 +2239,6 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 retval = TimeoutError;
                 break;
             }
-            memcpy(&DataValue[i], &value, sizeof(u_int32_t));
         }
         break;
     default:
@@ -2562,7 +2573,24 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         }
         break;
     case MECT: // fieldbusWrite()
-        retval = TimeoutError;
+        for (i = 0; i < DataNumber; ++i) {
+
+            if (CrossTable[DataAddr + i].Types == REAL) {
+                float value;
+                memcpy(&value, &DataValue[i], sizeof(u_int32_t));
+                e = mect_write_ascii(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, value);
+            } else if (CrossTable[DataAddr + i].Types == UINT16) {
+                unsigned value = DataValue[i];
+                e = mect_write_hexad(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, value);
+            }
+            if (e == -1) {
+                retval = CommError;
+                break;
+            } else if (e == -2) {
+                retval = TimeoutError;
+                break;
+            }
+        }
         break;
     default:
         ;
@@ -3391,7 +3419,8 @@ static void *clientThread(void *arg)
                     theDevices[d].u.serial.baudrate,
                     theDevices[d].u.serial.parity,
                     theDevices[d].u.serial.databits,
-                    theDevices[d].u.serial.stopbits);
+                    theDevices[d].u.serial.stopbits,
+                    theDevices[d].timeout_ms);
                 if (theDevices[d].mect_fd >= 0) {
                     changeDeviceStatus(d, CONNECTED);
                 } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
@@ -4358,7 +4387,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
 #include <rtdm/rtserial.h>
 
-static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits)
+static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms)
 {
     int fd;
     char devname[VMM_MAX_PATH];
@@ -4375,6 +4404,7 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
         | RTSER_SET_STOP_BITS
         | RTSER_SET_PARITY
         | RTSER_SET_HANDSHAKE
+        | RTSER_SET_TIMEOUT_RX
         ;
     /* Set Baud rate */
     rt_serial_config.baud_rate = baudrate;
@@ -4405,6 +4435,9 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
     /* Disable software flow control */
     rt_serial_config.handshake = RTSER_NO_HAND;
 
+    /* Response timeout in ns */
+    rt_serial_config.rx_timeout = timeout_ms * 1E6;
+
     int err = rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
     if (err) {
         fprintf(stderr, "%s(uart%u) error: %s\n", __func__, devnum, strerror(-err));
@@ -4427,11 +4460,24 @@ static int mect_bcc(char *buf, unsigned len)
 
     return bcc;
 }
-static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_ms)
+
+#ifdef VERBOSE_DEBUG
+static void mect_printbuf(char *msg, char *buf, unsigned len)
+{
+    int i;
+    fprintf(stderr, msg);
+    for (i = 0; i < len; ++i) {
+        fprintf(stderr, " %02x", buf[i]);
+    }
+    fprintf(stderr, "\n");
+}
+#endif
+
+static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value)
 {
     char nn[2+1];
+    char cc[2+1];
     char buf[13+1];
-    unsigned offset = 0, len = 13, elapsed_ms = 0;
     int retval;
     char *p;
 
@@ -4443,48 +4489,24 @@ static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_
 
     // question: EOT '1' '1' '2' '2' 'R' 'O' ENQ
     snprintf(nn, 2+1, "%02u", node);
-    snprintf(buf, 8+1, "\004%c%c%c%cRO\005", nn[0], nn[0], nn[1], nn[1]);
+    snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
+    snprintf(buf, 8+1, "\004%c%c%c%c%s\005", nn[0], nn[0], nn[1], nn[1], cc);
     rt_dev_write(fd, buf, 8);
 #ifdef VERBOSE_DEBUG
-    fprintf(stderr, "mect_read_node: wrote %02x %02x %02x %02x %02x %02x %02x %02x\n",
-            buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+    mect_printbuf("mect_read_ascii: wrote", buf, 8);
 #endif
+
     // answer: STX 'R' 'O' '1' '2' '3' '4' '.' '6' '7' '8' ETX BCC
     //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
-    do {
-        retval = rt_dev_read(fd, &buf[offset], len);
-#ifdef VERBOSE_DEBUG
-{
-        int i;
-        fprintf(stderr, "mect_read_node: read %d", retval);
-        for (i = 0; i < retval && i < 14; ++i) {
-            fprintf(stderr, " %d+%d:%02x", offset, i, buf[offset + i]);
-        }
-        fprintf(stderr, "\n");
-}
-#endif
-        if (retval > 0) {
-            offset += retval;
-            len -= retval;
-        } else if (retval == 0) {
-            osSleep(1);
-            elapsed_ms += 1;
-        } else {
-            break;
-        }
-    } while (len > 0 && elapsed_ms < timeout_ms);
+    retval = rt_dev_read(fd, buf, 13);
 
-    // return value
-    if (elapsed_ms >= timeout_ms) {
 #ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_node: error elapsed_ms=%u\n", elapsed_ms);
+    mect_printbuf("mect_read_ascii: read", buf, 13);
 #endif
-        return -2;
-    }
-    if (retval < 0 || buf[0] != '\002' || buf[1] != 'R' || buf[2] != 'O' || buf[11] != '\003'
+    if (retval <= 0 || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[11] != '\003'
         || buf[12] != mect_bcc(&buf[1], 11)) {
 #ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_node: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
+        fprintf(stderr, "mect_read_ascii: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
             retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
 #endif
         return -1;
@@ -4493,13 +4515,142 @@ static int mect_read_node(int fd, unsigned node, float *value, unsigned timeout_
     *value = strtof(&buf[3], &p);
     if (p == &buf[3]) {
 #ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_node: error float\n");
+        fprintf(stderr, "mect_read_ascii: error float\n");
 #endif
         return -1;
     }
 #ifdef VERBOSE_DEBUG
-    fprintf(stderr, "mect_read_node: value=%f\n", *value);
+    fprintf(stderr, "mect_read_ascii: value=%f\n", *value);
 #endif
+    return 0;
+}
+
+static int mect_write_ascii(int fd, unsigned node, unsigned command, float value)
+{
+    char nn[2+1];
+    char cc[2+1];
+    char buf[18+1];
+    int retval;
+
+    if (fd < 0) {
+        return -1;
+    }
+
+    // command: EOT '1' '1' '2' '2' STX 'I' 'U' '1' '2' '3' '.' '5' '6' '7' '8' ETX BCC
+    //          [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12][13][14][15][16][17]
+    snprintf(nn, 2+1, "%02u", node);
+    snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
+    snprintf(buf, 18+1, "\004%c%c%c%c\002%s%8.0f\003%c",
+        nn[0], nn[0], nn[1], nn[1], cc, value, 0x00);
+    buf[17] = mect_bcc(&buf[6], 11);
+    rt_dev_write(fd, buf, 18);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_write_ascii: wrote", buf, 18);
+#endif
+
+    // reply: ACK / NAK
+    //        [0]
+    retval = rt_dev_read(fd, buf, 1);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_write_ascii: read", buf, 1);
+#endif
+    if (retval < 0 || buf[0] != '\006') {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_write_ascii: error retval=%u 0:%02x\n",
+            retval, buf[0]);
+#endif
+        return -1;
+    }
+    return 0;
+}
+
+static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *value)
+{
+    char nn[2+1];
+    char cc[2+1];
+    char buf[13+1];
+    int retval;
+    char *p;
+
+    if (fd < 0 || value == NULL) {
+        return -1;
+    }
+
+    // requesting value from node "12" and obtaining "1234.678"
+
+    // question: EOT '1' '1' '2' '2' 'R' 'O' ENQ
+    snprintf(nn, 2+1, "%02u", node);
+    snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
+    snprintf(buf, 8+1, "\004%c%c%c%c%s\005", nn[0], nn[0], nn[1], nn[1], cc);
+    rt_dev_write(fd, buf, 8);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_read_hexad: wrote", buf, 8);
+#endif
+
+    // answer: STX 'R' 'O' ' ' ' ' ' ' '>' '0' '0' 'F' 'F' ETX BCC
+    //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
+    retval = rt_dev_read(fd, buf, 13);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_write_ascii: read", buf, 13);
+#endif
+    if (retval < 0 || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[3] != ' ' || buf[4] != ' '
+        || buf[5] != ' '  || buf[6] != '>'|| buf[11] != '\003' || buf[12] != mect_bcc(&buf[1], 11)) {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_read_hexad: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
+            retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
+#endif
+        return -1;
+    }
+    buf[11] = '\0';
+    *value = strtoul(&buf[7], &p, 16);
+    if (p == &buf[7]) {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_read_hexad: error hexadecimal\n");
+#endif
+        return -1;
+    }
+#ifdef VERBOSE_DEBUG
+    fprintf(stderr, "mect_read_hexad: value=0x%04xn", *value);
+#endif
+    return 0;
+}
+
+static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned value)
+{
+    char nn[2+1];
+    char cc[2+1];
+    char buf[18+1];
+    int retval;
+
+    if (fd < 0) {
+        return -1;
+    }
+
+    // command: EOT '1' '1' '2' '2' STX 'P' 'T' ' ' ' ' ' ' '>' '0' '0' 'F' 'F' ETX BCC
+    //          [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12][13][14][15][16][17]
+    snprintf(nn, 2+1, "%02u", node);
+    snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
+    snprintf(buf, 18+1, "\004%c%c%c%c\002%s   >%04x\003%c",
+        nn[0], nn[0], nn[1], nn[1], cc, (value & 0xFFFF), 0x00);
+    buf[17] = mect_bcc(&buf[6], 11);
+    rt_dev_write(fd, buf, 18);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_write_hexad: wrote", buf, 18);
+#endif
+
+    // reply: ACK / NAK
+    //        [0]
+    retval = rt_dev_read(fd, buf, 1);
+#ifdef VERBOSE_DEBUG
+    mect_printbuf("mect_write_hexad: read", buf, 1);
+#endif
+    if (retval < 0 || buf[0] != '\006') {
+#ifdef VERBOSE_DEBUG
+        fprintf(stderr, "mect_write_hexad: error retval=%u 0:%02x\n",
+            retval, buf[0]);
+#endif
+        return -1;
+    }
     return 0;
 }
 
