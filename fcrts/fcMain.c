@@ -91,8 +91,9 @@ void ReleaseResources(void);
 
 /* Long options */
 static struct option long_options[] = {
-	{"version", no_argument,        NULL, 'v'},
-	{NULL,      no_argument,        NULL,  0}
+    {"version", no_argument,        NULL, 'v'},
+    {"xx_gpio", no_argument,        NULL, 'x'},
+    {NULL,      no_argument,        NULL,  0}
 };
 
 /*
@@ -100,7 +101,7 @@ static struct option long_options[] = {
  * FIXME: KEEP THEIR LETTERS IN SYNC WITH THE RETURN VALUE
  * FROM THE LONG OPTIONS!
  */
-static char short_options[] = "vd";
+static char short_options[] = "vx";
 
 static int application_options(int argc, char *argv[])
 {
@@ -126,7 +127,30 @@ static int application_options(int argc, char *argv[])
 #endif
                 printf("%s version: %s\n", argv[0], version);
 				exit(0);
-				break;
+
+            case 'x':
+                printf("xx_gpio testing:\n");
+                XX_GPIO_INIT();
+                while (1) {
+                    printf("    XX_GPIO_SET(");
+                    for (c = 0; c < 16; ++c) {
+                        printf("%02d ", c);
+                        XX_GPIO_SET(c);
+                        XX_GPIO_CLR(c);
+                        XX_GPIO_SET(c);
+                    }
+                    printf("), XX_GPIO_CLR(");
+                    for (c = 0; c < 16; ++c) {
+                        printf("%02d ", c);
+                        XX_GPIO_CLR(c);
+                        XX_GPIO_SET(c);
+                        XX_GPIO_CLR(c);
+                    }
+                    printf(")\n");
+                    sleep(1);
+                }
+                XX_GPIO_CLOSE();
+                exit(0);
 
 			default:
 				break;

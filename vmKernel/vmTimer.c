@@ -54,17 +54,17 @@ static IEC_UDINT g_ulSystemWatchDog = 0xfffffffful;
 static void timInit(STaskInfoVMM *pVMM, SVMAction *pACT);
 
 #define tim_osSleep(delay_ms) 	\
-do {				\
-    /*XX_GPIO_CLR(0);*/		\
+do {                    \
+    XX_GPIO_CLR(12);	\
 	osSleep(delay_ms);	\
-    /*XX_GPIO_SET(0);*/		\
+    XX_GPIO_SET(12);	\
 } while (0)
 
 #define tim_osSleepAbsolute(time_ms) 	\
-do {					\
-    /*XX_GPIO_CLR(0);*/			\
+do {                            \
+    XX_GPIO_CLR(12);			\
 	osSleepAbsolute(time_ms);	\
-    /*XX_GPIO_SET(0);*/			\
+    XX_GPIO_SET(12);			\
 } while (0)
 
 /* ----  Implementations:	--------------------------------------------------- */
@@ -141,8 +141,7 @@ IEC_UINT timMain(void *pPara)
 	TR_RET(uRes);
   #endif
 	
-//	XX_GPIO_SET(0); /* vedi tim_osSleep() */
-
+    XX_GPIO_SET(12); /* vedi tim_osSleep() */
 	for ( ; ; )
 	{
 		tCurrent = osGetTime32Ex();

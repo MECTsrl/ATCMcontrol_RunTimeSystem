@@ -125,7 +125,9 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
 
 	IEC_BOOL bCyclic = (IEC_BOOL)((pVM->Task.usAttrib & VMM_TASK_ATTR_CYCLIC) != 0);
 
-	/* Initialize task
+    if (pVM->usTask == 4) { XX_GPIO_SET(13);}
+
+    /* Initialize task
 	 */
 	IEC_UINT uRes = vmInitialize(pVM);
 	if (uRes != OK)
@@ -134,30 +136,19 @@ IEC_UINT vmMain(STaskInfoVM *pVM)
 		RETURN(uRes);
 	}		 
 
-//    if (pVM->usTask <= 1) {
-//		XX_GPIO_SET(pVM->usTask + 1);
-//	}
-
 	for ( ; ; )
 	{
-//        if (pVM->usTask <= 1) {
-//            XX_GPIO_CLR(pVM->usTask + 1);
-//        }
+        if (pVM->usTask == 4) { XX_GPIO_CLR(13);}
 
 		if (msgRecv(&Message, pVM->usTask, VMM_WAIT_FOREVER) != OK)
 		{
 			osSleep(50);
-
-//            if (pVM->usTask <= 1) {
-//                XX_GPIO_SET(pVM->usTask + 1);
-//            }
+            if (pVM->usTask == 4) { XX_GPIO_SET(13);}
 
 			continue;
 		}
 
-//        if (pVM->usTask <= 1) {
-//            XX_GPIO_SET(pVM->usTask + 1);
-//        }
+        if (pVM->usTask == 4) { XX_GPIO_SET(13);}
 
 		uRespQueue			= Message.uRespQueue;
 		Message.uRespQueue	= IPC_Q_NONE;

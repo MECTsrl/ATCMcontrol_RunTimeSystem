@@ -135,20 +135,25 @@ IEC_UINT vmmMainIPC(void)
 	SMessage Message;
 	IEC_UINT uRespQueue;
 
-	osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM);
+    XX_GPIO_SET(0);
+    osPthreadSetSched(FC_SCHED_VMM, FC_PRIO_VMM);
 	IEC_UINT uRes = vmmInitialize(&pVMM);
 	if (uRes != OK)
 	{
-		RETURN(uRes);
+        XX_GPIO_CLR(0);
+        RETURN(uRes);
 	}
 
 	for ( ; ; ) 
 	{
-		if (msgRecv(&Message, Q_LIST_VMM, VMM_WAIT_FOREVER) != OK)
+        XX_GPIO_CLR(0);
+        if (msgRecv(&Message, Q_LIST_VMM, VMM_WAIT_FOREVER) != OK)
 		{
-			osSleep(100);
-			continue;
+            osSleep(100);
+            XX_GPIO_SET(0);
+            continue;
 		}
+        XX_GPIO_SET(0);
 
 		uRespQueue			= Message.uRespQueue;
 		Message.uRespQueue	= IPC_Q_NONE;

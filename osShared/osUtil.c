@@ -70,26 +70,10 @@ static IEC_DINT g_lMemObject = 0;
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 
-/* Use SDCARD pins as GPIO */
-#undef XX_GPIO_SDCARD
+/* Use FGPIO and SDCARD pins as GPIO */
 
-#ifdef XX_GPIO_SDCARD
-
-/*
- * GPIO INDEX LAYOUT
- *
- * OUTPUTS:  0               ->  (XX_MAX_OUT_BIT - 1)
- * INPUTS:   XX_MAX_OUT_BIT  ->  (XX_MAX_OUT_BIT + XX_MAX_IN_BIT - 1)
- */
-#define XX_MAX_OUT_BIT 6
+#define XX_MAX_OUT_BIT 14
 #define XX_MAX_IN_BIT 0
-
-#else
-
-#define XX_MAX_OUT_BIT 8
-#define XX_MAX_IN_BIT 0
-
-#endif
 
 static void *xx_base_ptr = NULL;
 static int xx_fd = -1;
@@ -97,68 +81,10 @@ static struct {
 	unsigned offset;
 	unsigned value;
 } xx_gpio_enabler[] = {
+
 	// PINCTRL register in "i.MX28 Applications Processor Reference Manual", # MCIMX28RM, rev. 1, 2010, page 688
 
-#ifdef XX_GPIO_SDCARD
-
-	// [0] OUT: bank 2, pin 2 (pin 2, SSP0_DATA2)
-	// 5 4 G 3 V 2 1 X
-	{ 0x0144, 0x00000030 },		//MUXSELx SET(GPIO), page 699
-	{ 0x0384, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x03b8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000004 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000004 },		//DOUTx CLR, page 801
-	{ 0x0b24, 0x00000004 },		//DOEx SET(en.), page 810
-
-	// [1] OUT: bank 2, pin 3 (pin 274, SSP0_DATA3)
-	// 5 4 G 3 V 2 X 0
-	{ 0x0144, 0x000000c0 },		//MUXSELx SET(GPIO), page 699
-	{ 0x0384, 0x00004000 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x03a8, 0x00003000 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000008 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000008 },		//DOUTx CLR, page 801
-	{ 0x0b24, 0x00000008 },		//DOEx SET(en.), page 810
-
-	// [2] OUT: bank 2, pin 8 (pin 276, SSP0_CMD)
-	// 5 4 G 3 V X 1 0
-	{ 0x0144, 0x00030000 },		//MUXSELx SET(GPIO), page 699
-	{ 0x0394, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x03a8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000100 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000100 },		//DOUTx CLR, page 801
-	{ 0x0b24, 0x00000100 },		//DOEx SET(en.), page 810
-
-	// [3] OUT: bank 2, pin 10 (pin 268, SSP0_SCK)
-	// 5 4 G X V 2 1 0
-	{ 0x0144, 0x00300000 },		//MUXSELx SET(GPIO), page 699
-	{ 0x0394, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x03a8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000400 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000400 },		//DOUTx CLR, page 801
-	{ 0x0b24, 0x00000400 },		//DOEx SET(en.), page 810
-
-	// [4] OUT: bank 2, pin 0 (pin 270, SSP0_DATA0)
-	// 5 X G 3 V 2 1 0
-	{ 0x0144, 0x00000003 },		//MUXSELx SET(GPIO), page 699
-	{ 0x0384, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x03b8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000001 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000001 },		//DOUTx CLR, page 801
-	{ 0x0b24, 0x00000001 },		//DOEx SET(en.), page 810
-
-	// [5] IN : bank 2, pin 1 (pin 289, SSP0_DATA1)
-	// X 4 G 3 V 2 1 0
-	{ 0x0144, 0x0000000c },		//MUXSELx SET(GPIO), page 699
-	{ 0x0384, 0x00000040 },		//DRIVEx SET(3.3V), page 753, 756
-	{ 0x0398, 0x00000030 },		//DRIVEx CLR(4mA), page 753, 756
-	{ 0x0628, 0x00000002 },		//PULLx CLR(no), page 789
-	{ 0x0728, 0x00000002 },		//DOUTx CLR, page 801
-//	{ 0x0b28, 0x00000002 },		//DOEx CLR(en.), page 810 (if input)
-	{ 0x0b24, 0x00000002 },		//DOEx SET(en.), page 810 (if output)
-
-#else
-
-	// FGPIO_1 OUT: bank 2, pin 14 (pin 21, SSP1_DATA0)
+    // XX_GPIO( 0) FGPIO_1 bank 2, pin 14 (pin 21, SSP1_DATA0)
 	{ 0x0144, 0x30000000 },		//MUXSEL4 SET(GPIO), page 705
 	{ 0x0394, 0x04000000 },		//DRIVE9 SET(3.3V), page 756
 	{ 0x0398, 0x03000000 },		//DRIVE9 CLR(4mA), page 756
@@ -166,7 +92,7 @@ static struct {
 	{ 0x0728, 0x00004000 },		//DOUT2 CLR, page 801
 	{ 0x0b24, 0x00004000 },		//DOE2 SET(en.), page 810
 
-	// FGPIO_2 OUT: bank 0, pin 17 (pin 131, GPMI_CE1N)
+    // XX_GPIO( 1) FGPIO_2 bank 0, pin 17 (pin 131, GPMI_CE1N)
 	{ 0x0114, 0x0000000c },		//MUXSEL1 SET(GPIO), page 696
 	{ 0x0324, 0x00000040 },		//DRIVE2 SET(3.3V), page 734
 	{ 0x0328, 0x00000030 },		//DRIVE2 CLR(4mA), page 734
@@ -174,7 +100,7 @@ static struct {
 	{ 0x0708, 0x00020000 },		//DOUT0 CLR, page 800
 	{ 0x0b04, 0x00020000 },		//DOEx SET(en.), page 810
 
-	// FGPIO_3 OUT: bank 2, pin 12 (pin 11, SSP1_SCK)
+    // XX_GPIO( 2) FGPIO_3 bank 2, pin 12 (pin 11, SSP1_SCK)
 	{ 0x0144, 0x03000000 },		//MUXSEL4 SET(GPIO), page 699
 	{ 0x0394, 0x00040000 },		//DRIVE9 SET(3.3V), page 756
 	{ 0x0398, 0x00030000 },		//DRIVE9 CLR(4mA), page 756
@@ -182,7 +108,7 @@ static struct {
 	{ 0x0728, 0x00001000 },		//DOUT2 CLR, page 801
 	{ 0x0b24, 0x00001000 },		//DOE2 SET(en.), page 810
 
-	// FGPIO_4 OUT: bank 3, pin 6 (pin 78, AUART1_CTS)
+    // XX_GPIO( 3) FGPIO_4 bank 3, pin 6 (pin 78, AUART1_CTS)
 	{ 0x0164, 0x00003000 },		//MUXSEL6 SET(GPIO), page 710
 	{ 0x03c4, 0x04000000 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x03000000 },		//DRIVEx CLR(4mA), page 764
@@ -190,7 +116,7 @@ static struct {
 	{ 0x0738, 0x00000040 },		//DOUT3 CLR, page 802
 	{ 0x0b34, 0x00000040 },		//DOE3 SET(en.), page 810
 
-	// FGPIO_5 OUT: bank 2, pin 20 (pin 7, SSP2_SS1)
+    // XX_GPIO( 4) FGPIO_5 bank 2, pin 20 (pin 7, SSP2_SS1)
 	{ 0x0154, 0x00000300 },		//MUXSEL5 SET(GPIO), page 708
 	{ 0x03a4, 0x00040000 },		//DRIVE10 SET(3.3V), page 760
 	{ 0x03a8, 0x00030000 },		//DRIVE10 CLR(4mA), page 760
@@ -198,7 +124,7 @@ static struct {
 	{ 0x0728, 0x00100000 },		//DOUT2 CLR, page 801
 	{ 0x0b24, 0x00100000 },		//DOE2 SET(en.), page 810
 
-	// FGPIO_6 OUT: bank 3, pin 2 (pin 70, AUART0_CTS)
+    // XX_GPIO( 5) FGPIO_6 bank 3, pin 2 (pin 70, AUART0_CTS)
     { 0x0164, 0x00000030 },		//MUXSEL6 SET(GPIO), page 711
 	{ 0x03c4, 0x00000400 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x00000300 },		//DRIVE12 CLR(4mA), page 764
@@ -206,7 +132,7 @@ static struct {
 	{ 0x0738, 0x00000004 },		//DOUT3 CLR, page 802
     { 0x0b34, 0x00000004 },		//DOE3 SET(en.), page 811
 
-	// FGPIO_7 OUT: bank 3, pin 4 (pin 81, AUART1_RX)
+    // XX_GPIO( 6) FGPIO_7 bank 3, pin 4 (pin 81, AUART1_RX)
 	{ 0x0164, 0x00000300 },		//MUXSEL6 SET(GPIO), page 710
 	{ 0x03c4, 0x00040000 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x00030000 },		//DRIVE12 CLR(4mA), page 764
@@ -214,7 +140,7 @@ static struct {
 	{ 0x0738, 0x00000010 },		//DOUT3 CLR, page 802
 	{ 0x0b34, 0x00000010 },		//DOE3 SET(en.), page 810
 
-	// FGPIO_8 OUT: bank 3, pin 5 (pin 65, AUART1_TX)
+    // XX_GPIO( 7) FGPIO_8 bank 3, pin 5 (pin 65, AUART1_TX)
 	{ 0x0164, 0x00000c00 },		//MUXSEL6 SET(GPIO), page 710
 	{ 0x03c4, 0x00400000 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x00300000 },		//DRIVE12 CLR(4mA), page 764
@@ -222,7 +148,60 @@ static struct {
 	{ 0x0738, 0x00000020 },		//DOUT3 CLR, page 802
 	{ 0x0b34, 0x00000020 },		//DOE3 SET(en.), page 810
 
-#endif
+    // XX_GPIO( 8) SDCARD0 bank 2, pin 2 (pin 2, SSP0_DATA2)
+    // 5 4 G 3 V 2 1 X
+    { 0x0144, 0x00000030 },		//MUXSELx SET(GPIO), page 699
+    { 0x0384, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x03b8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000004 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000004 },		//DOUTx CLR, page 801
+    { 0x0b24, 0x00000004 },		//DOEx SET(en.), page 810
+
+    // XX_GPIO( 9) SDCARD1 bank 2, pin 3 (pin 274, SSP0_DATA3)
+    // 5 4 G 3 V 2 X 0
+    { 0x0144, 0x000000c0 },		//MUXSELx SET(GPIO), page 699
+    { 0x0384, 0x00004000 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x03a8, 0x00003000 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000008 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000008 },		//DOUTx CLR, page 801
+    { 0x0b24, 0x00000008 },		//DOEx SET(en.), page 810
+
+    // XX_GPIO(10) SDCARD2 bank 2, pin 8 (pin 276, SSP0_CMD)
+    // 5 4 G 3 V X 1 0
+    { 0x0144, 0x00030000 },		//MUXSELx SET(GPIO), page 699
+    { 0x0394, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x03a8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000100 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000100 },		//DOUTx CLR, page 801
+    { 0x0b24, 0x00000100 },		//DOEx SET(en.), page 810
+
+    // XX_GPIO(11) SDCARD3 bank 2, pin 10 (pin 268, SSP0_SCK)
+    // 5 4 G X V 2 1 0
+    { 0x0144, 0x00300000 },		//MUXSELx SET(GPIO), page 699
+    { 0x0394, 0x00000400 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x03a8, 0x00000300 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000400 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000400 },		//DOUTx CLR, page 801
+    { 0x0b24, 0x00000400 },		//DOEx SET(en.), page 810
+
+    // XX_GPIO(12) SDCARD4 bank 2, pin 0 (pin 270, SSP0_DATA0)
+    // 5 X G 3 V 2 1 0
+    { 0x0144, 0x00000003 },		//MUXSELx SET(GPIO), page 699
+    { 0x0384, 0x00000004 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x03b8, 0x00000003 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000001 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000001 },		//DOUTx CLR, page 801
+    { 0x0b24, 0x00000001 },		//DOEx SET(en.), page 810
+
+    // XX_GPIO(13) SDCARD5 bank 2, pin 1 (pin 289, SSP0_DATA1)
+    // X 4 G 3 V 2 1 0
+    { 0x0144, 0x0000000c },		//MUXSELx SET(GPIO), page 699
+    { 0x0384, 0x00000040 },		//DRIVEx SET(3.3V), page 753, 756
+    { 0x0398, 0x00000030 },		//DRIVEx CLR(4mA), page 753, 756
+    { 0x0628, 0x00000002 },		//PULLx CLR(no), page 789
+    { 0x0728, 0x00000002 },		//DOUTx CLR, page 801
+//	{ 0x0b28, 0x00000002 },		//DOEx CLR(en.), page 810 (if input)
+    { 0x0b24, 0x00000002 },		//DOEx SET(en.), page 810 (if output)
 
 	// THE END
 	{ 0xffff, 0xffffffff }
@@ -231,62 +210,57 @@ static struct {
 	unsigned offset;
 	unsigned mask;
 } xx_gpio_pin[] = {
+
 	// PINCTRL register in "i.MX28 Applications Processor Reference Manual", # MCIMX28RM, rev. 1, 2010, page 688
 
-#ifdef XX_GPIO_SDCARD
-
-	// [0] OUT: bank 2, pin  2 (pin   2, SSP0_DATA2)
-	// 5 4 G 3 V 2 1 X
-	{ 0x0720, 0x00000004 },		//DOUTx, page 801
-
-	// [1] OUT: bank 2, pin  3 (pin 274, SSP0_DATA3)
-	// 5 4 G 3 V 2 X 0
-	{ 0x0720, 0x00000008 },		//DOUTx, page 801
-
-	// [2] OUT: bank 2, pin  8 (pin 276, SSP0_CMD)
-	// 5 4 G 3 V X 1 0
-	{ 0x0720, 0x00000100 },		//DOUTx, page 801
-
-	// [3] OUT: bank 2, pin 10 (pin 268, SSP0_SCK)
-	// 5 4 G X V 2 1 0
-	{ 0x0720, 0x00000400 },		//DOUTx, page 801
-
-	// [4] OUT: bank 2, pin  0 (pin 270, SSP0_DATA0)
-	// 5 X G 3 V 2 1 0
-	{ 0x0720, 0x00000001 },		//DOUTx, page 801
-
-	// [5] IN:  bank 2, pin  1 (pin 289, SSP0_DATA1)
-	// X 4 G 3 V 2 1 0
-	//{ 0x0920, 0x00000002 },	//DINx, page 806
-	{ 0x0720, 0x00000002 },		//DOUTx, page 801
-
-#else
-
-	// FGPIO_1 OUT: bank 2, pin 14 (pin 21, SSP1_DATA0)
+    // XX_GPIO( 0) FGPIO_1 bank 2, pin 14 (pin 21, SSP1_DATA0)
 	{ 0x0720, 0x00004000 },		//DOUT2, page 801
 
-	// FGPIO_2 OUT: bank 0, pin 17 (pin 131, GPMI_CE1N)
+    // XX_GPIO( 1) FGPIO_2 bank 0, pin 17 (pin 131, GPMI_CE1N)
 	{ 0x0700, 0x00020000 },		//DOUTx, page 801
 
-	// FGPIO_3 OUT: bank 2, pin 12 (pin 11, SSP1_SCK)
+    // XX_GPIO( 2) FGPIO_3 bank 2, pin 12 (pin 11, SSP1_SCK)
 	{ 0x0720, 0x00001000 },		//DOUT2, page 801
 
-	// FGPIO_4 OUT: bank 3, pin 6 (pin 78, AUART1_CTS)
+    // XX_GPIO( 3) FGPIO_4 bank 3, pin 6 (pin 78, AUART1_CTS)
 	{ 0x0730, 0x00000040 },		//DOUT3, page 802
 
-	// FGPIO_5 OUT: bank 2, pin 20 (pin 7, SSP2_SS1)
+    // XX_GPIO( 4) FGPIO_5 bank 2, pin 20 (pin 7, SSP2_SS1)
 	{ 0x0720, 0x00100000 },		//DOUT2, page 801
 
-	// FGPIO_6 OUT: bank 3, pin 2 (pin 70, AUART0_CTS)
+    // XX_GPIO( 5) FGPIO_6 bank 3, pin 2 (pin 70, AUART0_CTS)
 	{ 0x0730, 0x00000002 },		//DOUT3, page 801
 
-	// FGPIO_7 OUT: bank 3, pin 4 (pin 81, AUART1_RX)
+    // XX_GPIO( 6) FGPIO_7 bank 3, pin 4 (pin 81, AUART1_RX)
 	{ 0x0730, 0x00000010 },		//DOUT3, page 801
 
-	// FGPIO_8 OUT: bank 3, pin 5 (pin 65, AUART1_TX)
+    // XX_GPIO( 7) FGPIO_8 bank 3, pin 5 (pin 65, AUART1_TX)
 	{ 0x0730, 0x00000020 },		//DOUT3, page 801
 
-#endif
+    // XX_GPIO( 8) SDCARD0 bank 2, pin  2 (pin   2, SSP0_DATA2)
+    // 5 4 G 3 V 2 1 X
+    { 0x0720, 0x00000004 },		//DOUTx, page 801
+
+    // XX_GPIO( 9) SDCARD1 bank 2, pin  3 (pin 274, SSP0_DATA3)
+    // 5 4 G 3 V 2 X 0
+    { 0x0720, 0x00000008 },		//DOUTx, page 801
+
+    // XX_GPIO(10) SDCARD2 bank 2, pin  8 (pin 276, SSP0_CMD)
+    // 5 4 G 3 V X 1 0
+    { 0x0720, 0x00000100 },		//DOUTx, page 801
+
+    // XX_GPIO(11) SDCARD3 bank 2, pin 10 (pin 268, SSP0_SCK)
+    // 5 4 G X V 2 1 0
+    { 0x0720, 0x00000400 },		//DOUTx, page 801
+
+    // XX_GPIO(12) SDCARD4 bank 2, pin  0 (pin 270, SSP0_DATA0)
+    // 5 X G 3 V 2 1 0
+    { 0x0720, 0x00000001 },		//DOUTx, page 801
+
+    // XX_GPIO(13) SDCARD5 bank 2, pin  1 (pin 289, SSP0_DATA1)
+    // X 4 G 3 V 2 1 0
+    //{ 0x0920, 0x00000002 },	//DINx, page 806
+    { 0x0720, 0x00000002 },		//DOUTx, page 801
 
 	// THE END
 	{ 0xffff, 0xffffffff }
@@ -838,6 +812,7 @@ xx_gpio_init(void)
 		*reg_ptr = xx_gpio_enabler[i].value;
 	}
 
+#if 0
     // Toggle all output pins, leaving them ON
     for (i = 0; i < XX_MAX_OUT_BIT; ++i) {
 		xx_gpio_clr(i);
@@ -845,7 +820,7 @@ xx_gpio_init(void)
         xx_gpio_clr(i);
         xx_gpio_set(i);
     }
-
+#endif
 }
 
 void

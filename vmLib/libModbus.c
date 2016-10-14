@@ -3502,7 +3502,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         fprintf(stderr, "%s(%d) error\n", __func__, ctx->s);
         return -1;
     }
-    fprintf(stderr, "%s(%d) ok\n", __func__, ctx->s);
+    fprintf(stderr, "%s(%s) ok\n", __func__, ctx_rtu->device);
 #endif
 
 	return 0;
@@ -3620,10 +3620,8 @@ int modbus_rtu_get_rts(modbus_t *ctx) {
 
 static void _modbus_rtu_close(modbus_t *ctx)
 {
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
 	/* Restore line settings and close file descriptor in RTU mode */
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
-#endif
 
 #if defined(_WIN32)
 	/* Revert settings */
@@ -3640,7 +3638,7 @@ static void _modbus_rtu_close(modbus_t *ctx)
 		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
 		close(ctx->s);
 #else
-        fprintf(stderr, "%s(%d)\n", __func__, ctx->s);
+        fprintf(stderr, "%s(%s)\n", __func__, ctx_rtu->device);
         rt_dev_close(ctx->s);
 #endif
 	}
