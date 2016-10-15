@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  23
+#define REVISION_LO  24
 
 #if DEBUG
 #undef VERBOSE_DEBUG

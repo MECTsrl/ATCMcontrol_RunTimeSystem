@@ -126,6 +126,10 @@ static int application_options(int argc, char *argv[])
                 dataGetVersionInfo(version);
 #endif
                 printf("%s version: %s\n", argv[0], version);
+#if defined(RTS_CFG_DEBUG_GPIO)
+                printf("\tXX_GPIO enabled\n");
+#endif
+
 				exit(0);
 
             case 'x':
