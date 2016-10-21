@@ -52,7 +52,7 @@
 #include "CANopen.h"
 
 #define REVISION_HI  1
-#define REVISION_LO  24
+#define REVISION_LO  25
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -3627,12 +3627,16 @@ static void *clientThread(void *arg)
                 case CommError:
                     switch (Operation) {
                     case READ:
+                        theNodes[Data_node].status = NODE_OK;
+                        DataAddr = 0; // i.e. get next
+                        break;
                     case WRITE_SINGLE:
                     case WRITE_MULTIPLE:
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
-                        theNodes[Data_node].status = NODE_OK;
-                        DataAddr = 0; // i.e. get next
+                        theNodes[Data_node].RetryCounter = 0;
+                        theNodes[Data_node].status = TIMEOUT;
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
                         break;
                     case WRITE_PREPARE:
                     default:
@@ -3656,20 +3660,6 @@ static void *clientThread(void *arg)
                     DataAddr = 0; // i.e. get next
                     break;
                 case CommError:
-                    switch (Operation) {
-                    case READ:
-                    case WRITE_SINGLE:
-                    case WRITE_MULTIPLE:
-                    case WRITE_RIC_MULTIPLE:
-                    case WRITE_RIC_SINGLE:
-                        theNodes[Data_node].status = NODE_OK;
-                        DataAddr = 0; // i.e. get next
-                        break;
-                    case WRITE_PREPARE:
-                    default:
-                        ;
-                    }
-                    break;
                 case TimeoutError:
                 case ConnReset:
                     theNodes[Data_node].RetryCounter += 1;
