@@ -2152,7 +2152,7 @@ void modbus_set_response_timeout(modbus_t *ctx, const struct timeval *timeout)
         rt_serial_config.rx_timeout = ctx->response_timeout.tv_sec * 1E9 + ctx->response_timeout.tv_usec * 1E3;
         err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
         if (err) {
-            fprintf(stderr, "%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
+            fprintf(stderr, "%s - rt_dev_ioctl SET CONFIG error, %s\n", __func__,  strerror(-err));
 
         }
     }
@@ -3496,7 +3496,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
     int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
     if (err) {
-        fprintf(stderr, "%s - rt_dev_ioctl error, %s\n", __func__,  strerror(-err));
+        fprintf(stderr, "%s - rt_dev_ioctl SET CONFIG error, %s\n", __func__,  strerror(-err));
         rt_dev_close(ctx->s);
         ctx->s = -1;
         fprintf(stderr, "%s(%d) error\n", __func__, ctx->s);
@@ -3661,11 +3661,13 @@ static int _modbus_rtu_flush(modbus_t *ctx)
 
 #else
 
-	/* Emulate an IO flush by reopening the port. */
-	_modbus_rtu_close(ctx);
-	_sleep_response_timeout(ctx);
-	_modbus_rtu_connect(ctx);
-    modbus_set_response_timeout(ctx, &ctx->response_timeout);
+	int err;
+
+	/* RT serial flush is mapped on the ioctl for break control. */
+	err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_BREAK_CTL, NULL);
+	if (err)
+		fprintf(stderr, "%s - rt_dev_ioctl BREAK error, %s\n", __func__,  strerror(-err));
+
 	return 0;
 
 #endif
