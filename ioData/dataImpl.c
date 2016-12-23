@@ -51,6 +51,11 @@
 #include "libModbus.h"
 #include "CANopen.h"
 
+typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
+#define RTIME_FROM_TIMESPEC(rt, ts) { rt = ts.tv_sec * 1000000000ULL + ts.tv_nsec; }
+#define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
+
+
 #define REVISION_HI  1
 #define REVISION_LO  25
 
@@ -82,8 +87,11 @@
 #define THE_ENGINE_DELAY_ms     10
 #define THE_SERVER_DELAY_ms     1000
 #define THE_CONNECTION_DELAY_ms 1000
-#define THE_DEVICE_BLACKLIST_ms 4000
-#define THE_DEVICE_SILENCE_ms   20000 // tpac boot time
+
+#define THE_DEVICE_BLACKLIST_ns 4E9
+#define THE_DEVICE_SILENCE_ns   20E9 // tpac boot time
+
+#define THE_MAX_CLIENT_SLEEP_ns 1E9
 
 // -------- MANAGE THREADS: DATA & SYNCRO
 #define THE_UDP_PERIOD_ms	100
@@ -256,8 +264,8 @@ struct ClientStruct {
     enum DeviceStatus status;
     pthread_t thread_id;
     enum threadStatus thread_status;
-    u_int32_t current_time_ms;
-    u_int32_t elapsed_time_ms;
+    RTIME current_time_ns;
+    RTIME elapsed_time_ns;
     u_int16_t writeOperations;
     u_int16_t writeResetIndex;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
@@ -375,7 +383,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d (++)", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -1582,7 +1590,7 @@ static int checkServersDevicesAndNodes()
                         theDevices[d].timeout_ms = 300;
                         fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].timeout_ms);
                     }
-                    theDevices[d].elapsed_time_ms = 0;
+                    theDevices[d].elapsed_time_ns = 0;
                     theDevices[d].status = ZERO;
                     // theDevices[d].thread_id = 0;
                     theDevices[d].thread_status = NOT_STARTED;
@@ -1752,7 +1760,6 @@ static void *engineThread(void *statusAdr)
     // run
     *threadStatusPtr = RUNNING;
     struct timespec abstime;
-    ldiv_t x;
     clock_gettime(CLOCK_REALTIME, &abstime);
 
     pthread_mutex_lock(&theCrosstableClientMutex);
@@ -1772,7 +1779,7 @@ static void *engineThread(void *statusAdr)
         // abstime.tv_sec += THE_ENGINE_DELAY_ms / 1000;
         abstime.tv_nsec = abstime.tv_nsec + (THE_ENGINE_DELAY_ms * 1E6); // (THE_ENGINE_DELAY_ms % 1000) * 1E6;
         if (abstime.tv_nsec >= 1E9) {
-            x = ldiv(abstime.tv_nsec, 1E9);
+            ldiv_t x = ldiv(abstime.tv_nsec, 1E9);
             abstime.tv_sec += x.quot;
             abstime.tv_nsec = x.rem;
         }
@@ -2923,29 +2930,29 @@ static void zeroDeviceVariables(u_int32_t d)
 static inline void startDeviceTiming(u_int32_t d)
 {
     struct timespec abstime;
-    register u_int32_t now_ms;
+    RTIME now_ns;
 
     clock_gettime(CLOCK_REALTIME, &abstime);
-    now_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
-    theDevices[d].elapsed_time_ms = 0;
-    theDevices[d].current_time_ms = now_ms;
+    RTIME_FROM_TIMESPEC(now_ns, abstime);
+    theDevices[d].elapsed_time_ns = 0;
+    theDevices[d].current_time_ns = now_ns;
 }
 
 static inline void updateDeviceTiming(u_int32_t d)
 {
     struct timespec abstime;
-    register u_int32_t now_ms, delta_ms;
+    RTIME now_ns, delta_ns;
 
     clock_gettime(CLOCK_REALTIME, &abstime);
-    now_ms = abstime.tv_sec * 1000 + abstime.tv_nsec / 1E6;
-    delta_ms = now_ms - theDevices[d].current_time_ms;
-    theDevices[d].elapsed_time_ms += delta_ms;
-    theDevices[d].current_time_ms = now_ms;
+    RTIME_FROM_TIMESPEC(now_ns, abstime);
+    delta_ns = now_ns - theDevices[d].current_time_ns;
+    theDevices[d].elapsed_time_ns += delta_ns;
+    theDevices[d].current_time_ns = now_ns;
 }
 
 static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 {
-    theDevices[d].elapsed_time_ms = 0;
+    theDevices[d].elapsed_time_ns = 0;
     theDevices[d].status = status;
     setQdataRegisters(theDevices[d].diagnosticAddr, 2, status); // STATUS
 #ifdef VERBOSE_DEBUG
@@ -2988,7 +2995,7 @@ static void *clientThread(void *arg)
     int we_have_variables[MAX_PRIORITY];    // do we have variables at that priority?
     u_int16_t read_addr[MAX_PRIORITY];      // current read address in crosstable for each priority
     u_int16_t read_index[MAX_PRIORITY];     // current read indexes in queue for each priority
-    u_int32_t read_time_ms[MAX_PRIORITY];   // next read time for each priority
+    RTIME read_time_ns[MAX_PRIORITY];   // next read time for each priority
 
     // data for each fieldbus operation
     u_int16_t QueueIndex = 0;// command index in the queue
@@ -3117,7 +3124,7 @@ static void *clientThread(void *arg)
     startDeviceTiming(d);
     write_index = 1;
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
-        read_time_ms[prio] = theDevices[d].current_time_ms;
+        read_time_ns[prio] = theDevices[d].current_time_ns;
         read_addr[prio] = 0;
         read_index[prio] = 1;
         we_have_variables[prio] = 0;
@@ -3163,24 +3170,21 @@ static void *clientThread(void *arg)
         // was I already doing something?
         if (DataAddr == 0) {
             int rc;
-            u_int32_t next_ms;
+            RTIME next_ns;
 
             // wait for next operation or next programmed read
-            next_ms = theDevices[d].current_time_ms + THE_UDP_TIMEOUT_ms;
+            next_ns = theDevices[d].current_time_ns + THE_MAX_CLIENT_SLEEP_ns;
             for (prio = 0; prio < MAX_PRIORITY; ++prio) {
                 if (we_have_variables[prio]) {
-                    if (read_time_ms[prio] < next_ms) {
-                        next_ms = read_time_ms[prio];
+                    if (read_time_ns[prio] < next_ns) {
+                        next_ns = read_time_ns[prio];
                     }
                 }
             }
-            if (next_ms > theDevices[d].current_time_ms) {
+            if (next_ns > theDevices[d].current_time_ns) {
                 int timeout, invalid_timeout, invalid_permission, other_error;
-                ldiv_t q;
                 struct timespec abstime;
-                q = ldiv(next_ms, 1000);
-                abstime.tv_sec = q.quot;
-                abstime.tv_nsec = q.rem * 1E6; // ms -> ns
+                TIMESPEC_FROM_RTIME(abstime, next_ns);
 
                 do {
                     int saved_errno;
@@ -3192,8 +3196,8 @@ static void *clientThread(void *arg)
                     timeout = invalid_timeout = invalid_permission = other_error = FALSE;
                     errno = saved_errno;
                     if (errno ==  EINVAL) {
-                        fprintf(stderr, "%s@%09u ms: problem with (%us, %ldns).\n",
-                            theDevices[d].name, theDevices[d].current_time_ms, abstime.tv_sec, abstime.tv_nsec);
+                        fprintf(stderr, "%s@%09llu ms: problem with (%us, %ldns).\n",
+                            theDevices[d].name, theDevices[d].current_time_ns, abstime.tv_sec, abstime.tv_nsec);
                         invalid_timeout = TRUE;
                         break;
                     }
@@ -3318,7 +3322,7 @@ static void *clientThread(void *arg)
                             continue;
                         }
                         // only when the timer expires
-                        if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
+                        if (read_time_ns[prio] <= theDevices[d].current_time_ns) {
 
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
@@ -3387,10 +3391,11 @@ static void *clientThread(void *arg)
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
-                                read_time_ms[prio] += system_ini.system.read_period_ms[prio];
-                                if (read_time_ms[prio] <= theDevices[d].current_time_ms) {
-                                    u_int32_t n = theDevices[d].current_time_ms / system_ini.system.read_period_ms[prio];
-                                    read_time_ms[prio] = (n + 1) * system_ini.system.read_period_ms[prio];
+                                RTIME period_ns = system_ini.system.read_period_ms[prio] * 1E6;
+                                read_time_ns[prio] += period_ns;
+                                if (read_time_ns[prio] <= theDevices[d].current_time_ns) {
+                                    RTIME n = theDevices[d].current_time_ns / period_ns;
+                                    read_time_ns[prio] = (n + 1) * period_ns;
                                 }
                                 read_index[prio] = 1;
 #ifdef VERBOSE_DEBUG
@@ -3459,7 +3464,7 @@ static void *clientThread(void *arg)
                 u_int8_t channel = theDevices[d].u.can.bus;
                 if (CANopenConfigured(channel)) {
                     changeDeviceStatus(d, CONNECTED);
-                } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
+                } else if (theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
                     // CANopenResetChannel(theDevices[d].u.can.bus);
                     changeDeviceStatus(d, DEVICE_BLACKLIST);
                     zeroDeviceVariables(d);
@@ -3475,7 +3480,7 @@ static void *clientThread(void *arg)
                     theDevices[d].timeout_ms);
                 if (theDevices[d].mect_fd >= 0) {
                     changeDeviceStatus(d, CONNECTED);
-                } else if (theDevices[d].elapsed_time_ms >= THE_DEVICE_SILENCE_ms) {
+                } else if (theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
                     changeDeviceStatus(d, DEVICE_BLACKLIST);
                 }
                 break;
@@ -3495,7 +3500,7 @@ static void *clientThread(void *arg)
             // ok proceed with the fieldbus operations
             break;
         case DEVICE_BLACKLIST:
-            if (theDevices[d].elapsed_time_ms >= THE_DEVICE_BLACKLIST_ms) {
+            if (theDevices[d].elapsed_time_ns >= THE_DEVICE_BLACKLIST_ns) {
                 changeDeviceStatus(d, NOT_CONNECTED);
             }
             break;
@@ -3730,7 +3735,7 @@ static void *clientThread(void *arg)
                 changeDeviceStatus(d, NOT_CONNECTED);
             } else if (error == TimeoutError) {
                 updateDeviceTiming(d);
-                if (theDevices[d].elapsed_time_ms > THE_DEVICE_SILENCE_ms) {
+                if (theDevices[d].elapsed_time_ns > THE_DEVICE_SILENCE_ns) {
                     // too much silence
                     fieldbusReset(d);
                     changeDeviceStatus(d, NOT_CONNECTED);

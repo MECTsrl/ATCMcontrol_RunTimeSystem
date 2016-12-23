@@ -56,7 +56,7 @@ XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(MECT_ROOTFS)/usr/xenomai/lib
 
 else
 
-MECT_ROOTFS       = $(HOME)/imx_mect/ltib/rootfs
+MECT_ROOTFS       = $(HOME)/mect_suite_2.0/imx_mect/ltib/rootfs
 MECT_CC_VERSION   =
 MECT_CC_DIRECTORY = /opt/CodeSourcery
 MECT_CC_BINDIR    = $(MECT_CC_DIRECTORY)/$(MECT_CC_VERSION)/bin/
