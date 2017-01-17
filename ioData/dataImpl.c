@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  26
+#define REVISION_LO  27
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -174,6 +174,7 @@ enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError = 0, CommError, TimeoutError, ConnReset};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
+               UINT8,
                UINT16, UINT16BA,
                INT16, INT16BA,
                REAL, REALDCBA, REALCDAB, REALBADC,
@@ -899,6 +900,8 @@ static int LoadXTable(void)
         }
         if (strncmp(p, "BIT", strlen(p)) == 0) {
             CrossTable[addr].Types = BIT;
+        } else if (strncmp(p, "BYTE", strlen(p)) == 0) {
+            CrossTable[addr].Types = UINT8;
         } else if (strncmp(p, "BYTE_BIT", strlen(p)) == 0) {
             CrossTable[addr].Types = BYTE_BIT;
         } else if (strncmp(p, "WORD_BIT", strlen(p)) == 0) {
@@ -1130,6 +1133,7 @@ static int LoadXTable(void)
                 // NB this may either overflow or underflow
                 ALCrossTable[indx].ALCompareVal = fvalue;
                 break;
+            case UINT8:
             case UINT16:
             case UINT16BA:
             case UDINT:
@@ -1855,6 +1859,7 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
         case REAL: case REALDCBA: case REALCDAB: case REALBADC:
             retval += 2;
             break;
+        case UINT8:
         case  INT16: case  INT16BA:
         case UINT16: case UINT16BA:
             retval += 1;
@@ -2006,6 +2011,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                             && ++i);
                         r += (CrossTable[DataAddr + i].Types == DWORD_BIT) ? 2 : 1;
                         break;
+                    case UINT8:
                     case UINT16:
                     case INT16:
                     case UINT16BA:
@@ -2063,6 +2069,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                             && ++i);
                         r += (vartype == DWORD_BIT) ? 2 : 1;
                     }   break;
+                    case UINT8:
                     case UINT16:
                     case INT16:
                         DataValue[i] = uintRegs[r];
@@ -2177,6 +2184,11 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                             && CrossTable[DataAddr + (i + 1)].Types == vartype
                             && CrossTable[DataAddr + (i + 1)].Offset == offset
                             && ++i);
+                    }   break;
+                    case  UINT8: {
+                        u_int8_t a;
+                        e = CANopenReadPDOByte(channel, offset, &a);
+                        DataValue[i] = a;
                     }   break;
                     case  UINT16:
                     case INT16: {
@@ -2328,6 +2340,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                         && ++i);
                     r += (vartype == DWORD_BIT) ? 2 : 1;
                 }   break;
+                case UINT8:
                 case UINT16:
                 case INT16:
                 case UINT16BA:
@@ -2382,6 +2395,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                       && ++i);
                 r += (vartype == DWORD_BIT) ? 2 : 1;
             }   break;
+            case UINT8:
             case UINT16:
             case INT16:
                 uintRegs[r] = DataValue[i];
@@ -2556,6 +2570,9 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                         && CrossTable[DataAddr + (i + 1)].Offset == offset
                         && ++i);
                 }   break;
+                case UINT8:
+                    e = CANopenWritePDOByte(channel, offset, DataValue[i]);
+                    break;
                 case UINT16:
                 case INT16:
                     e = CANopenWritePDOWord(channel, offset, DataValue[i]);
