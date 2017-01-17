@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  25
+#define REVISION_LO  26
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -383,7 +383,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d (++)", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -1940,6 +1940,14 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             if (CrossTable[DataAddr].Types == BIT) {
                 bzero(bitRegs, sizeof(bitRegs));
                 e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
+            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+                bzero(uintRegs, sizeof(uintRegs));
+                e = modbus_read_input_registers(theDevices[d].modbus_ctx,
+                    CrossTable[DataAddr].Offset - 30001, regs, uintRegs);
+            } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
+                bzero(uintRegs, sizeof(uintRegs));
+                e = modbus_read_registers(theDevices[d].modbus_ctx,
+                    CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
             } else {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
@@ -2422,10 +2430,20 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         case TCPRTU:
             if (CrossTable[DataAddr].Types == BIT) {
                 e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (regs == 1){
-                e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, uintRegs[0]);
+            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+                e = -1; // cannot write inputs
+            } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
+                if (regs == 1){
+                    e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, uintRegs[0]);
+                } else {
+                    e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
+                }
             } else {
-                e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
+                if (regs == 1){
+                    e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, uintRegs[0]);
+                } else {
+                    e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
+                }
             }
 #ifdef VERBOSE_DEBUG
             if (theDevices[d].protocol == TCP) {
