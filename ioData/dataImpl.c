@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  27
+#define REVISION_LO  28
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -239,7 +239,10 @@ struct ClientStruct {
     u_int16_t port;
     //
     u_int16_t var_num;
-    u_int16_t *var_addr;
+    struct device_var {
+        u_int16_t addr;
+        u_int16_t active; // 1 {P,S,F,V,X}, 0/1 {H}
+    } *device_vars;
     union ClientData {
         // no plc client
         struct {
@@ -1254,6 +1257,17 @@ static void PLCsync(void)
     u_int16_t indx;
     u_int16_t oper;
     u_int16_t addr;
+    int d, n;
+
+    // clear H variables status for each device
+    for (d = 0; d < theDevicesNumber; ++d) {
+        for (n = 0; n < theDevices[d].var_num; ++n) {
+            addr = theDevices[d].device_vars[n].addr;
+            if (CrossTable[addr].Plc == Htype) {
+                theDevices[d].device_vars[n].active = 0;
+            }
+        }
+    }
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (indx = 1; indx <= DimCrossTable; ++indx) {
@@ -1270,6 +1284,15 @@ static void PLCsync(void)
                 // }
                 break;
             case READ:
+                // set H variables status for each device
+                if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
+                    d = CrossTable[addr].device;
+                    for (n = 0; n < theDevices[d].var_num; ++n) {
+                        if (theDevices[d].device_vars[n].addr == addr) {
+                            theDevices[d].device_vars[n].active = 1;
+                        }
+                    }
+                }
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_READ) {
                     the_QsyncRegisters[indx] = QUEUE_BUSY_READ;
                     switch (CrossTable[addr].Protocol) {
@@ -1288,6 +1311,7 @@ static void PLCsync(void)
                     case TCPRTU_SRV:
                         // consider only "H" variables, because the "P,S,F" are already managed by clientThread
                         if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
+                            // activate semaphore only the first time
                             sem_post(&newOperations[CrossTable[addr].device]);
                         } else {
                             the_QsyncRegisters[indx] = QUEUE_EMPTY;
@@ -1342,6 +1366,34 @@ static void PLCsync(void)
             }
         }
     }
+#ifdef VERBOSE_DEBUG
+    static int counter = 0;
+
+    if (counter++ >= 10) {
+        // circa ogni secondo
+        counter = 0;
+        fprintf(stderr, "_________\n");
+        u_int16_t n;
+        for (n = 1; n <= DimCrossTable; ++n) {
+            u_int16_t Oper = the_IsyncRegisters[n] & QueueOperMask;
+            u_int16_t Addr = the_IsyncRegisters[n] & QueueAddrMask;
+
+            if (1 <= Addr && Addr <= DimCrossTable && CrossTable[Addr].Plc == Htype) {
+                fprintf(stderr, "\t[%u] 0x%04x %s", n, Oper, CrossTable[Addr].Tag);
+                for (d = 0; d < theDevicesNumber; ++d) {
+                    int i;
+                    for (i = 0; i < theDevices[d].var_num; ++i) {
+                        addr = theDevices[d].device_vars[i].addr;
+                        if (addr == Addr && theDevices[d].device_vars[i].active) {
+                            fprintf(stderr, " (%s)", theDevices[d].name);
+                        }
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
+#endif
 }
 
 static int checkServersDevicesAndNodes()
@@ -1498,9 +1550,7 @@ static int checkServersDevicesAndNodes()
                 }
                 if (d < theDevicesNumber) {
                     CrossTable[i].device = d; // found
-                    if (CrossTable[i].Plc > Htype) {
-                        theDevices[d].var_num += 1; // this one
-                    }
+                    theDevices[d].var_num += 1; // this one, also Htype
                 } else if (theDevicesNumber >= MAX_DEVICES) {
                     CrossTable[i].device = 0xffff; // FIXME: error
                     fprintf(stderr, "%s() too many devices\n", __func__, MAX_DEVICES);
@@ -1512,11 +1562,8 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].protocol = CrossTable[i].Protocol;
                     theDevices[d].IPaddress = CrossTable[i].IPAddress;
                     theDevices[d].port = p = CrossTable[i].Port;
-                    theDevices[d].var_num = 0;
-                    theDevices[d].var_addr = NULL; // calloc later on
-                    if (CrossTable[i].Plc > Htype) {
-                        theDevices[d].var_num += 1; // this one
-                    }
+                    theDevices[d].var_num = 1; // this one, also Htype
+                    theDevices[d].device_vars = NULL; // calloc later on
                     theDevices[d].server = 0xffff;
                     switch (theDevices[d].protocol) {
                     case PLC:
@@ -1660,17 +1707,20 @@ static int checkServersDevicesAndNodes()
             case TCPRTU_SRV:
                 d = CrossTable[i].device;
                 if (d != 0xffff) {
-                    if (theDevices[d].var_addr == NULL) {
-                        theDevices[d].var_addr = calloc(theDevices[d].var_num, sizeof(u_int16_t));
+                    if (theDevices[d].device_vars == NULL) {
+                        theDevices[d].device_vars = calloc(theDevices[d].var_num, sizeof(struct device_var));
                         var_max[d] = 0;
                     }
-                    if (theDevices[d].var_addr == NULL) {
+                    if (theDevices[d].device_vars == NULL) {
                         fprintf(stderr, "%s() memory full\n", __func__);
                         retval = -1;
                         break;
                     }
                     if (var_max[d] < theDevices[d].var_num) {
-                        theDevices[d].var_addr[var_max[d]] = i;
+                        theDevices[d].device_vars[var_max[d]].addr = i;
+                        if (CrossTable[i].Plc > Htype) {
+                            theDevices[d].device_vars[var_max[d]].active = 1;
+                        }
                         ++var_max[d];
                     }
                 }
@@ -3029,7 +3079,6 @@ static void *clientThread(void *arg)
     u_int16_t write_index;                  // current write index in queue
     int we_have_variables[MAX_PRIORITY];    // do we have variables at that priority?
     u_int16_t read_addr[MAX_PRIORITY];      // current read address in crosstable for each priority
-    u_int16_t read_index[MAX_PRIORITY];     // current read indexes in queue for each priority
     RTIME read_time_ns[MAX_PRIORITY];   // next read time for each priority
 
     // data for each fieldbus operation
@@ -3161,15 +3210,14 @@ static void *clientThread(void *arg)
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
         read_time_ns[prio] = theDevices[d].current_time_ns;
         read_addr[prio] = 0;
-        read_index[prio] = 1;
         we_have_variables[prio] = 0;
     }
     // for each priority check if we have variables at that priority
     for (v = 0; v < theDevices[d].var_num; ++v) {
-        DataAddr = theDevices[d].var_addr[v];
-        if (CrossTable[DataAddr].Enable <= MAX_PRIORITY) {
+        DataAddr = theDevices[d].device_vars[v].addr;
+        if (CrossTable[DataAddr].Enable > 0 && CrossTable[DataAddr].Enable <= MAX_PRIORITY) {
             prio = CrossTable[DataAddr].Enable - 1;
-            we_have_variables[prio] = 1;
+            we_have_variables[prio] = 1; // also Htype
         }
     }
     fprintf(stderr, "%s: reading variables {", theDevices[d].name);
@@ -3177,7 +3225,9 @@ static void *clientThread(void *arg)
         if (we_have_variables[prio]) {
             fprintf(stderr, "\n\t%u:", prio + 1);
             for (v = 0; v < theDevices[d].var_num; ++v) {
-                fprintf(stderr, " %u", theDevices[d].var_addr[v]);
+                if (CrossTable[theDevices[d].device_vars[v].addr].Enable == (prio + 1)) {
+                    fprintf(stderr, " %u%s", theDevices[d].device_vars[v].addr, theDevices[d].device_vars[v].active ? "" : "(H)");
+                }
             }
         }
     }
@@ -3346,7 +3396,7 @@ static void *clientThread(void *arg)
 
                 // if no write then is it there a read request for this device?
                 if (DataAddr == 0) {
-                    u_int16_t indx, oper, addr;
+                    u_int16_t addr;
 
                     // periodic read requests:
                     // -- {P,S,F} automatically enabled from Crosstable
@@ -3362,12 +3412,14 @@ static void *clientThread(void *arg)
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
 
-                            // {P,S,F} from Crosstable
+                            // {P,S,F} and active {H}
                             for (v = read_addr[prio]; v < theDevices[d].var_num; ++v) {
-                                addr = theDevices[d].var_addr[v];
-                                if (CrossTable[addr].Enable == (prio + 1) && addr == CrossTable[addr].BlockBase) {
-                                    found = TRUE;
-                                    break;
+                                if (theDevices[d].device_vars[v].active) {
+                                    addr = theDevices[d].device_vars[v].addr;
+                                    if (CrossTable[addr].Enable == (prio + 1) && addr == CrossTable[addr].BlockBase) {
+                                        found = TRUE;
+                                        break;
+                                    }
                                 }
                             }
                             if (found) {
@@ -3387,44 +3439,6 @@ static void *clientThread(void *arg)
 #endif
                                 break;
                             } else {
-                                // read_time_ms[prio] only set if no H as well
-                                read_addr[prio] = 0;
-                            }
-
-                            // {H} from HMI
-                            for (indx = read_index[prio]; indx <= DimCrossTable; ++indx) {
-                                oper = the_IsyncRegisters[indx] & QueueOperMask;
-                                addr = the_IsyncRegisters[indx] & QueueAddrMask;
-                                if (oper == 0 && addr == 0) {
-                                    // queue tail, jump to the array end
-                                    indx = DimCrossTable;
-                                } else if (the_QsyncRegisters[indx] == QUEUE_BUSY_READ
-                                        && CrossTable[addr].device == d && oper == READ
-                                        && CrossTable[addr].Enable == (prio + 1)
-                                        && CrossTable[addr].Plc == Htype
-                                        && addr == CrossTable[addr].BlockBase // reading by block only
-                                        ) {
-                                    found = TRUE;
-                                    break;
-                                }
-                            }
-                            if (found) {
-                                QueueIndex = indx;
-                                DataAddr = addr; // CrossTable[addr].BlockBase;
-                                DataNumber = CrossTable[addr].BlockSize;
-                                if (DataNumber > MAX_VALUES) {
-                                    fprintf(stderr, "clientThread(%d) (HMI,H) DataNumber = %u\n", d, DataNumber);
-                                    DataNumber = MAX_VALUES;
-                                }
-                                Operation = READ;
-                                // data values will be available after the fieldbus access
-                                // keep the index for the next loop
-                                read_index[prio] = indx + 1; // may overlap DimCrossTable, it's ok
-#ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%s@%09u ms: read %uH [%u]@%u, will check @%u\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, indx, read_index[prio]);
-#endif
-                                break;
-                            } else {
                                 // compute next tic for this priority, restarting from the first
                                 RTIME period_ns = system_ini.system.read_period_ms[prio] * 1E6;
                                 read_time_ns[prio] += period_ns;
@@ -3432,7 +3446,7 @@ static void *clientThread(void *arg)
                                     RTIME n = theDevices[d].current_time_ns / period_ns;
                                     read_time_ns[prio] = (n + 1) * period_ns;
                                 }
-                                read_index[prio] = 1;
+                                read_addr[prio] = 0;
 #ifdef VERBOSE_DEBUG
                                 fprintf(stderr, "%s@%09u ms: no read %uHPSF will restart at %09u ms\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, read_time_ms[prio]);
 #endif
@@ -3839,9 +3853,9 @@ static void *clientThread(void *arg)
     }
 
     // cleanup
-    if (theDevices[d].var_addr != NULL) {
-        free(theDevices[d].var_addr);
-        theDevices[d].var_addr = NULL;
+    if (theDevices[d].device_vars != NULL) {
+        free(theDevices[d].device_vars);
+        theDevices[d].device_vars = NULL;
     }
     // exit
     XX_GPIO_CLR_69(d);
