@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  28
+#define REVISION_LO  29
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -316,7 +316,7 @@ struct CrossTableRecord {
     int16_t BlockSize;
     int Output;
     int16_t Counter;
-    u_int32_t OldVal;
+    int32_t OldVal;
     u_int16_t Error;
     int usedInAlarmsEvents;
     //
@@ -340,11 +340,12 @@ struct Alarms {
     char ALCompareVar[MAX_IDNAME_LEN];
     u_int16_t SourceAddr;
     u_int16_t CompareAddr;
-    u_int32_t ALCompareVal;
+    int32_t ALCompareVal;
     u_int16_t ALOperator;
     u_int16_t ALFilterTime;
     u_int16_t ALFilterCount;
     u_int16_t ALError;
+    int unsignedInt;
 } ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
 static u_int16_t lastAlarmEvent = 0;
 
@@ -393,9 +394,11 @@ void dataGetVersionInfo(char *szVersion)
 
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
 {
-    the_QdataRegisters[addr] = value;
-    if (CrossTable[addr].usedInAlarmsEvents) {
+    if (CrossTable[addr].usedInAlarmsEvents && value != the_QdataRegisters[addr]) {
+        the_QdataRegisters[addr] = value;
         pthread_cond_signal(&theAlarmsEventsCondvar);
+    } else {
+        the_QdataRegisters[addr] = value;
     }
 #if defined(RTS_CFG_MECT_RETAIN)
     if (retentive && addr <= LAST_RETENTIVE) {
@@ -679,7 +682,7 @@ static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
         char *s;
         float f;
 
-        p = strtok_r(NULL, " ]", &r);
+        p = strtok_r(NULL, "]", &r);
         if (p == NULL) {
             goto exit_error;
         }
@@ -822,6 +825,8 @@ static int LoadXTable(void)
         ALCrossTable[addr].ALCompareVal = 0;
         ALCrossTable[addr].ALOperator = 0;
         ALCrossTable[addr].ALFilterTime = 0;
+        ALCrossTable[addr].ALFilterCount = 0;
+        ALCrossTable[addr].unsignedInt = 0;
     }
 
     // open file
@@ -1094,6 +1099,40 @@ static int LoadXTable(void)
         }
         ALCrossTable[indx].SourceAddr = addr;
         CrossTable[addr].usedInAlarmsEvents = TRUE;
+        // is it a signed int comparison?
+        switch (CrossTable[addr].Types) {
+        case BIT:
+        case BYTE_BIT:
+        case WORD_BIT:
+        case DWORD_BIT:
+            ALCrossTable[indx].unsignedInt = 1;
+            break;
+        case INT16:
+        case INT16BA:
+        case DINT:
+        case DINTDCBA:
+        case DINTCDAB:
+        case DINTBADC:
+            ALCrossTable[indx].unsignedInt = 0;
+            break;
+        case UINT8:
+        case UINT16:
+        case UINT16BA:
+        case UDINT:
+        case UDINTDCBA:
+        case UDINTCDAB:
+        case UDINTBADC:
+            ALCrossTable[indx].unsignedInt = 1;
+            break;
+        case REAL:
+        case REALDCBA:
+        case REALCDAB:
+        case REALBADC:
+            ALCrossTable[indx].unsignedInt = 0;
+            break;
+        default:
+            ; // FIXME: assert
+        }
         // if the comparison is with a variable
         if (ALCrossTable[indx].ALCompareVar[0] != 0) {
             // then retrieve the compare variable address
@@ -1198,34 +1237,35 @@ static inline void checkThis(int i, int condition)
 
 static void AlarmMngr(void)
 {
-    u_int16_t i;
+    register u_int16_t i;
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (i = 1; i <= lastAlarmEvent; ++i) {
 
         register u_int16_t SourceAddr;
-        register u_int32_t SourceValue;
+        register int32_t SourceValue;
         register u_int16_t Operator;
-        register u_int32_t CompareVal;
+        register int32_t CompareVal;
 
         SourceAddr = ALCrossTable[i].SourceAddr;
         if (CrossTable[SourceAddr].Error && CrossTable[SourceAddr].Protocol != PLC) {
             // unreliable values
             continue;
         }
-	SourceValue = the_QdataRegisters[SourceAddr];
-	Operator = ALCrossTable[i].ALOperator;
-	if (Operator == OPER_RISING) {
-            // checking against old value
-        CompareVal = CrossTable[i].OldVal;
-	    checkThis(i, CompareVal == 0 && SourceValue != 0);
-        CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
-	} else if (Operator == OPER_FALLING)  {
-            // checking against old value
-        CompareVal = CrossTable[i].OldVal;
-	    checkThis(i, CompareVal != 0 && SourceValue == 0);
-        CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
-	} else {
+        SourceValue = the_QdataRegisters[SourceAddr];
+        Operator = ALCrossTable[i].ALOperator;
+        if (Operator == OPER_RISING) {
+                // checking against old value
+            CompareVal = CrossTable[i].OldVal;
+            checkThis(i, CompareVal == 0 && SourceValue != 0);
+            CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+        } else if (Operator == OPER_FALLING)  {
+                // checking against old value
+            CompareVal = CrossTable[i].OldVal;
+            checkThis(i, CompareVal != 0 && SourceValue == 0);
+            CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+        } else {
+
             if (ALCrossTable[i].CompareAddr == 0) {
                 // checking against fixed value
                 CompareVal = ALCrossTable[i].ALCompareVal;
@@ -1233,20 +1273,39 @@ static void AlarmMngr(void)
                 // checking against variable value
                 CompareVal = the_QdataRegisters[ALCrossTable[i].CompareAddr];
             }
-            if (Operator == OPER_GREATER) {
-                checkThis(i, SourceValue > CompareVal);
-            } else if (Operator == OPER_GREATER_EQ) {
-                checkThis(i, SourceValue >= CompareVal);
-            } else if (Operator == OPER_SMALLER) {
-                checkThis(i, SourceValue < CompareVal);
-            } else if (Operator == OPER_SMALLER_EQ) {
-                checkThis(i, SourceValue <= CompareVal);
-            } else if (Operator == OPER_EQUAL) {
+
+            if (Operator == OPER_EQUAL) {
                 checkThis(i, SourceValue == CompareVal);
             } else if (Operator == OPER_NOT_EQUAL) {
                 checkThis(i, SourceValue != CompareVal);
+
+            } else if (ALCrossTable[i].unsignedInt) {
+                register u_int32_t u_SourceValue = SourceValue;
+                register u_int32_t u_CompareVal = CompareVal;
+
+                if (Operator == OPER_GREATER) {
+                    checkThis(i, u_SourceValue > u_CompareVal);
+                } else if (Operator == OPER_GREATER_EQ) {
+                    checkThis(i, u_SourceValue >= u_CompareVal);
+                } else if (Operator == OPER_SMALLER) {
+                    checkThis(i, u_SourceValue < u_CompareVal);
+                } else if (Operator == OPER_SMALLER_EQ) {
+                    checkThis(i, u_SourceValue <= u_CompareVal);
+                } else {
+                    ; // FIXME: assert
+                }
             } else {
-                ; // FIXME: assert
+                if (Operator == OPER_GREATER) {
+                    checkThis(i, SourceValue > CompareVal);
+                } else if (Operator == OPER_GREATER_EQ) {
+                    checkThis(i, SourceValue >= CompareVal);
+                } else if (Operator == OPER_SMALLER) {
+                    checkThis(i, SourceValue < CompareVal);
+                } else if (Operator == OPER_SMALLER_EQ) {
+                    checkThis(i, SourceValue <= CompareVal);
+                } else {
+                    ; // FIXME: assert
+                }
             }
         }
     }
