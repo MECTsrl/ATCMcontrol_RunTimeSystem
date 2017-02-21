@@ -658,14 +658,14 @@ static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
     if (p == NULL) {
         goto exit_error;
     }
-    if (strncmp(p, ">", 1) == 0) {
-        ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER;
-    } else if (strncmp(p, ">=", 2) == 0) {
+    if (strncmp(p, ">=", 2) == 0) { // before ">" !!!
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER_EQ;
+    } else if (strncmp(p, ">", 1) == 0) {
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_GREATER;
+    } else if (strncmp(p, "<=", 2) == 0) { // before "<" !!!
+        ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER_EQ;
     } else if (strncmp(p, "<", 1) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER;
-    } else if (strncmp(p, "<=", 2) == 0) {
-        ALCrossTable[lastAlarmEvent].ALOperator = OPER_SMALLER_EQ;
     } else if (strncmp(p, "==", 2) == 0) {
         ALCrossTable[lastAlarmEvent].ALOperator = OPER_EQUAL;
     } else if (strncmp(p, "!=", 2) == 0) {
