@@ -1213,25 +1213,35 @@ exit_function:
     return ERR;
 }
 
-static inline void checkThis(int i, int condition)
+static inline void setAlarmEvent(int i)
+{
+    writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
+    if (ALCrossTable[i].ALType == Alarm) {
+        vmmSetEvent(pVMM, EVT_RESERVED_11); // 27u --> EVENT:='28'
+    } else {
+        vmmSetEvent(pVMM, EVT_RESERVED_10); // 26u --> EVENT:='27'
+    }
+}
+
+static inline void clearAlarmEvent(int i)
+{
+    writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
+    ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterTime;
+}
+
+static inline void checkAlarmEvent(int i, int condition)
 {
     if (condition) {
         if (ALCrossTable[i].ALFilterCount == 0) {
             // setting alarm/event
-            writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
-            if (ALCrossTable[i].ALType == Alarm) {
-                vmmSetEvent(pVMM, EVT_RESERVED_11); // 27u --> EVENT:='28'
-            } else {
-                vmmSetEvent(pVMM, EVT_RESERVED_10); // 26u --> EVENT:='27'
-            }
+            setAlarmEvent(i);
         } else {
             // filtering alarm/event
             ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterCount - 1;
         }
     } else {
         // clearing alarm/event
-        writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
-        ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterTime;
+        clearAlarmEvent(i);
     }
 }
 
@@ -1255,54 +1265,70 @@ static void AlarmMngr(void)
         SourceValue = the_QdataRegisters[SourceAddr];
         Operator = ALCrossTable[i].ALOperator;
         if (Operator == OPER_RISING) {
-                // checking against old value
+            // checking against old value
             CompareVal = CrossTable[i].OldVal;
-            checkThis(i, CompareVal == 0 && SourceValue != 0);
-            CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+            if (CompareVal == 0) {
+                // checking rising edge if currently low
+                checkAlarmEvent(i, SourceValue != 0);
+            } else if (SourceValue == 0){
+                // clearing alarm/event only at falling edge
+                clearAlarmEvent(i);
+            }
+            // saving the new "old value" :)
+            CrossTable[i].OldVal = SourceValue;
         } else if (Operator == OPER_FALLING)  {
-                // checking against old value
+            // checking against old value
             CompareVal = CrossTable[i].OldVal;
-            checkThis(i, CompareVal != 0 && SourceValue == 0);
-            CrossTable[i].OldVal = SourceValue; // saving the new "old value" :)
+            checkAlarmEvent(i, CompareVal != 0 && SourceValue == 0);
+            if (CompareVal != 0) {
+                // checking falling edge if currently high
+                checkAlarmEvent(i, SourceValue == 0);
+            } else if (SourceValue != 0){
+                // clearing alarm/event only at rising edge
+                clearAlarmEvent(i);
+            }
+            // saving the new "old value" :)
+            CrossTable[i].OldVal = SourceValue;
         } else {
 
+            // checking either against fixed value or against variable value
             if (ALCrossTable[i].CompareAddr == 0) {
-                // checking against fixed value
                 CompareVal = ALCrossTable[i].ALCompareVal;
             } else {
-                // checking against variable value
                 CompareVal = the_QdataRegisters[ALCrossTable[i].CompareAddr];
             }
 
+            // equal/no equal operators do not rely on signed/unsigned
             if (Operator == OPER_EQUAL) {
-                checkThis(i, SourceValue == CompareVal);
+                checkAlarmEvent(i, SourceValue == CompareVal);
             } else if (Operator == OPER_NOT_EQUAL) {
-                checkThis(i, SourceValue != CompareVal);
+                checkAlarmEvent(i, SourceValue != CompareVal);
 
+            // greater/smaller operators do rely on signed/unsigned
             } else if (ALCrossTable[i].unsignedInt) {
                 register u_int32_t u_SourceValue = SourceValue;
                 register u_int32_t u_CompareVal = CompareVal;
 
                 if (Operator == OPER_GREATER) {
-                    checkThis(i, u_SourceValue > u_CompareVal);
+                    checkAlarmEvent(i, u_SourceValue > u_CompareVal);
                 } else if (Operator == OPER_GREATER_EQ) {
-                    checkThis(i, u_SourceValue >= u_CompareVal);
+                    checkAlarmEvent(i, u_SourceValue >= u_CompareVal);
                 } else if (Operator == OPER_SMALLER) {
-                    checkThis(i, u_SourceValue < u_CompareVal);
+                    checkAlarmEvent(i, u_SourceValue < u_CompareVal);
                 } else if (Operator == OPER_SMALLER_EQ) {
-                    checkThis(i, u_SourceValue <= u_CompareVal);
+                    checkAlarmEvent(i, u_SourceValue <= u_CompareVal);
                 } else {
                     ; // FIXME: assert
                 }
             } else {
                 if (Operator == OPER_GREATER) {
-                    checkThis(i, SourceValue > CompareVal);
+                    checkAlarmEvent(i, SourceValue > CompareVal);
                 } else if (Operator == OPER_GREATER_EQ) {
-                    checkThis(i, SourceValue >= CompareVal);
+                    checkAlarmEvent(i, SourceValue >= CompareVal);
                 } else if (Operator == OPER_SMALLER) {
-                    checkThis(i, SourceValue < CompareVal);
+                    checkAlarmEvent(i, SourceValue < CompareVal);
                 } else if (Operator == OPER_SMALLER_EQ) {
-                    checkThis(i, SourceValue <= CompareVal);
+                    checkAlarmEvent(i, SourceValue <= CompareVal);
                 } else {
                     ; // FIXME: assert
                 }
