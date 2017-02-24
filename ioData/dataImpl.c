@@ -378,6 +378,7 @@ static void AlarmMngr(void);
 static void PLCsync(void);
 
 static void doWriteDeviceRetentives(u_int32_t d);
+static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
 static void zeroNodeVariables(u_int32_t node);
 static void zeroDeviceVariables(u_int32_t d);
@@ -1437,12 +1438,12 @@ static void PLCsync(void)
             case WRITE_RIC_SINGLE:
             case WRITE_RIC_MULTIPLE:
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
-                    the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                     switch (CrossTable[addr].Protocol) {
                     case PLC:
                         // immediate write: no fieldbus
                         writeQdataRegisters(addr, the_IdataRegisters[addr]);
                         the_QdataStates[addr] = DATA_OK;
+                        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                         break;
                     case RTU:
                     case TCP:
@@ -1456,11 +1457,47 @@ static void PLCsync(void)
 #ifdef VERBOSE_DEBUG
                             fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u %s\n", oper, addr, indx, the_IdataRegisters[addr], CrossTable[addr].Tag);
 #endif
-                            theDevices[CrossTable[addr].device].writeOperations += 1;
-                            if (oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE) {
-                                theDevices[CrossTable[addr].device].writeResetIndex = 1;
+                            // search for consecutive writes
+                            register int i;
+                            register u_int16_t oper_i;
+                            register u_int16_t addr_i;
+                            register unsigned written;
+
+                            for (i = 1; i < MAX_VALUES && (indx + i) <= DimCrossTable; ++i) {
+                                oper_i = the_IsyncRegisters[indx + i] & QueueOperMask;
+                                addr_i = the_IsyncRegisters[indx + i] & QueueAddrMask;
+
+                                if (the_QsyncRegisters[indx + i] != QUEUE_BUSY_WRITE
+                                 && oper_i == oper && addr_i == (addr + i)
+                                 && CrossTable[addr].device == CrossTable[addr + i].device)
+                                    continue;
+                                else
+                                    break;
                             }
-                            sem_post(&newOperations[CrossTable[addr].device]);
+
+                            // trying multiple writes
+                            i = i - 1; // may be 0
+#ifdef VERBOSE_DEBUG
+                            {
+                                int z;
+                                fprintf(stderr, "PLCsync() --> doWriteVariable(%u, 0x%08x, , , %d) [%d]\n",
+                                        addr, the_IdataRegisters[addr], addr + i, i + 1);
+                                for (z = 0; z < i + 1; ++z)
+                                    fprintf(stderr, "\t%02d: 0x%08x\n", z, the_IdataRegisters[addr + z]);
+                            }
+#endif
+                            written = doWriteVariable(addr, the_IdataRegisters[addr], the_IdataRegisters, NULL, addr + i);
+#ifdef VERBOSE_DEBUG
+                            fprintf(stderr, "PLCsync() <-- written = %u\n", written);
+#endif
+                            // acknowledge the written items
+                            for (i = 0; i < written; ++i) {
+                                the_QsyncRegisters[indx + i] = QUEUE_BUSY_WRITE;
+                            }
+                            // adjust the loop index
+                            if (written > 1) {
+                                indx += written - 1;
+                            }
                         }
                         break;
                     default:
@@ -2620,7 +2657,15 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                 }
             }
 #ifdef VERBOSE_DEBUG
+        {
+            int z;
             fprintf(stderr, "%s wrote %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
+            for (z = 0; z < regs; ++z) {
+                fprintf(stderr, "\t%02d: 0x%04x\n", z, uintRegs[z]);
+            }
+            fprintf(stderr, "\tresult = %02d\n", e);
+
+        }
 #endif
             break;
         case RTU_SRV:
@@ -3454,15 +3499,17 @@ static void *clientThread(void *arg)
                             DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
                         }
                     }
-                    // local queue management (even if check failed)
+
+                    // write requests circular buffer (even if check failed)
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
+
                     setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
 #ifdef VERBOSE_DEBUG
                     fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
-                // is it there a write requests from PLC to this device?
-                } else if (theDevices[d].writeOperations > 0) {
+                // is it there a write requests from HMI to this device?
+                } else if (0) { // theDevices[d].writeOperations > 0) {
                     u_int16_t indx, oper, addr;
 
                     // it should be there something to write from HMI to this device
@@ -4356,7 +4403,7 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
  *
  */
 
-static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax)
+static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax)
 {
     unsigned retval = 0;
 
@@ -4396,12 +4443,14 @@ static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t 
         }
         else {
             register int base, size, type, node, n, offset;
+
+            // write requests circular buffer
             register int i = theDevices[d].PLCwriteRequestPut;
+            theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
+            theDevices[d].PLCwriteRequestNumber += 1;
 
             // add the write request of 'value'
-            theDevices[d].PLCwriteRequestNumber += 1;
             setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
-            theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
             theDevices[d].PLCwriteRequests[i].Addr = addr;
             theDevices[d].PLCwriteRequests[i].Number = 1;
 
@@ -4426,7 +4475,7 @@ static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t 
                 offset = CrossTable[addr].Offset;
                 node = CrossTable[addr].node;
 
-                for (n = 1; (addr + n) < (base + size) && (addr + n) < addrMax; ++n)
+                for (n = 1; (addr + n) < (base + size) && (addr + n) <= addrMax; ++n)
                 {
                     if (theDevices[d].PLCwriteRequests[i].Number >= MAX_VALUES) {
                         break;
@@ -4451,11 +4500,15 @@ static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t 
                     }
 
                     // ok, add another one
-                    theDevices[d].PLCwriteRequests[i].Number += 1;
-                    if (flags && flags[addr + n] != 0) {
+                    theDevices[d].PLCwriteRequests[i].Number = 1 + n;
+                    if (flags && flags[addr + n] == 0) {
+                        // in the exception of *_BIT, we get the actual value
+                        theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
+                    } else {
+                        // normal case
                         if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
-                            || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
-                            // the engine seems to use only the bit#0 for bool variables
+                         || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
+                            // the engine uses only the bit#0 for bool variables
                             if (values[addr + n] & 1) {
                                 theDevices[d].PLCwriteRequests[i].Values[n] = 1;
                             } else {
@@ -4464,16 +4517,20 @@ static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t 
                         } else {
                             theDevices[d].PLCwriteRequests[i].Values[n] = values[addr + n];
                         }
-                    } else {
-                        // in the exception of *_BIT, we get the actual value
-                        theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
                     }
 
                     // wrote another one
                     retval += 1;
                 }
             }
-
+#ifdef VERBOSE_DEBUG
+            {
+                int z;
+                fprintf(stderr, "\tqueued %u values in slot #%d\n", retval, i);
+                for (z = 0; z < retval; ++z)
+                    fprintf(stderr, "\t%02d 0x%08x\n", z, theDevices[d].PLCwriteRequests[i].Values[z]);
+            }
+#endif
             // awake the device thread
             sem_post(&newOperations[d]);
         }
