@@ -333,6 +333,10 @@ struct CrossTableRecord {
 #define OPER_RISING     47
 #define OPER_FALLING    48
 
+#define COMP_UNSIGNED   77
+#define COMP_SIGNED     78
+#define COMP_FLOATING      79
+
 struct Alarms {
     enum EventAlarm ALType;
     u_int16_t TagAddr;
@@ -345,7 +349,7 @@ struct Alarms {
     u_int16_t ALFilterTime;
     u_int16_t ALFilterCount;
     u_int16_t ALError;
-    int unsignedInt;
+    int comparison;
 } ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
 static u_int16_t lastAlarmEvent = 0;
 
@@ -826,7 +830,7 @@ static int LoadXTable(void)
         ALCrossTable[addr].ALOperator = 0;
         ALCrossTable[addr].ALFilterTime = 0;
         ALCrossTable[addr].ALFilterCount = 0;
-        ALCrossTable[addr].unsignedInt = 0;
+        ALCrossTable[addr].comparison = 0;
     }
 
     // open file
@@ -1099,13 +1103,13 @@ static int LoadXTable(void)
         }
         ALCrossTable[indx].SourceAddr = addr;
         CrossTable[addr].usedInAlarmsEvents = TRUE;
-        // is it a signed int comparison?
+        // which comparison?
         switch (CrossTable[addr].Types) {
         case BIT:
         case BYTE_BIT:
         case WORD_BIT:
         case DWORD_BIT:
-            ALCrossTable[indx].unsignedInt = 1;
+            ALCrossTable[indx].comparison = COMP_UNSIGNED;
             break;
         case INT16:
         case INT16BA:
@@ -1113,7 +1117,7 @@ static int LoadXTable(void)
         case DINTDCBA:
         case DINTCDAB:
         case DINTBADC:
-            ALCrossTable[indx].unsignedInt = 0;
+            ALCrossTable[indx].comparison = COMP_SIGNED;
             break;
         case UINT8:
         case UINT16:
@@ -1122,13 +1126,13 @@ static int LoadXTable(void)
         case UDINTDCBA:
         case UDINTCDAB:
         case UDINTBADC:
-            ALCrossTable[indx].unsignedInt = 1;
+            ALCrossTable[indx].comparison = COMP_UNSIGNED;
             break;
         case REAL:
         case REALDCBA:
         case REALCDAB:
         case REALBADC:
-            ALCrossTable[indx].unsignedInt = 0;
+            ALCrossTable[indx].comparison = COMP_FLOATING;
             break;
         default:
             ; // FIXME: assert
@@ -1145,8 +1149,7 @@ static int LoadXTable(void)
             CrossTable[addr].usedInAlarmsEvents = TRUE;
         } else {
             // the comparison is with a fixed value, now check for the vartype
-            // since we saved the value as float before and we wish to check
-            // directly afterwards using u_int32_t values
+            // since we saved the value as float before
             float fvalue = *(float *)&ALCrossTable[indx].ALCompareVal;
             int n;
 
@@ -1155,9 +1158,9 @@ static int LoadXTable(void)
             case BYTE_BIT:
             case WORD_BIT:
             case DWORD_BIT:
-                if (fvalue <= 0) {
+                if (fvalue <= 0.0) {
                     ALCrossTable[indx].ALCompareVal = 0;
-                } else if (fvalue <= 1) {
+                } else if (fvalue <= 1.0) {
                     ALCrossTable[indx].ALCompareVal = 1;
                 } else {
                     ALCrossTable[indx].ALCompareVal = 2;
@@ -1215,11 +1218,16 @@ exit_function:
 
 static inline void setAlarmEvent(int i)
 {
-    writeQdataRegisters(ALCrossTable[i].TagAddr, 1);
-    if (ALCrossTable[i].ALType == Alarm) {
-        vmmSetEvent(pVMM, EVT_RESERVED_11); // 27u --> EVENT:='28'
-    } else {
-        vmmSetEvent(pVMM, EVT_RESERVED_10); // 26u --> EVENT:='27'
+    u_int16_t addr = ALCrossTable[i].TagAddr;
+
+    if (the_QdataRegisters[addr] == 0) {
+        // set alarm and call tasks only if currently clear
+        writeQdataRegisters(addr, 1);
+        if (ALCrossTable[i].ALType == Alarm) {
+            vmmSetEvent(pVMM, EVT_RESERVED_11); // 27u --> EVENT:='28'
+        } else {
+            vmmSetEvent(pVMM, EVT_RESERVED_10); // 26u --> EVENT:='27'
+        }
     }
 }
 
@@ -1252,86 +1260,96 @@ static void AlarmMngr(void)
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (i = 1; i <= lastAlarmEvent; ++i) {
 
-        register u_int16_t SourceAddr;
-        register int32_t SourceValue;
-        register u_int16_t Operator;
-        register int32_t CompareVal;
+        register u_int16_t SourceAddr = ALCrossTable[i].SourceAddr;
+        register u_int16_t Operator = ALCrossTable[i].ALOperator;
 
-        SourceAddr = ALCrossTable[i].SourceAddr;
         if (CrossTable[SourceAddr].Error && CrossTable[SourceAddr].Protocol != PLC) {
             // unreliable values
             continue;
         }
-        SourceValue = the_QdataRegisters[SourceAddr];
-        Operator = ALCrossTable[i].ALOperator;
-        if (Operator == OPER_RISING) {
+
+        if (Operator == OPER_RISING || Operator == OPER_FALLING) {
             // checking against old value
-            CompareVal = CrossTable[i].OldVal;
-            if (CompareVal == 0) {
-                // checking rising edge if currently low
-                checkAlarmEvent(i, SourceValue != 0);
-            } else if (SourceValue == 0){
-                // clearing alarm/event only at falling edge
-                clearAlarmEvent(i);
+            register int32_t SourceValue = the_QdataRegisters[SourceAddr];
+            register int32_t CompareVal = CrossTable[i].OldVal;
+
+            if (Operator == OPER_RISING) {
+                if (CompareVal == 0) {
+                    // checking rising edge if currently low
+                    checkAlarmEvent(i, SourceValue != 0);
+                } else if (SourceValue == 0){
+                    // clearing alarm/event only at falling edge
+                    clearAlarmEvent(i);
+                }
+            } else if (Operator == OPER_FALLING)  {
+                if (CompareVal != 0) {
+                    // checking falling edge if currently high
+                    checkAlarmEvent(i, SourceValue == 0);
+                } else if (SourceValue != 0){
+                    // clearing alarm/event only at rising edge
+                    clearAlarmEvent(i);
+                }
             }
             // saving the new "old value" :)
             CrossTable[i].OldVal = SourceValue;
-        } else if (Operator == OPER_FALLING)  {
-            // checking against old value
-            CompareVal = CrossTable[i].OldVal;
-            checkAlarmEvent(i, CompareVal != 0 && SourceValue == 0);
-            if (CompareVal != 0) {
-                // checking falling edge if currently high
-                checkAlarmEvent(i, SourceValue == 0);
-            } else if (SourceValue != 0){
-                // clearing alarm/event only at rising edge
-                clearAlarmEvent(i);
-            }
-            // saving the new "old value" :)
-            CrossTable[i].OldVal = SourceValue;
+
         } else {
+            register u_int16_t CompareAddr = ALCrossTable[i].CompareAddr;
+            union {
+                int32_t ivalue;
+                u_int32_t uvalue;
+                float fvalue;
+            } SourceValue, CompareVal;
 
+            SourceValue.ivalue = the_QdataRegisters[SourceAddr];
             // checking either against fixed value or against variable value
-            if (ALCrossTable[i].CompareAddr == 0) {
-                CompareVal = ALCrossTable[i].ALCompareVal;
+            if (CompareAddr == 0) {
+                // fixed value
+                CompareVal.ivalue = ALCrossTable[i].ALCompareVal;
+            } else if (CrossTable[CompareAddr].Error && CrossTable[CompareAddr].Protocol != PLC) {
+                // unreliable values
+                continue;
             } else {
-                CompareVal = the_QdataRegisters[ALCrossTable[i].CompareAddr];
+                CompareVal.ivalue = the_QdataRegisters[CompareAddr];
             }
 
-            // equal/no equal operators do not rely on signed/unsigned
-            if (Operator == OPER_EQUAL) {
-                checkAlarmEvent(i, SourceValue == CompareVal);
-            } else if (Operator == OPER_NOT_EQUAL) {
-                checkAlarmEvent(i, SourceValue != CompareVal);
-
-            // greater/smaller operators do rely on signed/unsigned
-            } else if (ALCrossTable[i].unsignedInt) {
-                register u_int32_t u_SourceValue = SourceValue;
-                register u_int32_t u_CompareVal = CompareVal;
-
-                if (Operator == OPER_GREATER) {
-                    checkAlarmEvent(i, u_SourceValue > u_CompareVal);
-                } else if (Operator == OPER_GREATER_EQ) {
-                    checkAlarmEvent(i, u_SourceValue >= u_CompareVal);
-                } else if (Operator == OPER_SMALLER) {
-                    checkAlarmEvent(i, u_SourceValue < u_CompareVal);
-                } else if (Operator == OPER_SMALLER_EQ) {
-                    checkAlarmEvent(i, u_SourceValue <= u_CompareVal);
-                } else {
-                    ; // FIXME: assert
+            // comparison types
+            switch (ALCrossTable[i].comparison) {
+            case COMP_UNSIGNED:
+                switch (Operator) {
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.uvalue == CompareVal.uvalue); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.uvalue != CompareVal.uvalue); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.uvalue >  CompareVal.uvalue); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.uvalue >= CompareVal.uvalue); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.uvalue <  CompareVal.uvalue); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.uvalue <= CompareVal.uvalue); break;
+                default             : ;
                 }
-            } else {
-                if (Operator == OPER_GREATER) {
-                    checkAlarmEvent(i, SourceValue > CompareVal);
-                } else if (Operator == OPER_GREATER_EQ) {
-                    checkAlarmEvent(i, SourceValue >= CompareVal);
-                } else if (Operator == OPER_SMALLER) {
-                    checkAlarmEvent(i, SourceValue < CompareVal);
-                } else if (Operator == OPER_SMALLER_EQ) {
-                    checkAlarmEvent(i, SourceValue <= CompareVal);
-                } else {
-                    ; // FIXME: assert
+                break;
+            case COMP_SIGNED:
+                switch (Operator) {
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.ivalue == CompareVal.ivalue); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.ivalue != CompareVal.ivalue); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.ivalue >  CompareVal.ivalue); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.ivalue >= CompareVal.ivalue); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.ivalue <  CompareVal.ivalue); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.ivalue <= CompareVal.ivalue); break;
+                default             : ;
                 }
+                break;
+            case COMP_FLOATING:
+                switch (Operator) {
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.fvalue == CompareVal.fvalue); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.fvalue != CompareVal.fvalue); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.fvalue >  CompareVal.fvalue); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.fvalue >= CompareVal.fvalue); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.fvalue <  CompareVal.fvalue); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.fvalue <= CompareVal.fvalue); break;
+                default             : ;
+                }
+                break;
+            default:
+                ;
             }
         }
     }
@@ -4329,6 +4347,185 @@ IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
  * dataNotifySet
  *
  */
+
+static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax)
+{
+    unsigned retval = 0;
+
+    if (CrossTable[addr].Protocol == PLC) {
+
+        // PLC only, immediate writing
+        if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
+            || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
+            // the engine seems to use only the bit#0 for bool variables
+            if (value & 1)
+                writeQdataRegisters(addr, 1);
+            else
+                writeQdataRegisters(addr, 0);
+        }
+        else
+            writeQdataRegisters(addr, values[addr]);
+
+        // wrote one
+        retval = 1;
+    }
+    else {
+        // RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV
+        u_int16_t d = CrossTable[addr].device;
+
+        // FIXME: error recovery
+        if (d >= theDevicesNumber) {
+            fprintf(stderr, "%s() writing to unknown device addr=%u device=%u",
+                 __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
+            // wrote none
+            retval = 0;
+        }
+        else if (theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
+            fprintf(stderr, "%s() buffer full (%u) writing %u in client %u ",
+                 __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
+            // wrote none
+            retval = 0;
+        }
+        else {
+            register int base, size, type, node, n, offset;
+            register int i = theDevices[d].PLCwriteRequestPut;
+
+            // add the write request of 'value'
+            theDevices[d].PLCwriteRequestNumber += 1;
+            setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
+            theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
+            theDevices[d].PLCwriteRequests[i].Addr = addr;
+            theDevices[d].PLCwriteRequests[i].Number = 1;
+
+            if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
+                || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
+                // the engine uses only the bit#0 for bool variables
+                if (value & 1)
+                    theDevices[d].PLCwriteRequests[i].Values[0] = 1;
+                else
+                    theDevices[d].PLCwriteRequests[i].Values[0] = 0;
+            } else
+                theDevices[d].PLCwriteRequests[i].Values[0] = value;
+
+            // wrote one
+            retval = 1;
+
+            if (values) {
+                // are there any other consecutive writes to the same block?
+                base = CrossTable[addr].BlockBase;
+                size = CrossTable[addr].BlockSize;
+                type = CrossTable[addr].Types;
+                offset = CrossTable[addr].Offset;
+                node = CrossTable[addr].node;
+
+                for (n = 1; (addr + n) < (base + size) && (addr + n) < addrMax; ++n)
+                {
+                    if (theDevices[d].PLCwriteRequests[i].Number >= MAX_VALUES) {
+                        break;
+                    }
+                    // must be same device and node (should already be checked by Crosstable editor)
+                    if (CrossTable[addr + n].device != d || CrossTable[addr + n].node != node) {
+                        break;
+                    }
+                    // in Modbus clients we cannot mix BIT and non BIT variables
+                    if ((type == RTU || type == TCP || type == TCPRTU)
+                        && ((type == BIT && CrossTable[addr + n].Types != BIT)
+                           || (type != BIT && CrossTable[addr + n].Types == BIT))) {
+                        break;
+                    }
+                    if (flags) {
+                        // only sequential writes, with the exception of *_BIT of the same offset
+                        if (flags[addr + n] == 0
+                        && !((type == BYTE_BIT || type == WORD_BIT || type == DWORD_BIT)
+                           && type == CrossTable[addr + n].Types && offset == CrossTable[addr + n].Offset)) {
+                            break;
+                        }
+                    }
+
+                    // ok, add another one
+                    theDevices[d].PLCwriteRequests[i].Number += 1;
+                    if (flags && flags[addr + n] != 0) {
+                        if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
+                            || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
+                            // the engine seems to use only the bit#0 for bool variables
+                            if (values[addr + n] & 1) {
+                                theDevices[d].PLCwriteRequests[i].Values[n] = 1;
+                            } else {
+                                theDevices[d].PLCwriteRequests[i].Values[n] = 0;
+                            }
+                        } else {
+                            theDevices[d].PLCwriteRequests[i].Values[n] = values[addr + n];
+                        }
+                    } else {
+                        // in the exception of *_BIT, we get the actual value
+                        theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
+                    }
+
+                    // wrote another one
+                    retval += 1;
+                }
+            }
+
+            // awake the device thread
+            sem_post(&newOperations[d]);
+        }
+    }
+
+    return retval;
+}
+
+static inline void doWriteBytes(u_int32_t *values, u_int32_t *flags, unsigned ulOffs, unsigned uLen)
+{
+    unsigned addrMin = ulOffs / 4;
+    unsigned addrMax = (ulOffs + uLen) / 4;
+    unsigned shiftMin = ulOffs % 4 ; // 0 1 2 3
+    unsigned shiftMax = (ulOffs + uLen) % 4 ; // 0 1 2 3
+    unsigned addr, written, n;
+
+    if (shiftMin > 0)
+        fprintf(stderr, "%s() called with %u shiftMin instead of 0", __func__, shiftMin);
+    if (shiftMax > 0)
+        fprintf(stderr, "%s() called with %u shiftMax instead of 0", __func__, shiftMax);
+
+    for (addr = addrMin; addr < addrMax && addr <= DimCrossTable; ++addr) {
+
+        if (flags && flags[addr] == 0)
+            continue;
+
+        written = doWriteVariable(addr, values[addr], values, flags, addrMax);
+
+        if (flags) {
+            for (n = 0; n < written; ++n)
+                flags[addr + n] = 0;
+        }
+
+        if (written > 1)
+            addr += written - 1;
+    }
+}
+
+static inline void doWriteBit(unsigned ulOffs, unsigned usBit, int bit)
+{
+    unsigned addr = ulOffs / 4;
+    unsigned shift = ulOffs % 4 * 8; // 0 8 16 24
+    u_int32_t mask;
+    u_int32_t value;
+    unsigned written;
+
+    mask = 1 << (usBit - 1); // 0x01 ... 0x80
+    mask = mask << shift;    // 0x00000001 ... 0x80000000
+
+    if (bit)
+        value = the_QdataRegisters[addr] |= mask;
+    else
+        value = the_QdataRegisters[addr] &= ~mask;
+
+    written = doWriteVariable(addr, value, NULL, NULL, addr);
+
+    if (written > 1)
+        fprintf(stderr, "%s() wrote %u variables instead of 1", __func__, written);
+}
+
 IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 {
 	IEC_UINT uRes = OK;
@@ -4351,119 +4548,12 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
                 if (pIR->pSetQ[uIOLayer]) {
                     // write from __%Q__ segment only if changed (using the %W write flags)
-                    /*u_int16_t*/ unsigned addr;
                     void *pvQsegment = pIO->Q.pAdr + pIO->Q.ulOffs;
                     void *pvWsegment = pIO->W.pAdr + pIO->W.ulOffs;
                     u_int32_t *values = (u_int32_t *)pvQsegment;
                     u_int32_t *flags = (u_int32_t *)pvWsegment;
-                    for (addr = 1; addr <= DimCrossTable; ++addr) {
-                        if (flags[addr] != 0) {
-                            if (CrossTable[addr].Protocol == PLC) {
-                                // PLC only, immediate writing
-                                if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
-                                    || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
-                                    // the engine seems to use only the bit#0 for bool variables
-                                    if (values[addr] & 1) {
-                                        writeQdataRegisters(addr, 1);
-                                    } else {
-                                        writeQdataRegisters(addr, 0);
-                                    }
-                                } else {
-                                    writeQdataRegisters(addr, values[addr]);
-                                }
-                                flags[addr] = 0;
-                            } else {
-                                // RTU, TCP, TCPRTU, CANOPEN, MECT, RTU_SRV, TCP_SRV, TCPRTU_SRV
-                                u_int16_t d = CrossTable[addr].device;
 
-                                // FIXME: error recovery
-                                if (d >= theDevicesNumber) {
-                                    fprintf(stderr, "%s() writing to unknown device addr=%u device=%u",
-                                         __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
-                                    flags[addr] = 0;
-                                }
-                                if (d < theDevicesNumber && theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
-                                    fprintf(stderr, "%s() buffer full (%u) writing %u in client %u ",
-                                         __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
-                                    flags[addr] = 0;
-                                }
-                                if (d < theDevicesNumber && theDevices[d].PLCwriteRequestNumber < MaxLocalQueue) {
-                                    register int base, size, type, node, n, offset;
-                                    register int i = theDevices[d].PLCwriteRequestPut;
-
-                                    theDevices[d].PLCwriteRequestNumber += 1;
-                                    setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
-                                    theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
-                                    theDevices[d].PLCwriteRequests[i].Addr = addr;
-                                    theDevices[d].PLCwriteRequests[i].Number = 1;
-                                    if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
-                                        || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
-                                        // the engine seems to use only the bit#0 for bool variables
-                                        if (values[addr] & 1) {
-                                            theDevices[d].PLCwriteRequests[i].Values[0] = 1;
-                                        } else {
-                                            theDevices[d].PLCwriteRequests[i].Values[0] = 0;
-                                        }
-                                    } else {
-                                        theDevices[d].PLCwriteRequests[i].Values[0] = values[addr];
-                                    }
-                                    flags[addr] = 0;
-                                    // are there any other consecutive writes to the same block?
-                                    base = CrossTable[addr].BlockBase;
-                                    size = CrossTable[addr].BlockSize;
-                                    type = CrossTable[addr].Types;
-                                    offset = CrossTable[addr].Offset;
-                                    node = CrossTable[addr].node;
-                                    for (n = 1; (addr + n) < (base + size); ++n) {
-                                        if (theDevices[d].PLCwriteRequests[i].Number >= MAX_VALUES) {
-                                            break;
-                                        }
-                                        // must be same device and node (should already be checked by Crosstable editor)
-                                        if (CrossTable[addr + n].device != d || CrossTable[addr + n].node != node) {
-                                            break;
-                                        }
-                                        // in Modbus clients we cannot mix BIT and non BIT variables
-                                        if ((type == RTU || type == TCP || type == TCPRTU)
-                                            && ((type == BIT && CrossTable[addr + n].Types != BIT)
-                                               || (type != BIT && CrossTable[addr + n].Types == BIT))) {
-                                            break;
-                                        }
-                                        // only sequential writes, with the exception of *_BIT of the same offset
-                                        if (flags[addr + n] == 0
-                                           && !((type == BYTE_BIT || type == WORD_BIT || type == DWORD_BIT)
-                                                && type == CrossTable[addr + n].Types && offset == CrossTable[addr + n].Offset)) {
-                                            break;
-                                        }
-                                        // ok, add another one
-                                        theDevices[d].PLCwriteRequests[i].Number += 1;
-                                        if (flags[addr + n] != 0) {
-                                            if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
-                                                || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
-                                                // the engine seems to use only the bit#0 for bool variables
-                                                if (values[addr + n] & 1) {
-                                                    theDevices[d].PLCwriteRequests[i].Values[n] = 1;
-                                                } else {
-                                                    theDevices[d].PLCwriteRequests[i].Values[n] = 0;
-                                                }
-                                            } else {
-                                                theDevices[d].PLCwriteRequests[i].Values[n] = values[addr + n];
-                                            }
-                                            flags[addr + n] = 0;
-                                        } else {
-                                            // in the exception of *_BIT, we get the actual value
-                                            theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
-                                        }
-                                    }
-                                    // manage the for index
-                                    if (theDevices[d].PLCwriteRequests[i].Number > 1) {
-                                        addr += (theDevices[d].PLCwriteRequests[i].Number - 1);
-                                    }
-                                    // awake the device thread
-                                    sem_post(&newOperations[d]);
-                                }
-                            }
-                         }
-                    }
+                    doWriteBytes(values, flags, 0, (1 + DimCrossTable)*sizeof(u_int32_t)); // < sizeof(the_QdataRegisters)
                 }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
                 uRes = ERR_WRITE_TO_INPUT;
@@ -4471,21 +4561,20 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                 // notify from others
                 IEC_UDINT ulStart = vmm_max(pNotify->ulOffset, pIO->Q.ulOffs);
                 IEC_UDINT ulStop = vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->Q.ulOffs + pIO->Q.ulSize);
-                void * source = pIO->Q.pAdr + ulStart;
-                void * dest = the_QdataRegisters;
-                dest += ulStart - pIO->Q.ulOffs;
                 if (pNotify->usBit == 0) {
+                    // write a byte region
                     if (ulStart < ulStop) {
-                        OS_MEMCPY(dest, source, ulStop - ulStart);
+                        doWriteBytes((u_int32_t *)(pIO->Q.pAdr), NULL, (ulStart - pIO->Q.ulOffs), pNotify->uLen);
                     }
                 } else {
+                    // write a bit in a byte
+                    void * source = pIO->Q.pAdr + ulStart;
                     IEC_UINT uM = (IEC_UINT)(1u << (pNotify->usBit - 1u));
                     if ((*(IEC_DATA *)source) & uM) {
-                        *(IEC_DATA *)dest |= uM;
+                        doWriteBit(ulStart - pIO->Q.ulOffs, pNotify->usBit, 1);
                     } else {
-                        *(IEC_DATA *)dest &= ~uM;
+                        doWriteBit(ulStart - pIO->Q.ulOffs, pNotify->usBit, 0);
                     }
-                    // FIXME: create a write request
                 }
             }
             XX_GPIO_CLR(3);
