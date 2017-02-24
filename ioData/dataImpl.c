@@ -4483,9 +4483,10 @@ static inline void doWriteBytes(u_int32_t *values, u_int32_t *flags, unsigned ul
     unsigned addr, written, n;
 
     if (shiftMin > 0)
-        fprintf(stderr, "%s() called with %u shiftMin instead of 0", __func__, shiftMin);
-    if (shiftMax > 0)
-        fprintf(stderr, "%s() called with %u shiftMax instead of 0", __func__, shiftMax);
+        fprintf(stderr, "%s() called with %u shiftMin instead of 0\n", __func__, shiftMin);
+    if (shiftMax > 0) {
+        addrMax += 1;
+    }
 
     for (addr = addrMin; addr < addrMax && addr <= DimCrossTable; ++addr) {
 
