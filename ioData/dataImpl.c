@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  29
+#define REVISION_LO  30
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -376,6 +376,8 @@ static void *clientThread(void *statusAdr);
 static int LoadXTable(void);
 static void AlarmMngr(void);
 static void PLCsync(void);
+
+static void doWriteDeviceRetentives(u_int32_t d);
 
 static void zeroNodeVariables(u_int32_t node);
 static void zeroDeviceVariables(u_int32_t d);
@@ -813,10 +815,10 @@ static int LoadXTable(void)
         CrossTable[addr].Output = FALSE;
         CrossTable[addr].OldVal = 0;
         CrossTable[addr].Error = 1;
+        the_QdataStates[addr] = DATA_ERR;
         CrossTable[addr].device = 0xffff;
         CrossTable[addr].node = 0xffff;
         the_QsyncRegisters[addr] = QUEUE_EMPTY;
-        the_QdataStates[addr] = DATA_OK;
     }
     lastAlarmEvent = 0;
     for (addr = 0; addr <= DimAlarmsCT; ++addr) {
@@ -846,7 +848,8 @@ static int LoadXTable(void)
         char row[1024], *p, *r;
 
         if (fgets(row, 1024, xtable) == NULL) {
-            CrossTable[addr].Error = 100;
+            CrossTable[addr].Error = 1;
+            the_QdataStates[addr] = DATA_ERR;
             // no ERR = TRUE;
             continue;
         }
@@ -860,7 +863,8 @@ static int LoadXTable(void)
         CrossTable[addr].Enable = atoi(p);
         // skip empty or disabled variables
         if (CrossTable[addr].Enable == 0) {
-            CrossTable[addr].Error = 100;
+            CrossTable[addr].Error = 1;
+            the_QdataStates[addr] = DATA_ERR;
             continue;
         }
 
@@ -994,6 +998,8 @@ static int LoadXTable(void)
         }
         if (strncmp(p, "PLC", strlen(p)) == 0) {
             CrossTable[addr].Protocol = PLC;
+            CrossTable[addr].Error = 0; // already ok
+            the_QdataStates[addr] = DATA_OK;
         } else if (strncmp(p, "RTU", strlen(p)) == 0) {
             CrossTable[addr].Protocol = RTU;
         } else if (strncmp(p, "TCP", strlen(p)) == 0) {
@@ -1089,7 +1095,8 @@ static int LoadXTable(void)
         }
     }
     if (ERR) {
-        CrossTable[addr].Error = 100;
+        CrossTable[addr].Error = 1;
+        the_QdataStates[addr] = DATA_ERR;
         goto exit_function;
     }
 
@@ -1263,7 +1270,7 @@ static void AlarmMngr(void)
         register u_int16_t SourceAddr = ALCrossTable[i].SourceAddr;
         register u_int16_t Operator = ALCrossTable[i].ALOperator;
 
-        if (CrossTable[SourceAddr].Error && CrossTable[SourceAddr].Protocol != PLC) {
+        if (CrossTable[SourceAddr].Error) {
             // unreliable values
             continue;
         }
@@ -1306,7 +1313,7 @@ static void AlarmMngr(void)
             if (CompareAddr == 0) {
                 // fixed value
                 CompareVal.ivalue = ALCrossTable[i].ALCompareVal;
-            } else if (CrossTable[CompareAddr].Error && CrossTable[CompareAddr].Protocol != PLC) {
+            } else if (CrossTable[CompareAddr].Error) {
                 // unreliable values
                 continue;
             } else {
@@ -1447,7 +1454,7 @@ static void PLCsync(void)
                     case TCPRTU_SRV:
                         if (CrossTable[addr].device != 0xffff) {
 #ifdef VERBOSE_DEBUG
-                            fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u\n", oper, addr, indx, the_IdataRegisters[addr]);
+                            fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u %s\n", oper, addr, indx, the_IdataRegisters[addr], CrossTable[addr].Tag);
 #endif
                             theDevices[CrossTable[addr].device].writeOperations += 1;
                             if (oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE) {
@@ -2613,9 +2620,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                 }
             }
 #ifdef VERBOSE_DEBUG
-            if (theDevices[d].protocol == TCP) {
-                fprintf(stderr, "%s wrote %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
-            }
+            fprintf(stderr, "%s wrote %u (%u) vars from %u (%s)\n", theDevices[d].name, DataNumber, regs, DataAddr, CrossTable[DataAddr].Tag);
 #endif
             break;
         case RTU_SRV:
@@ -3343,6 +3348,9 @@ static void *clientThread(void *arg)
     error = NoError;
     theDevices[d].thread_status = RUNNING;
 
+    // pre-charge the output retentives
+    doWriteDeviceRetentives(d);
+
     while (engineStatus != enExiting) {
 
         XX_GPIO_SET_69(d);
@@ -3752,7 +3760,7 @@ static void *clientThread(void *arg)
                 case CommError:
                     for (i = 0; i < DataNumber; ++i) {
                        CrossTable[DataAddr + i].Error = 1;
-                       the_QdataStates[DataAddr + i] = DATA_ERR; // DATA_RUN;
+                       the_QdataStates[DataAddr + i] = DATA_ERR;
                     }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
                     break;
@@ -4472,6 +4480,20 @@ static inline unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t 
     }
 
     return retval;
+}
+
+static void doWriteDeviceRetentives(u_int32_t d)
+{
+    unsigned addr, written;
+
+    for (addr = 1;  addr <= LAST_RETENTIVE; ++addr) {
+        if (CrossTable[addr].device == d && CrossTable[addr].Output) {
+
+            written = doWriteVariable(addr, the_QdataRegisters[addr], the_QdataRegisters, NULL, LAST_RETENTIVE);
+            if (written > 1)
+                addr += written - 1;
+        }
+    }
 }
 
 static inline void doWriteBytes(u_int32_t *values, u_int32_t *flags, unsigned ulOffs, unsigned uLen)
