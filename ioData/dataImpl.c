@@ -270,8 +270,6 @@ struct ClientStruct {
     enum threadStatus thread_status;
     RTIME current_time_ns;
     RTIME elapsed_time_ns;
-    u_int16_t writeOperations;
-    u_int16_t writeResetIndex;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
     int mect_fd; // for MECT
@@ -1793,8 +1791,6 @@ static int checkServersDevicesAndNodes()
                     // theDevices[d].thread_id = 0;
                     theDevices[d].thread_status = NOT_STARTED;
                     sem_init(&newOperations[d], 0, 0);
-                    theDevices[d].writeOperations = 0;
-                    theDevices[d].writeResetIndex = 0;
                     theDevices[d].PLCwriteRequestNumber = 0;
                     theDevices[d].PLCwriteRequestGet = 0;
                     theDevices[d].PLCwriteRequestPut = 0;
@@ -3508,48 +3504,6 @@ static void *clientThread(void *arg)
 #ifdef VERBOSE_DEBUG
                     fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
-                // is it there a write requests from HMI to this device?
-                } else if (0) { // theDevices[d].writeOperations > 0) {
-                    u_int16_t indx, oper, addr;
-
-                    // it should be there something to write from HMI to this device
-                    int found = FALSE;
-                    if (theDevices[d].writeResetIndex) {
-                        write_index = 1; // for recipes
-                        theDevices[d].writeResetIndex = 0;
-                    }
-                    for (indx = write_index; indx <= DimCrossTable; ++indx) {
-                        oper = the_IsyncRegisters[indx] & QueueOperMask;
-                        addr = the_IsyncRegisters[indx] & QueueAddrMask;
-                        if (oper == 0 && addr == 0) {
-                            // queue tail, jump to the array end
-                            indx = DimCrossTable;
-                        } else if (the_QsyncRegisters[indx] == QUEUE_BUSY_WRITE
-                               && CrossTable[addr].device == d
-                               && (oper == WRITE_SINGLE || oper == WRITE_MULTIPLE
-                                || oper == WRITE_RIC_SINGLE || oper == WRITE_RIC_MULTIPLE)) {
-                            found = TRUE;
-                            break;
-                        }
-                    }
-                    if (found) {
-                        QueueIndex = indx;
-                        Operation = oper; // WRITE_*
-                        DataAddr = addr;
-                        DataNumber = 1;
-                        DataValue[0] = the_IdataRegisters[addr];
-                        // FIXME: we could search the Isync for other writes in order at the same priority
-                        //        of the same type to the same fieldbus, but the complex thing is the
-                        //        management of the Qsync and of the errors
-                        theDevices[d].writeOperations -= 1;
-                        write_index = indx + 1; // may overlap DimCrossTable, it's ok
-#ifdef VERBOSE_DEBUG
-                        fprintf(stderr, "%s@%09u ms: write [%u]@%u value=%u, will check @%u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, indx, DataValue[0], write_index);
-#endif
-                    } else {
-                        // next time we'll restart from the first one
-                        write_index = 1;
-                    }
                 }
 
                 // if no write then is it there a read request for this device?
