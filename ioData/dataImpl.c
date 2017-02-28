@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  30
+#define REVISION_LO  31
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -123,8 +123,8 @@ static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
 // Qdata states
 #define DATA_OK            0    // reading/writing success
-#define DATA_ERR           1    // reading/writing failure
-#define DATA_BUSY          2    // still reading/writing
+#define DATA_ERROR         1    // reading/writing failure
+#define DATA_WARNING       2    // reading/writing temporary failure
 
 // -------- SYNC MANAGE FROM HMI ---------------------------------------------
 #define REG_SYNC_NUMBER 	6144 // 1+5472+...
@@ -315,7 +315,6 @@ struct CrossTableRecord {
     int Output;
     int16_t Counter;
     int32_t OldVal;
-    u_int16_t Error;
     int usedInAlarmsEvents;
     //
     u_int16_t device;
@@ -397,16 +396,43 @@ void dataGetVersionInfo(char *szVersion)
     }
 }
 
-static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value)
+static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t status)
 {
-    if (CrossTable[addr].usedInAlarmsEvents && value != the_QdataRegisters[addr]) {
+    switch (status) {
+
+    case DATA_OK:
+        // if the variable is used in alarms/events conditions
+        // ... and the value changed or the state became OK (at boot-time, ...)
+        if (CrossTable[addr].usedInAlarmsEvents
+          && (value != the_QdataRegisters[addr] || the_QdataStates[addr] != DATA_OK)) {
+            // change value and/or status ... and then re-check the alarms/events conditions
+            the_QdataRegisters[addr] = value;
+            the_QdataStates[addr] = status;
+            pthread_cond_signal(&theAlarmsEventsCondvar);
+        } else {
+            // simply change value and status
+            the_QdataRegisters[addr] = value;
+            the_QdataStates[addr] = status;
+        }
+        break;
+
+    case DATA_WARNING:
+        // only status change, no value change yet
+        the_QdataStates[addr] = status;
+        break;
+
+    case DATA_ERROR:
         the_QdataRegisters[addr] = value;
-        pthread_cond_signal(&theAlarmsEventsCondvar);
-    } else {
-        the_QdataRegisters[addr] = value;
+        the_QdataStates[addr] = status;
+        break;
+
+    default:
+        ;
     }
+
 #if defined(RTS_CFG_MECT_RETAIN)
-    if (retentive && addr <= LAST_RETENTIVE) {
+    // if the variable is a retentive one then also update the copy
+    if (retentive && addr <= LAST_RETENTIVE && status != DATA_WARNING) {
         retentive[addr -1] = value;
     }
 #endif
@@ -469,7 +495,7 @@ static inline void initServerDiagnostic(u_int16_t s)
         u_int32_t value;
 
         value = (theServers[s].protocol << 16) + theServers[s].port;
-        writeQdataRegisters(addr + 0, value); // TYPE_PORT
+        writeQdataRegisters(addr + 0, value, DATA_OK); // TYPE_PORT
 
         switch (theServers[s].protocol) {
         case RTU_SRV:
@@ -483,7 +509,7 @@ static inline void initServerDiagnostic(u_int16_t s)
         default:
             value = 0;
         }
-        writeQdataRegisters(addr + 1, value); // IP_ADDRESS/BAUDRATE
+        writeQdataRegisters(addr + 1, value, DATA_OK); // IP_ADDRESS/BAUDRATE
     }
 }
 
@@ -530,7 +556,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
         u_int32_t value;
 
         value = (theDevices[d].protocol << 16) + theDevices[d].port;
-        writeQdataRegisters(addr + 0, value); // TYPE_PORT
+        writeQdataRegisters(addr + 0, value, DATA_OK); // TYPE_PORT
 
         switch (theDevices[d].protocol) {
         case RTU:
@@ -546,7 +572,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
         default:
             value = 0;
         }
-        writeQdataRegisters(addr + 1, value); // IP_ADDRESS/BAUDRATE
+        writeQdataRegisters(addr + 1, value, DATA_OK); // IP_ADDRESS/BAUDRATE
     }
 }
 
@@ -561,8 +587,8 @@ static inline void initNodeDiagnostic(u_int16_t n)
     addr = 5172 + 2 * n;
     theNodes[n].diagnosticAddr = addr;
     value = (theNodes[n].device << 16) + theNodes[n].NodeID;
-    writeQdataRegisters(addr + 0, value); // DEV_NODE
-    writeQdataRegisters(addr + 1, theNodes[n].status); // STATUS
+    writeQdataRegisters(addr + 0, value, DATA_OK); // DEV_NODE
+    writeQdataRegisters(addr + 1, theNodes[n].status, DATA_OK); // STATUS
 }
 
 static inline void incQdataRegisters(u_int16_t addr, u_int16_t offset)
@@ -570,16 +596,7 @@ static inline void incQdataRegisters(u_int16_t addr, u_int16_t offset)
     if (addr == 0 || addr + offset > DimCrossTable) {
         return;
     }
-    addr += offset;
-    writeQdataRegisters(addr, the_QdataRegisters[addr] + 1);
-}
-
-static inline void setQdataRegisters(u_int16_t addr, u_int16_t offset, u_int32_t value)
-{
-    if (addr == 0 || addr + offset > DimCrossTable) {
-        return;
-    }
-    writeQdataRegisters(addr + offset, value);
+    writeQdataRegisters(addr + offset, the_QdataRegisters[addr] + 1, DATA_OK);
 }
 
 static inline unsigned get_byte_bit(u_int8_t data, unsigned n)
@@ -813,8 +830,7 @@ static int LoadXTable(void)
         CrossTable[addr].BlockSize = 0;
         CrossTable[addr].Output = FALSE;
         CrossTable[addr].OldVal = 0;
-        CrossTable[addr].Error = 1;
-        the_QdataStates[addr] = DATA_ERR;
+        the_QdataStates[addr] = DATA_ERROR; // in error until we actually read it
         CrossTable[addr].device = 0xffff;
         CrossTable[addr].node = 0xffff;
         the_QsyncRegisters[addr] = QUEUE_EMPTY;
@@ -847,8 +863,6 @@ static int LoadXTable(void)
         char row[1024], *p, *r;
 
         if (fgets(row, 1024, xtable) == NULL) {
-            CrossTable[addr].Error = 1;
-            the_QdataStates[addr] = DATA_ERR;
             // no ERR = TRUE;
             continue;
         }
@@ -862,8 +876,6 @@ static int LoadXTable(void)
         CrossTable[addr].Enable = atoi(p);
         // skip empty or disabled variables
         if (CrossTable[addr].Enable == 0) {
-            CrossTable[addr].Error = 1;
-            the_QdataStates[addr] = DATA_ERR;
             continue;
         }
 
@@ -997,8 +1009,7 @@ static int LoadXTable(void)
         }
         if (strncmp(p, "PLC", strlen(p)) == 0) {
             CrossTable[addr].Protocol = PLC;
-            CrossTable[addr].Error = 0; // already ok
-            the_QdataStates[addr] = DATA_OK;
+            the_QdataStates[addr] = DATA_OK; // PLC variables are already ok at startup
         } else if (strncmp(p, "RTU", strlen(p)) == 0) {
             CrossTable[addr].Protocol = RTU;
         } else if (strncmp(p, "TCP", strlen(p)) == 0) {
@@ -1094,12 +1105,11 @@ static int LoadXTable(void)
         }
     }
     if (ERR) {
-        CrossTable[addr].Error = 1;
-        the_QdataStates[addr] = DATA_ERR;
         goto exit_function;
     }
 
     // check alarms and events
+    fprintf(stderr, "\nalarms/events:\n");
     for (indx = 1; indx <= lastAlarmEvent; ++indx) {
         // retrieve the source variable address
         addr = tagAddr(ALCrossTable[indx].ALSource);
@@ -1109,6 +1119,9 @@ static int LoadXTable(void)
         }
         ALCrossTable[indx].SourceAddr = addr;
         CrossTable[addr].usedInAlarmsEvents = TRUE;
+        fprintf(stderr, "\t%2d: %s", indx, CrossTable[ALCrossTable[indx].TagAddr].Tag);
+        fprintf(stderr, " = %s", CrossTable[ALCrossTable[indx].SourceAddr].Tag);
+
         // which comparison?
         switch (CrossTable[addr].Types) {
         case BIT:
@@ -1116,6 +1129,7 @@ static int LoadXTable(void)
         case WORD_BIT:
         case DWORD_BIT:
             ALCrossTable[indx].comparison = COMP_UNSIGNED;
+            fprintf(stderr, " (u)");
             break;
         case INT16:
         case INT16BA:
@@ -1124,6 +1138,7 @@ static int LoadXTable(void)
         case DINTCDAB:
         case DINTBADC:
             ALCrossTable[indx].comparison = COMP_SIGNED;
+            fprintf(stderr, " (s)");
             break;
         case UINT8:
         case UINT16:
@@ -1133,84 +1148,296 @@ static int LoadXTable(void)
         case UDINTCDAB:
         case UDINTBADC:
             ALCrossTable[indx].comparison = COMP_UNSIGNED;
+            fprintf(stderr, " (u)");
             break;
         case REAL:
         case REALDCBA:
         case REALCDAB:
         case REALBADC:
             ALCrossTable[indx].comparison = COMP_FLOATING;
+            fprintf(stderr, " (f)");
             break;
         default:
             ; // FIXME: assert
         }
-        // if the comparison is with a variable
-        if (ALCrossTable[indx].ALCompareVar[0] != 0) {
-            // then retrieve the compare variable address
-            addr = tagAddr(ALCrossTable[indx].ALCompareVar);
-            if (addr == 0) {
-                ERR = TRUE;
-                break;
-            }
-            ALCrossTable[indx].CompareAddr = addr;
-            CrossTable[addr].usedInAlarmsEvents = TRUE;
-        } else {
-            // the comparison is with a fixed value, now check for the vartype
-            // since we saved the value as float before
-            float fvalue = *(float *)&ALCrossTable[indx].ALCompareVal;
-            int n;
 
-            switch (CrossTable[addr].Types) {
-            case BIT:
-            case BYTE_BIT:
-            case WORD_BIT:
-            case DWORD_BIT:
-                if (fvalue <= 0.0) {
-                    ALCrossTable[indx].ALCompareVal = 0;
-                } else if (fvalue <= 1.0) {
-                    ALCrossTable[indx].ALCompareVal = 1;
-                } else {
-                    ALCrossTable[indx].ALCompareVal = 2;
+        switch (ALCrossTable[indx].ALOperator)  {
+        case OPER_RISING    : fprintf(stderr, " RISING"); break;
+        case OPER_FALLING   : fprintf(stderr, " FALLING"); break;
+        case OPER_EQUAL     : fprintf(stderr, " =="); break;
+        case OPER_NOT_EQUAL : fprintf(stderr, " !="); break;
+        case OPER_GREATER   : fprintf(stderr, " >" ); break;
+        case OPER_GREATER_EQ: fprintf(stderr, " >="); break;
+        case OPER_SMALLER   : fprintf(stderr, " <" ); break;
+        case OPER_SMALLER_EQ: fprintf(stderr, " <="); break;
+        default             : ;
+        }
+
+        if (ALCrossTable[lastAlarmEvent].ALOperator != OPER_FALLING
+         && ALCrossTable[lastAlarmEvent].ALOperator != OPER_RISING) {
+
+            // if the comparison is with a variable
+            if (ALCrossTable[indx].ALCompareVar[0] != 0) {
+                int compatible = TRUE;
+
+                // then retrieve the compare variable address
+                addr = tagAddr(ALCrossTable[indx].ALCompareVar);
+                if (addr == 0) {
+                    ERR = TRUE;
+                    break;
                 }
-                break;
-            case INT16:
-            case INT16BA:
-            case DINT:
-            case DINTDCBA:
-            case DINTCDAB:
-            case DINTBADC:
-                for (n = 0; n < CrossTable[addr].Decimal; ++n) {
-                    fvalue *= 10;
+                ALCrossTable[indx].CompareAddr = addr;
+                CrossTable[addr].usedInAlarmsEvents = TRUE;
+                fprintf(stderr, " %s", CrossTable[addr].Tag);
+
+                // check for incompatibles types
+                switch (CrossTable[ALCrossTable[indx].SourceAddr].Types) {
+
+                case BIT:
+                case BYTE_BIT:
+                case WORD_BIT:
+                case DWORD_BIT:
+                    switch (CrossTable[ALCrossTable[indx].CompareAddr].Types) {
+                    case BIT:
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
+                        compatible = TRUE;
+                        break;
+                    case INT16:
+                    case INT16BA:
+                    case DINT:
+                    case DINTDCBA:
+                    case DINTCDAB:
+                    case DINTBADC:
+                        compatible = FALSE; // only == 0 and != 0
+                        break;
+                    case UINT8:
+                    case UINT16:
+                    case UINT16BA:
+                    case UDINT:
+                    case UDINTDCBA:
+                    case UDINTCDAB:
+                    case UDINTBADC:
+                        compatible = FALSE; // only == 0 and != 0
+                        break;
+                    case REAL:
+                    case REALDCBA:
+                    case REALCDAB:
+                    case REALBADC:
+                        compatible = FALSE; // only == 0 and != 0
+                        break;
+                    default:
+                        ; // FIXME: assert
+                    }
+                    break;
+
+                case INT16:
+                case INT16BA:
+                case DINT:
+                case DINTDCBA:
+                case DINTCDAB:
+                case DINTBADC:
+                    switch (CrossTable[ALCrossTable[indx].CompareAddr].Types) {
+                    case BIT:
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
+                        compatible = FALSE;
+                        break;
+                    case INT16:
+                    case INT16BA:
+                    case DINT:
+                    case DINTDCBA:
+                    case DINTCDAB:
+                    case DINTBADC:
+                        compatible = (CrossTable[ALCrossTable[indx].SourceAddr].Decimal == CrossTable[ALCrossTable[indx].CompareAddr].Decimal);
+                        break;
+                    case UINT8:
+                    case UINT16:
+                    case UINT16BA:
+                    case UDINT:
+                    case UDINTDCBA:
+                    case UDINTCDAB:
+                    case UDINTBADC:
+                        // compatible = (CrossTable[ALCrossTable[indx].SourceAddr].Decimal == CrossTable[ALCrossTable[indx].CompareAddr].Decimal);
+                        compatible = FALSE;
+                        break;
+                    case REAL:
+                    case REALDCBA:
+                    case REALCDAB:
+                    case REALBADC:
+                        compatible = FALSE;
+                        break;
+                    default:
+                        ; // FIXME: assert
+                    }
+                    break;
+
+                case UINT8:
+                case UINT16:
+                case UINT16BA:
+                case UDINT:
+                case UDINTDCBA:
+                case UDINTCDAB:
+                case UDINTBADC:
+                    switch (CrossTable[ALCrossTable[indx].CompareAddr].Types) {
+                    case BIT:
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
+                        compatible = FALSE;
+                        break;
+                    case INT16:
+                    case INT16BA:
+                    case DINT:
+                    case DINTDCBA:
+                    case DINTCDAB:
+                    case DINTBADC:
+                        // compatible = (CrossTable[ALCrossTable[indx].SourceAddr].Decimal == CrossTable[ALCrossTable[indx].CompareAddr].Decimal);
+                        compatible = FALSE;
+                        break;
+                    case UINT8:
+                    case UINT16:
+                    case UINT16BA:
+                    case UDINT:
+                    case UDINTDCBA:
+                    case UDINTCDAB:
+                    case UDINTBADC:
+                        compatible = (CrossTable[ALCrossTable[indx].SourceAddr].Decimal == CrossTable[ALCrossTable[indx].CompareAddr].Decimal);
+                        break;
+                    case REAL:
+                    case REALDCBA:
+                    case REALCDAB:
+                    case REALBADC:
+                        compatible = FALSE;
+                        break;
+                    default:
+                        ; // FIXME: assert
+                    }
+                    break;
+
+                case REAL:
+                case REALDCBA:
+                case REALCDAB:
+                case REALBADC:
+                    switch (CrossTable[ALCrossTable[indx].CompareAddr].Types) {
+                    case BIT:
+                    case BYTE_BIT:
+                    case WORD_BIT:
+                    case DWORD_BIT:
+                        compatible = FALSE;
+                        break;
+                    case INT16:
+                    case INT16BA:
+                    case DINT:
+                    case DINTDCBA:
+                    case DINTCDAB:
+                    case DINTBADC:
+                        compatible = FALSE;
+                        break;
+                    case UINT8:
+                    case UINT16:
+                    case UINT16BA:
+                    case UDINT:
+                    case UDINTDCBA:
+                    case UDINTCDAB:
+                    case UDINTBADC:
+                        compatible = FALSE;
+                        break;
+                    case REAL:
+                    case REALDCBA:
+                    case REALCDAB:
+                    case REALBADC:
+                        compatible = TRUE; // no decimal test
+                        break;
+                    default:
+                        ; // FIXME: assert
+                    }
+                    break;
+
+                default:
+                    ; // FIXME: assert
                 }
-                // NB this may either overflow or underflow
-                ALCrossTable[indx].ALCompareVal = fvalue;
-                break;
-            case UINT8:
-            case UINT16:
-            case UINT16BA:
-            case UDINT:
-            case UDINTDCBA:
-            case UDINTCDAB:
-            case UDINTBADC:
-                if (fvalue <= 0) {
-                    fvalue = 0; // why check unsigned with a negative value?
-                } else {
+                if (! compatible) {
+                    fprintf(stderr, " [WARNING: comparison between incompatible types]");
+                }
+
+            } else {
+                // the comparison is with a fixed value, now check for the vartype
+                // since we saved the value as float before
+                float fvalue = *(float *)&ALCrossTable[indx].ALCompareVal;
+                int n;
+
+                switch (CrossTable[addr].Types) {
+                case BIT:
+                case BYTE_BIT:
+                case WORD_BIT:
+                case DWORD_BIT:
+                    if (fvalue <= 0.0) {
+                        ALCrossTable[indx].ALCompareVal = 0;
+                    } else if (fvalue <= 1.0) {
+                        ALCrossTable[indx].ALCompareVal = 1;
+                    } else {
+                        ALCrossTable[indx].ALCompareVal = 2;
+                    }
+                    break;
+                case INT16:
+                case INT16BA:
+                case DINT:
+                case DINTDCBA:
+                case DINTCDAB:
+                case DINTBADC:
                     for (n = 0; n < CrossTable[addr].Decimal; ++n) {
                         fvalue *= 10;
                     }
+                    // NB this may either overflow or underflow
+                    ALCrossTable[indx].ALCompareVal = fvalue;
+                    break;
+                case UINT8:
+                case UINT16:
+                case UINT16BA:
+                case UDINT:
+                case UDINTDCBA:
+                case UDINTCDAB:
+                case UDINTBADC:
+                    if (fvalue <= 0) {
+                        fvalue = 0; // why check unsigned with a negative value?
+                    } else {
+                        for (n = 0; n < CrossTable[addr].Decimal; ++n) {
+                            fvalue *= 10;
+                        }
+                    }
+                    // NB this may overflow
+                    ALCrossTable[indx].ALCompareVal = fvalue;
+                    break;
+                case REAL:
+                case REALDCBA:
+                case REALCDAB:
+                case REALBADC:
+                    // the value is already stored as a float, comparisons will be ok
+                    break;
+                default:
+                    ; // FIXME: assert
                 }
-                // NB this may overflow
-                ALCrossTable[indx].ALCompareVal = fvalue;
-                break;
-            case REAL:
-            case REALDCBA:
-            case REALCDAB:
-            case REALBADC:
-                // the value is already stored as a float, comparisons will be ok
-                break;
-            default:
-                ; // FIXME: assert
+
+                switch (ALCrossTable[indx].comparison)
+                {
+                case COMP_UNSIGNED:
+                    fprintf(stderr, " %u", ALCrossTable[indx].ALCompareVal);
+                    break;
+                case COMP_SIGNED:
+                    fprintf(stderr, " %d", ALCrossTable[indx].ALCompareVal);
+                    break;
+                case COMP_FLOATING:
+                    fprintf(stderr, " %f", fvalue);
+                    break;
+                default:
+                    ;
+                }
             }
         }
+        fprintf(stderr, "\n");
     }
 
     // close file
@@ -1228,7 +1455,7 @@ static inline void setAlarmEvent(int i)
 
     if (the_QdataRegisters[addr] == 0) {
         // set alarm and call tasks only if currently clear
-        writeQdataRegisters(addr, 1);
+        writeQdataRegisters(addr, 1, DATA_OK);
         if (ALCrossTable[i].ALType == Alarm) {
             vmmSetEvent(pVMM, EVT_RESERVED_11); // 27u --> EVENT:='28'
         } else {
@@ -1239,7 +1466,7 @@ static inline void setAlarmEvent(int i)
 
 static inline void clearAlarmEvent(int i)
 {
-    writeQdataRegisters(ALCrossTable[i].TagAddr, 0);
+    writeQdataRegisters(ALCrossTable[i].TagAddr, 0, DATA_OK);
     ALCrossTable[i].ALFilterCount = ALCrossTable[i].ALFilterTime;
 }
 
@@ -1269,7 +1496,7 @@ static void AlarmMngr(void)
         register u_int16_t SourceAddr = ALCrossTable[i].SourceAddr;
         register u_int16_t Operator = ALCrossTable[i].ALOperator;
 
-        if (CrossTable[SourceAddr].Error) {
+        if (the_QdataStates[SourceAddr] != DATA_OK) {
             // unreliable values
             continue;
         }
@@ -1308,15 +1535,18 @@ static void AlarmMngr(void)
             } SourceValue, CompareVal;
 
             SourceValue.ivalue = the_QdataRegisters[SourceAddr];
+
             // checking either against fixed value or against variable value
             if (CompareAddr == 0) {
                 // fixed value
                 CompareVal.ivalue = ALCrossTable[i].ALCompareVal;
-            } else if (CrossTable[CompareAddr].Error) {
+            } else if (the_QdataStates[CompareAddr] != DATA_OK) {
                 // unreliable values
                 continue;
             } else {
                 CompareVal.ivalue = the_QdataRegisters[CompareAddr];
+                // FIXME: align decimals and types
+
             }
 
             // comparison types
@@ -1408,7 +1638,7 @@ static void PLCsync(void)
                     case PLC:
                         // immediate read: no fieldbus
                         // ready "by design" the_QdataRegisters[addr] = the_QdataRegisters[addr];
-                        the_QdataStates[addr] = DATA_OK;
+                        // the_QdataStates[addr] = DATA_OK;
                         break;
                     case RTU:
                     case TCP:
@@ -1439,8 +1669,7 @@ static void PLCsync(void)
                     switch (CrossTable[addr].Protocol) {
                     case PLC:
                         // immediate write: no fieldbus
-                        writeQdataRegisters(addr, the_IdataRegisters[addr]);
-                        the_QdataStates[addr] = DATA_OK;
+                        writeQdataRegisters(addr, the_IdataRegisters[addr], DATA_OK);
                         the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
                         break;
                     case RTU:
@@ -1880,7 +2109,7 @@ static int checkServersDevicesAndNodes()
 static void setEngineStatus(enum EngineStatus status)
 {
     engineStatus = status;
-    writeQdataRegisters(5395, status);
+    writeQdataRegisters(5395, status, DATA_OK);
 }
 
 static void *engineThread(void *statusAdr)
@@ -2841,7 +3070,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
 static inline void changeServerStatus(u_int32_t s, enum ServerStatus status)
 {
     theServers[s].status = status;
-    setQdataRegisters(theServers[s].diagnosticAddr, 2, status); // STATUS
+    writeQdataRegisters(theServers[s].diagnosticAddr + 2, status, DATA_OK); // STATUS
 #ifdef VERBOSE_DEBUG
     fprintf(stderr, "%s: status = %d\n", theServers[s].name, status);
 #endif
@@ -3133,14 +3362,12 @@ static void zeroNodeVariables(u_int32_t node)
 {
     u_int16_t addr;
 
-    if (theDevices[theNodes[node].device].protocol == TCP) {
 #ifdef VERBOSE_DEBUG
         fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
 #endif
-        for (addr = 1; addr <= DimCrossTable; ++addr) {
-            if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
-                writeQdataRegisters(addr, 0);
-            }
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
+            writeQdataRegisters(addr, 0, DATA_ERROR);
         }
     }
 }
@@ -3149,14 +3376,12 @@ static void zeroDeviceVariables(u_int32_t d)
 {
     u_int16_t addr;
 
-    if (theDevices[d].protocol == TCP) {
 #ifdef VERBOSE_DEBUG
         fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
 #endif
-        for (addr = 1; addr <= DimCrossTable; ++addr) {
-            if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
-                writeQdataRegisters(addr, 0);
-            }
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
+            writeQdataRegisters(addr, 0, DATA_ERROR);
         }
     }
 }
@@ -3188,7 +3413,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 {
     theDevices[d].elapsed_time_ns = 0;
     theDevices[d].status = status;
-    setQdataRegisters(theDevices[d].diagnosticAddr, 2, status); // STATUS
+    writeQdataRegisters(theDevices[d].diagnosticAddr + 2, status, DATA_OK); // STATUS
 #ifdef VERBOSE_DEBUG
     fprintf(stderr, "%s: status = %s\n", theDevices[d].name, statusName[status]);
 #endif
@@ -3500,7 +3725,7 @@ static void *clientThread(void *arg)
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
 
-                    setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
+                    writeQdataRegisters(theDevices[d].diagnosticAddr + 8, theDevices[d].PLCwriteRequestNumber, DATA_OK); // WRITE_QUEUE
 #ifdef VERBOSE_DEBUG
                     fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
@@ -3689,12 +3914,6 @@ static void *clientThread(void *arg)
 #endif
         } else {
             // the device is connected, so operate, without locking the mutex
-            u_int16_t i;
-
-            for (i = 0; i < DataNumber; ++i) {
-                // CrossTable[DataAddr + i].Error = 0;
-                the_QdataStates[DataAddr + i] = DATA_BUSY;
-            }
             switch (Operation) {
             case READ:
                 incQdataRegisters(theDevices[d].diagnosticAddr, 3); // READS
@@ -3719,7 +3938,8 @@ static void *clientThread(void *arg)
             default:
                 ;
             }
-            setQdataRegisters(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
+            writeQdataRegisters(theDevices[d].diagnosticAddr + 7, error, DATA_OK); // LAST_ERROR
+
             // check error and set values and flags
             XX_GPIO_CLR_69(d);
             pthread_mutex_lock(&theCrosstableClientMutex);
@@ -3738,10 +3958,6 @@ static void *clientThread(void *arg)
                 // manage the data values
                 switch (error) {
                 case NoError:
-                    for (i = 0; i < DataNumber; ++i) {
-                        CrossTable[DataAddr + i].Error = 0;
-                        the_QdataStates[DataAddr + i] = DATA_OK;
-                    }
                     switch (Operation) {
                     case READ:
                     case WRITE_SINGLE:
@@ -3749,7 +3965,8 @@ static void *clientThread(void *arg)
                     case WRITE_RIC_MULTIPLE:
                     case WRITE_RIC_SINGLE:
                         for (i = 0; i < DataNumber; ++i) {
-                            writeQdataRegisters(DataAddr + i, DataValue[i]);
+                            // status and value change
+                            writeQdataRegisters(DataAddr + i, DataValue[i], DATA_OK);
                         }
                         break;
                     case WRITE_PREPARE:
@@ -3760,16 +3977,17 @@ static void *clientThread(void *arg)
                     break;
                 case CommError:
                     for (i = 0; i < DataNumber; ++i) {
-                       CrossTable[DataAddr + i].Error = 1;
-                       the_QdataStates[DataAddr + i] = DATA_ERR;
+                        // only status change, no value change yet
+                        writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                     }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
                     break;
                 case TimeoutError:
                 case ConnReset:
                     for (i = 0; i < DataNumber; ++i) {
-                       CrossTable[DataAddr + i].Error = 1;
-                       the_QdataStates[DataAddr + i] = DATA_ERR;
+                        // status error and zero value
+                        writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
+                       // see also the zeroNodeVariables() and/or zeroDeviceVariables() calls afterwards
                     }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
                     break;
@@ -3781,9 +3999,11 @@ static void *clientThread(void *arg)
             pthread_mutex_unlock(&theCrosstableClientMutex);
         }
         XX_GPIO_SET_69(d);
+
         // manage the node status (see also the device status)
         if (Data_node != 0xffff) {
             switch (theNodes[Data_node].status) {
+
             case NODE_OK:
                 switch (error) {
                 case NoError:
@@ -3819,6 +4039,7 @@ static void *clientThread(void *arg)
                     ;
                 }
                 break;
+
             case TIMEOUT:
                 switch (error) {
                 case NoError:
@@ -3855,6 +4076,7 @@ static void *clientThread(void *arg)
                     ;
                 }
                 break;
+
             case BLACKLIST:
                 // no fieldbus operations, so no error
                 theNodes[Data_node].JumpRead -= 1;
@@ -3869,15 +4091,18 @@ static void *clientThread(void *arg)
             default:
                 ;
             }
-            setQdataRegisters(theNodes[Data_node].diagnosticAddr, 1, theNodes[Data_node].status); // STATUS
+            writeQdataRegisters(theNodes[Data_node].diagnosticAddr + 1, theNodes[Data_node].status, DATA_OK); // STATUS
         }
+
         // manage the device status (after operation)
         switch (theDevices[d].status) {
+
         case ZERO:
         case NO_HOPE:
         case NOT_CONNECTED:
             // FIXME: assert
             break;
+
         case CONNECTED:
             // ok proceed with the fieldbus operations
             if (error == TimeoutError) {
@@ -3887,6 +4112,7 @@ static void *clientThread(void *arg)
                 changeDeviceStatus(d, NOT_CONNECTED);
             }
             break;
+
         case CONNECTED_WITH_ERRORS:
             // ok proceed with the fieldbus operations
             if (error == NoError || error == CommError) {
@@ -3903,12 +4129,14 @@ static void *clientThread(void *arg)
                 }
             }
             break;
+
         case DEVICE_BLACKLIST:
             // FIXME: assert
             break;
         default:
             ;
         }
+
         // wait, if necessary, after fieldbus operations
         switch (theDevices[d].protocol) {
         case PLC:
@@ -4201,7 +4429,7 @@ void dataEngineStart(void)
 
     // initialize data array
     u_int32_t PLC_Version = REVISION_HI * 1000 + REVISION_LO;
-    writeQdataRegisters(5394, PLC_Version);
+    writeQdataRegisters(5394, PLC_Version, DATA_OK);
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
     pthread_cond_init(&theAlarmsEventsCondvar, NULL);
     for (s = 0; s < MAX_SERVERS; ++s) {
@@ -4368,12 +4596,12 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
             || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
             // the engine seems to use only the bit#0 for bool variables
             if (value & 1)
-                writeQdataRegisters(addr, 1);
+                writeQdataRegisters(addr, 1, DATA_OK);
             else
-                writeQdataRegisters(addr, 0);
+                writeQdataRegisters(addr, 0, DATA_OK);
         }
         else
-            writeQdataRegisters(addr, values[addr]);
+            writeQdataRegisters(addr, values[addr], DATA_OK);
 
         // wrote one
         retval = 1;
@@ -4404,7 +4632,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
             theDevices[d].PLCwriteRequestNumber += 1;
 
             // add the write request of 'value'
-            setQdataRegisters(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
+            writeQdataRegisters(theDevices[d].diagnosticAddr + 8, theDevices[d].PLCwriteRequestNumber, DATA_OK); // WRITE_QUEUE
             theDevices[d].PLCwriteRequests[i].Addr = addr;
             theDevices[d].PLCwriteRequests[i].Number = 1;
 
