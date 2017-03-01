@@ -596,7 +596,8 @@ static inline void incQdataRegisters(u_int16_t addr, u_int16_t offset)
     if (addr == 0 || addr + offset > DimCrossTable) {
         return;
     }
-    writeQdataRegisters(addr + offset, the_QdataRegisters[addr] + 1, DATA_OK);
+    addr += offset;
+    writeQdataRegisters(addr, the_QdataRegisters[addr] + 1, DATA_OK);
 }
 
 static inline unsigned get_byte_bit(u_int8_t data, unsigned n)
