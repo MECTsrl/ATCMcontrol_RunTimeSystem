@@ -3366,7 +3366,7 @@ static void zeroNodeVariables(u_int32_t node)
         fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
 #endif
     for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
             writeQdataRegisters(addr, 0, DATA_ERROR);
         }
     }
@@ -3380,7 +3380,7 @@ static void zeroDeviceVariables(u_int32_t d)
         fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
 #endif
     for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
+        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
             writeQdataRegisters(addr, 0, DATA_ERROR);
         }
     }
@@ -3977,17 +3977,25 @@ static void *clientThread(void *arg)
                     break;
                 case CommError:
                     for (i = 0; i < DataNumber; ++i) {
-                        // only status change, no value change yet
-                        writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        if (Operation == READ) {
+                            // only status change, no value change yet
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        } else {
+                            the_QdataStates[DataAddr + i] = DATA_WARNING;
+                        }
                     }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
                     break;
                 case TimeoutError:
                 case ConnReset:
                     for (i = 0; i < DataNumber; ++i) {
-                        // status error and zero value
-                        writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
-                       // see also the zeroNodeVariables() and/or zeroDeviceVariables() calls afterwards
+                        if (Operation == READ) {
+                            // status error and zero value
+                            writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
+                           // see also the zeroNodeVariables() and/or zeroDeviceVariables() calls afterwards
+                        } else {
+                            the_QdataStates[DataAddr + i] = DATA_ERROR;
+                        }
                     }
                     incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
                     break;
@@ -4612,13 +4620,13 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
 
         // FIXME: error recovery
         if (d >= theDevicesNumber) {
-            fprintf(stderr, "%s() writing to unknown device addr=%u device=%u",
-                 __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
+            fprintf(stderr, "%s() unknown device error, writing addr=%u to device=%u\n",
+                 __func__, addr, d);
             // wrote none
             retval = 0;
         }
         else if (theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
-            fprintf(stderr, "%s() buffer full (%u) writing %u in client %u ",
+            fprintf(stderr, "%s() buffer full error (%u), writing addr=%u to device=%u\n",
                  __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
             // wrote none
             retval = 0;
