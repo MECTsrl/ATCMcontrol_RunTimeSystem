@@ -926,64 +926,64 @@ static int LoadXTable(void)
             ERR = TRUE;
             break;
         }
-        if (strncmp(p, "BIT", strlen(p)) == 0) {
+        if (strcmp(p, "BIT") == 0) {
             CrossTable[addr].Types = BIT;
-        } else if (strncmp(p, "BYTE", strlen(p)) == 0) {
+        } else if (strcmp(p, "BYTE") == 0) {
             CrossTable[addr].Types = UINT8;
-        } else if (strncmp(p, "BYTE_BIT", strlen(p)) == 0) {
+        } else if (strcmp(p, "BYTE_BIT") == 0) {
             CrossTable[addr].Types = BYTE_BIT;
-        } else if (strncmp(p, "WORD_BIT", strlen(p)) == 0) {
+        } else if (strcmp(p, "WORD_BIT") == 0) {
             CrossTable[addr].Types = WORD_BIT;
-        } else if (strncmp(p, "DWORD_BIT", strlen(p)) == 0) {
+        } else if (strcmp(p, "DWORD_BIT") == 0) {
             CrossTable[addr].Types = DWORD_BIT;
-        } else if (strncmp(p, "UINT", strlen(p)) == 0) {
+        } else if (strcmp(p, "UINT") == 0) {
             CrossTable[addr].Types = UINT16;
-        } else if (strncmp(p, "UINTBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "UINTBA") == 0) {
             CrossTable[addr].Types = UINT16BA;
-        } else if (strncmp(p, "INT", strlen(p)) == 0) {
+        } else if (strcmp(p, "INT") == 0) {
             CrossTable[addr].Types = INT16;
-        } else if (strncmp(p, "INTBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "INTBA") == 0) {
             CrossTable[addr].Types = INT16BA;
-        } else if (strncmp(p, "UDINT", strlen(p)) == 0) {
+        } else if (strcmp(p, "UDINT") == 0) {
             CrossTable[addr].Types = UDINT;
-        } else if (strncmp(p, "UDINTDCBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "UDINTDCBA") == 0) {
             CrossTable[addr].Types = UDINTDCBA;
-        } else if (strncmp(p, "UDINTCDAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "UDINTCDAB") == 0) {
             CrossTable[addr].Types = UDINTCDAB;
-        } else if (strncmp(p, "UDINTBADC", strlen(p)) == 0) {
+        } else if (strcmp(p, "UDINTBADC") == 0) {
             CrossTable[addr].Types = UDINTBADC;
-        } else if (strncmp(p, "DINT", strlen(p)) == 0) {
+        } else if (strcmp(p, "DINT") == 0) {
             CrossTable[addr].Types = DINT;
-        } else if (strncmp(p, "DINTDCBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "DINTDCBA") == 0) {
             CrossTable[addr].Types = DINTDCBA;
-        } else if (strncmp(p, "DINTCDAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "DINTCDAB") == 0) {
             CrossTable[addr].Types = DINTCDAB;
-        } else if (strncmp(p, "DINTBADC", strlen(p)) == 0) {
+        } else if (strcmp(p, "DINTBADC") == 0) {
             CrossTable[addr].Types = DINTBADC;
-        } else if (strncmp(p, "REAL", strlen(p)) == 0) {
+        } else if (strcmp(p, "REAL") == 0) {
             CrossTable[addr].Types = REAL;
-        } else if (strncmp(p, "REALDCBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "REALDCBA") == 0) {
             CrossTable[addr].Types = REALDCBA;
-        } else if (strncmp(p, "REALCDAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "REALCDAB") == 0) {
             CrossTable[addr].Types = REALCDAB;
-        } else if (strncmp(p, "REALBADC", strlen(p)) == 0) {
+        } else if (strcmp(p, "REALBADC") == 0) {
             CrossTable[addr].Types = REALBADC;
 
-        } else if (strncmp(p, "UINTAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "UINTAB") == 0) {
             CrossTable[addr].Types = UINT16; // backward compatibility
-        } else if (strncmp(p, "INTAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "INTAB") == 0) {
             CrossTable[addr].Types = INT16; // backward compatibility
-        } else if (strncmp(p, "UDINTABCD", strlen(p)) == 0) {
+        } else if (strcmp(p, "UDINTABCD") == 0) {
             CrossTable[addr].Types = UDINT; // backward compatibility
-        } else if (strncmp(p, "DINTABCD", strlen(p)) == 0) {
+        } else if (strcmp(p, "DINTABCD") == 0) {
             CrossTable[addr].Types = DINT; // backward compatibility
-        } else if (strncmp(p, "FDCBA", strlen(p)) == 0) {
+        } else if (strcmp(p, "FDCBA") == 0) {
             CrossTable[addr].Types = REALDCBA; // backward compatibility
-        } else if (strncmp(p, "FCDAB", strlen(p)) == 0) {
+        } else if (strcmp(p, "FCDAB") == 0) {
             CrossTable[addr].Types = REALCDAB; // backward compatibility
-        } else if (strncmp(p, "FABCD", strlen(p)) == 0) {
+        } else if (strcmp(p, "FABCD") == 0) {
             CrossTable[addr].Types = REAL; // backward compatibility
-        } else if (strncmp(p, "FBADC", strlen(p)) == 0) {
+        } else if (strcmp(p, "FBADC") == 0) {
             CrossTable[addr].Types = REALBADC; // backward compatibility
 
         } else {
@@ -1008,24 +1008,24 @@ static int LoadXTable(void)
             ERR = TRUE;
             break;
         }
-        if (strncmp(p, "PLC", strlen(p)) == 0) {
+        if (strcmp(p, "PLC") == 0) {
             CrossTable[addr].Protocol = PLC;
             the_QdataStates[addr] = DATA_OK; // PLC variables are already ok at startup
-        } else if (strncmp(p, "RTU", strlen(p)) == 0) {
+        } else if (strcmp(p, "RTU") == 0) {
             CrossTable[addr].Protocol = RTU;
-        } else if (strncmp(p, "TCP", strlen(p)) == 0) {
+        } else if (strcmp(p, "TCP") == 0) {
             CrossTable[addr].Protocol = TCP;
-        } else if (strncmp(p, "TCPRTU", strlen(p)) == 0) {
+        } else if (strcmp(p, "TCPRTU") == 0) {
             CrossTable[addr].Protocol = TCPRTU;
-        } else if (strncmp(p, "CANOPEN", strlen(p)) == 0) {
+        } else if (strcmp(p, "CANOPEN") == 0) {
             CrossTable[addr].Protocol = CANOPEN;
-        } else if (strncmp(p, "MECT", strlen(p)) == 0) {
+        } else if (strcmp(p, "MECT") == 0) {
             CrossTable[addr].Protocol = MECT;
-        } else if (strncmp(p, "RTU_SRV", strlen(p)) == 0) {
+        } else if (strcmp(p, "RTU_SRV") == 0) {
             CrossTable[addr].Protocol = RTU_SRV;
-        } else if (strncmp(p, "TCP_SRV", strlen(p)) == 0) {
+        } else if (strcmp(p, "TCP_SRV") == 0) {
             CrossTable[addr].Protocol = TCP_SRV;
-        } else if (strncmp(p, "TCPRTU_SRV", strlen(p)) == 0) {
+        } else if (strcmp(p, "TCPRTU_SRV") == 0) {
             CrossTable[addr].Protocol = TCPRTU_SRV;
         } else {
             CrossTable[addr].Protocol = PLC;
