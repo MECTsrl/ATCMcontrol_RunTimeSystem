@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  1
-#define REVISION_LO  31
+#define REVISION_LO  32
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -120,7 +120,7 @@ static u_int32_t the_UdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
 static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
 static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
-static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[22000]));
+static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[5500]));
 // Qdata states
 #define DATA_OK            0    // reading/writing success
 #define DATA_ERROR         1    // reading/writing failure
@@ -167,10 +167,11 @@ static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "
 enum threadStatus {NOT_STARTED = 0, RUNNING, EXITING};
 enum ServerStatus {SRV_RUNNING0 = 0, SRV_RUNNING1, SRV_RUNNING2, SRV_RUNNING3, SRV_RUNNING4};
 enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
-#ifdef VERBOSE_DEBUG
-static const char *statusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
+enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST, DISCONNECTED};
+#if 1 //def VERBOSE_DEBUG
+static const char *deviceStatusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
+static const char *nodeStatusName[] = {"NO_NODE", "NODE_OK", "TIMEOUT", "BLACKLIST", "DISCONNECTED" };
 #endif
-enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST};
 enum fieldbusError {NoError = 0, CommError, TimeoutError, ConnReset};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
@@ -292,8 +293,8 @@ struct NodeStruct {
     u_int16_t NodeID;
     //
     enum NodeStatus status;
-    int16_t RetryCounter; // TIMEOUT
-    int16_t JumpRead; // BLACKLIST
+    int16_t retries;
+    int16_t blacklist;
     u_int16_t diagnosticAddr;
 } theNodes[MAX_NODES];
 static u_int16_t theNodesNumber = 0;
@@ -377,9 +378,6 @@ static void PLCsync(void);
 static void doWriteDeviceRetentives(u_int32_t d);
 static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
-static void zeroNodeVariables(u_int32_t node);
-static void zeroDeviceVariables(u_int32_t d);
-
 static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms);
 static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value);
 static int mect_write_ascii(int fd, unsigned node, unsigned command, float value);
@@ -392,7 +390,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03dbeta GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -3359,34 +3357,6 @@ static void *serverThread(void *arg)
     return arg;
 }
 
-static void zeroNodeVariables(u_int32_t node)
-{
-    u_int16_t addr;
-
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "zeroNodeVariables() node=%u (%u) in %s\n", node, theNodes[node].NodeID, theDevices[theNodes[node].device].name);
-#endif
-    for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
-            writeQdataRegisters(addr, 0, DATA_ERROR);
-        }
-    }
-}
-
-static void zeroDeviceVariables(u_int32_t d)
-{
-    u_int16_t addr;
-
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "zeroDeviceVariables() device=%u %s\n", d, theDevices[d].name);
-#endif
-    for (addr = 1; addr <= DimCrossTable; ++addr) {
-        if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
-            writeQdataRegisters(addr, 0, DATA_ERROR);
-        }
-    }
-}
-
 static inline void startDeviceTiming(u_int32_t d)
 {
     struct timespec abstime;
@@ -3412,12 +3382,70 @@ static inline void updateDeviceTiming(u_int32_t d)
 
 static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 {
-    theDevices[d].elapsed_time_ns = 0;
+    u_int16_t addr;
+
+#if 1 //def VERBOSE_DEBUG
+    fprintf(stderr, "device %u(%s): status = %s\n", d, theDevices[d].name, deviceStatusName[status]);
+#endif
     theDevices[d].status = status;
     writeQdataRegisters(theDevices[d].diagnosticAddr + 2, status, DATA_OK); // STATUS
-#ifdef VERBOSE_DEBUG
-    fprintf(stderr, "%s: status = %s\n", theDevices[d].name, statusName[status]);
+
+    theDevices[d].elapsed_time_ns = 0;
+
+    switch (status) {
+    case ZERO:
+    case NO_HOPE:
+        break;
+    case NOT_CONNECTED:
+    case DEVICE_BLACKLIST:
+        // zeroDeviceVariables
+        for (addr = 1; addr <= DimCrossTable; ++addr) {
+            if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d
+                    && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
+                writeQdataRegisters(addr, 0, DATA_ERROR);
+            }
+        }
+        break;
+    case CONNECTED:
+        break;
+    case CONNECTED_WITH_ERRORS:
+        break;
+    default:
+        ;
+    }
+}
+
+static inline void changeNodeStatus(u_int32_t node, enum NodeStatus status)
+{
+    u_int16_t addr;
+
+#if 1 //def VERBOSE_DEBUG
+    fprintf(stderr, "node #%02u: status = %s\n", node, nodeStatusName[status]);
 #endif
+    theNodes[node].status = status;
+    writeQdataRegisters(theNodes[node].diagnosticAddr + 1, theNodes[node].status, DATA_OK); // STATUS
+
+    switch (status) {
+    case NO_NODE:
+    case NODE_OK:
+        break;
+    case TIMEOUT:
+        theNodes[node].retries = 0;
+        break;
+    case BLACKLIST:
+        theNodes[node].blacklist = system_ini.system.blacklist;
+        // zeroDeviceVariables
+        for (addr = 1; addr <= DimCrossTable; ++addr) {
+            if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node
+                    && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
+                writeQdataRegisters(addr, 0, DATA_ERROR);
+            }
+        }
+        break;
+    case DISCONNECTED:
+    default:
+        ;
+    }
 }
 
 static unsigned checkAddr(unsigned d, unsigned DataAddr, unsigned DataNumber)
@@ -3458,7 +3486,7 @@ static void *clientThread(void *arg)
 
     // data for each fieldbus operation
     u_int16_t QueueIndex = 0;// command index in the queue
-    u_int16_t Operation;     // read/write normal/recipe single/multiple
+    u_int16_t readOperation; // read/write
     u_int16_t DataAddr = 0;  // variable address in the crosstable
     u_int32_t DataValue[MAX_VALUES]; // max 64 reads and 16 writes
     u_int32_t DataNumber;    // max 64 reads and 16 writes
@@ -3611,7 +3639,7 @@ static void *clientThread(void *arg)
     // start the fieldbus operations loop
     DataAddr = 0;
     DataNumber = 0;
-    Operation = NOP;
+    readOperation = TRUE;
     error = NoError;
     theDevices[d].thread_status = RUNNING;
 
@@ -3619,6 +3647,8 @@ static void *clientThread(void *arg)
     doWriteDeviceRetentives(d);
 
     while (engineStatus != enExiting) {
+
+        int do_fieldbusReset = FALSE;
 
         XX_GPIO_SET_69(d);
         updateDeviceTiming(d);
@@ -3713,7 +3743,7 @@ static void *clientThread(void *arg)
                     DataAddr = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Addr;
                     // data values from the local queue only, the *_BIT management is in fieldWrite()
                     DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
-                    Operation = (DataNumber == 1) ? WRITE_SINGLE : WRITE_MULTIPLE;
+                    readOperation = FALSE;
                     // check
                     DataAddr = checkAddr(d, DataAddr, DataNumber);
                     if (DataAddr > 0) {
@@ -3768,7 +3798,7 @@ static void *clientThread(void *arg)
                                     fprintf(stderr, "clientThread(%d) (HMI) DataNumber = %u\n", d, DataNumber);
                                     DataNumber = MAX_VALUES;
                                 }
-                                Operation = READ;
+                                readOperation = TRUE;
                                 // data values will be available after the fieldbus access
                                 // keep the index for the next loop
                                 read_addr[prio] = v + DataNumber; // may overlap DimCrossTable, it's ok
@@ -3823,12 +3853,10 @@ static void *clientThread(void *arg)
             case PLC: // FIXME: assert
                 break;
             case RTU:
+                fprintf(stderr, "%s modbus_connect()\n", theDevices[d].name);
                 if (modbus_connect(theDevices[d].modbus_ctx) >= 0) {
                     modbus_set_response_timeout(theDevices[d].modbus_ctx, &response_timeout);
                     changeDeviceStatus(d, CONNECTED);
-                } else {
-                    changeDeviceStatus(d, DEVICE_BLACKLIST);
-                    zeroDeviceVariables(d);
                 }
                 break;
             case TCP:
@@ -3839,22 +3867,13 @@ static void *clientThread(void *arg)
                         changeDeviceStatus(d, CONNECTED);
                     } else {
                         modbus_close(theDevices[d].modbus_ctx);
-                        changeDeviceStatus(d, DEVICE_BLACKLIST);
-                        zeroDeviceVariables(d);
                     }
-                } else {
-                    changeDeviceStatus(d, DEVICE_BLACKLIST);
-                    zeroDeviceVariables(d);
                 }
                 break;
             case CANOPEN: {
                 u_int8_t channel = theDevices[d].u.can.bus;
                 if (CANopenConfigured(channel)) {
                     changeDeviceStatus(d, CONNECTED);
-                } else if (theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
-                    // CANopenResetChannel(theDevices[d].u.can.bus);
-                    changeDeviceStatus(d, DEVICE_BLACKLIST);
-                    zeroDeviceVariables(d);
                 }
             }   break;
             case MECT: // connect()
@@ -3867,8 +3886,6 @@ static void *clientThread(void *arg)
                     theDevices[d].timeout_ms);
                 if (theDevices[d].mect_fd >= 0) {
                     changeDeviceStatus(d, CONNECTED);
-                } else if (theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
-                    changeDeviceStatus(d, DEVICE_BLACKLIST);
                 }
                 break;
             case RTU_SRV:
@@ -3878,6 +3895,10 @@ static void *clientThread(void *arg)
                 break;
             default:
                 ;
+            }
+            // if connection attempts fail too much, then rest a bit
+            if (theDevices[d].status == NOT_CONNECTED && theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
+                changeDeviceStatus(d, DEVICE_BLACKLIST); // also data=0 and status=DATA_ERROR
             }
             break;
         case CONNECTED:
@@ -3896,14 +3917,17 @@ static void *clientThread(void *arg)
         }
 
         // can we continue?
-        if (theDevices[d].status == NOT_CONNECTED || theDevices[d].status == DEVICE_BLACKLIST) {
+        if (theDevices[d].status != CONNECTED && theDevices[d].status != CONNECTED_WITH_ERRORS) {
             XX_GPIO_CLR_69(d);
             osSleep(THE_CONNECTION_DELAY_ms);
             continue;
         }
 
-        // check the node status
-        if (Data_node == 0xffff || theNodes[Data_node].status == BLACKLIST) {
+        // check the node status before actually operating
+        if (Data_node == 0xffff) {
+            error = TimeoutError;
+
+        } else if (theNodes[Data_node].status == DISCONNECTED || theNodes[Data_node].status == BLACKLIST) {
             error = TimeoutError;
 #ifdef VERBOSE_DEBUG
               if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
@@ -3914,243 +3938,232 @@ static void *clientThread(void *arg)
               }
 #endif
         } else {
+
             // the device is connected, so operate, without locking the mutex
-            switch (Operation) {
-            case READ:
+            if (readOperation) {
                 incQdataRegisters(theDevices[d].diagnosticAddr, 3); // READS
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
-                // fieldbusWait afterwards
-                break;
-            case WRITE_SINGLE:
-            case WRITE_MULTIPLE:
-            case WRITE_RIC_MULTIPLE:
-            case WRITE_RIC_SINGLE:
+            } else {
                 incQdataRegisters(theDevices[d].diagnosticAddr, 4); // WRITES
                 if (CrossTable[DataAddr].Output) {
                     error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
                 } else {
                     error = CommError;
                 }
-                // fieldbusWait afterwards
-                break;
-            case WRITE_PREPARE:
-                error = NoError;
-                break; // nop
-            default:
-                ;
             }
+            // fieldbusWait afterwards
             writeQdataRegisters(theDevices[d].diagnosticAddr + 7, error, DATA_OK); // LAST_ERROR
-
-            // check error and set values and flags
-            XX_GPIO_CLR_69(d);
-            pthread_mutex_lock(&theCrosstableClientMutex);
-            {
-                u_int16_t i;
-
-                XX_GPIO_SET_69(d);
-#ifdef VERBOSE_DEBUG
-              if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
-                fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevices[d].name, theDevices[d].current_time_ms,
-                        Operation == READ ? "read" : "write",
-                        error == NoError ? "ok" : "error",
-                        DataNumber, DataAddr);
-              }
-#endif
-                // manage the data values
-                switch (error) {
-                case NoError:
-                    switch (Operation) {
-                    case READ:
-                    case WRITE_SINGLE:
-                    case WRITE_MULTIPLE:
-                    case WRITE_RIC_MULTIPLE:
-                    case WRITE_RIC_SINGLE:
-                        for (i = 0; i < DataNumber; ++i) {
-                            // status and value change
-                            writeQdataRegisters(DataAddr + i, DataValue[i], DATA_OK);
-                        }
-                        break;
-                    case WRITE_PREPARE:
-                        break; // nop
-                    default:
-                        ;
-                    }
-                    break;
-                case CommError:
-                    for (i = 0; i < DataNumber; ++i) {
-                        if (Operation == READ) {
-                            // only status change, no value change yet
-                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
-                        } else {
-                            the_QdataStates[DataAddr + i] = DATA_WARNING;
-                        }
-                    }
-                    incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
-                    break;
-                case TimeoutError:
-                case ConnReset:
-                    for (i = 0; i < DataNumber; ++i) {
-                        if (Operation == READ) {
-                            // status error and zero value
-                            writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
-                           // see also the zeroNodeVariables() and/or zeroDeviceVariables() calls afterwards
-                        } else {
-                            the_QdataStates[DataAddr + i] = DATA_ERROR;
-                        }
-                    }
-                    incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
-                    break;
-                default:
-                    ;
-                }
-                XX_GPIO_CLR_69(d);
-            }
-            pthread_mutex_unlock(&theCrosstableClientMutex);
         }
-        XX_GPIO_SET_69(d);
 
-        // manage the node status (see also the device status)
-        if (Data_node != 0xffff) {
-            switch (theNodes[Data_node].status) {
+        // check error and set values and flags
+        XX_GPIO_CLR_69(d);
+        pthread_mutex_lock(&theCrosstableClientMutex);
+        {
+            u_int16_t i;
 
-            case NODE_OK:
-                switch (error) {
-                case NoError:
-                    theNodes[Data_node].status = NODE_OK;
-                    DataAddr = 0; // i.e. get next
-                    break;
-                case CommError:
-                    switch (Operation) {
-                    case READ:
-                        theNodes[Data_node].status = NODE_OK;
-                        DataAddr = 0; // i.e. get next
-                        break;
-                    case WRITE_SINGLE:
-                    case WRITE_MULTIPLE:
-                    case WRITE_RIC_MULTIPLE:
-                    case WRITE_RIC_SINGLE:
-                        theNodes[Data_node].RetryCounter = 0;
-                        theNodes[Data_node].status = TIMEOUT;
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
-                        break;
-                    case WRITE_PREPARE:
-                    default:
-                        ;
-                    }
-                    break;
-                case TimeoutError:
-                case ConnReset:
-                    theNodes[Data_node].RetryCounter = 0;
-                    theNodes[Data_node].status = TIMEOUT;
-                    DataAddr = DataAddr; // i.e. RETRY this immediately
-                    break;
-                default:
-                    ;
+            XX_GPIO_SET_69(d);
+#ifdef VERBOSE_DEBUG
+            if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
+            fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevices[d].name, theDevices[d].current_time_ms,
+                    Operation == READ ? "read" : "write",
+                    error == NoError ? "ok" : "error",
+                    DataNumber, DataAddr);
+            }
+#endif
+            // manage the data values, data status, node status and device status
+            switch (error) {
+
+            case NoError:
+                // node status
+                if (theNodes[Data_node].status != NODE_OK)
+                    changeNodeStatus(Data_node, NODE_OK);
+                // device status
+                if (theDevices[d].status != CONNECTED)
+                    changeDeviceStatus(d, CONNECTED);
+                // data values and status
+                for (i = 0; i < DataNumber; ++i) {
+                    writeQdataRegisters(DataAddr + i, DataValue[i], DATA_OK);
                 }
+                DataAddr = 0; // i.e. get next
                 break;
 
-            case TIMEOUT:
-                switch (error) {
-                case NoError:
-                    theNodes[Data_node].status = NODE_OK;
-                    DataAddr = 0; // i.e. get next
-                    break;
-                case CommError:
-                case TimeoutError:
-                case ConnReset:
-                    theNodes[Data_node].RetryCounter += 1;
-                    if (theNodes[Data_node].RetryCounter < system_ini.system.retries) {
-                        theNodes[Data_node].status = TIMEOUT;
+            case CommError:
+                incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
+                // node status
+                switch (theNodes[Data_node].status) {
+                case NODE_OK:
+                    if (readOperation) {
+                        // data values and status
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        }
+                        DataAddr = 0; // i.e. get next
+                    } else if (system_ini.system.retries > 0) {
+                        // write operation and we can retry
+                        changeNodeStatus(Data_node, TIMEOUT);
+                        // data values and status
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        }
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
-                        theNodes[Data_node].JumpRead = system_ini.system.blacklist;
-                        theNodes[Data_node].status = BLACKLIST;
-                        switch (Operation) {
-                        case READ:
-                            zeroNodeVariables(Data_node);
-                            // no break
-                        case WRITE_SINGLE:
-                        case WRITE_MULTIPLE:
-                        case WRITE_RIC_MULTIPLE:
-                        case WRITE_RIC_SINGLE:
-                            DataAddr = 0; // i.e. get next
-                            break;
-                        case WRITE_PREPARE:
-                        default:
-                            ;
+                        // write operation and we cannot retry
+                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        DataAddr = 0; // i.e. we lose a write
+                    }
+                    break;
+                case TIMEOUT:
+                    theNodes[Data_node].retries += 1;
+                    if (readOperation) {
+                        changeNodeStatus(Data_node, NODE_OK);
+                        // data values and status
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                         }
+                        DataAddr = 0; // i.e. get next
+                    } else if (theNodes[Data_node].retries < system_ini.system.retries) {
+                        // write operation and we can retry
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        }
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                    } else {
+                        // write operation and we cannot retry
+                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        DataAddr = 0; // i.e. we lose a write
+                    }
+                    break;
+                case BLACKLIST:
+                case DISCONNECTED:
+                default:
+                    ;
+                }
+                // device status
+                if (theDevices[d].status == CONNECTED_WITH_ERRORS) {
+                    // we received something, even if wrong
+                    changeDeviceStatus(d, CONNECTED);
+                }
+                break;
+
+            case TimeoutError:
+                incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
+                // node status
+                switch (theNodes[Data_node].status) {
+                case NODE_OK:
+                    if (system_ini.system.retries > 0) {
+                        // any operation and we can retry
+                        changeNodeStatus(Data_node, TIMEOUT);
+                        // data values and status
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        }
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                    } else {
+                        // any operation and we cannot retry
+                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        if (readOperation) {
+                            DataAddr = 0; // i.e. retry this after the others
+                        } else {
+                            DataAddr = 0; // i.e. we lose a write
+                        }
+                    }
+                    break;
+                case TIMEOUT:
+                    theNodes[Data_node].retries += 1;
+                    if (theNodes[Data_node].retries < system_ini.system.retries) {
+                        // any operation and we can retry
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
+                        }
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                    } else {
+                        // any operation and we cannot retry
+                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        if (readOperation) {
+                            DataAddr = 0; // i.e. retry this after the others
+                        } else {
+                            DataAddr = 0; // i.e. we lose a write
+                        }
+                    }
+                    break;
+                case BLACKLIST:
+                    theNodes[Data_node].blacklist -= 1;
+                    // no fieldbus operations, so no error
+                    if (theNodes[Data_node].blacklist > 0) {
+                        // data values and status
+                        for (i = 0; i < DataNumber; ++i) {
+                            writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
+                        }
+                        if (readOperation) {
+                            DataAddr = 0; // i.e. retry this after the others
+                        } else {
+                            DataAddr = 0; // i.e. we lose a write
+                        }
+                    } else {
+                        changeNodeStatus(Data_node, NODE_OK);
+                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                    }
+                    break;
+                case DISCONNECTED:
+                    // data values and status
+                    for (i = 0; i < DataNumber; ++i) {
+                        writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
+                    }
+                    if (readOperation) {
+                        DataAddr = 0; // i.e. retry this after the others
+                    } else {
+                        DataAddr = 0; // i.e. we lose a write
                     }
                     break;
                 default:
                     ;
                 }
-                break;
-
-            case BLACKLIST:
-                // no fieldbus operations, so no error
-                theNodes[Data_node].JumpRead -= 1;
-                if (theNodes[Data_node].JumpRead > 0) {
-                    theNodes[Data_node].status = BLACKLIST;
-                    DataAddr = 0; // i.e. retry this after the others
+                // device status
+                if (theDevices[d].status == CONNECTED) {
+                    changeDeviceStatus(d, CONNECTED_WITH_ERRORS);
                 } else {
-                    theNodes[Data_node].status = NODE_OK;
-                    DataAddr = DataAddr; // i.e. RETRY this immediately
+                    // maybe we need a reset?
+                    updateDeviceTiming(d);
+                    if (theDevices[d].elapsed_time_ns > THE_DEVICE_SILENCE_ns) {
+                        // too much silence
+                        do_fieldbusReset = TRUE;
+                        changeDeviceStatus(d, NOT_CONNECTED); // also data=0 status=DATA_ERROR
+                    }
                 }
                 break;
+
+            case ConnReset:
+                incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS(RESET)
+                // node status
+                changeNodeStatus(Data_node, DISCONNECTED);
+                // data values and status
+                for (i = 0; i < DataNumber; ++i) {
+                    writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);
+                }
+                if (readOperation) {
+                    DataAddr = 0; // i.e. retry this after the others
+                } else {
+                    DataAddr = 0; // i.e. we lose a write
+                }
+                // device status
+                do_fieldbusReset = TRUE;
+                changeDeviceStatus(d, NOT_CONNECTED); // also data=0 status=DATA_ERROR
+                break;
+
             default:
                 ;
             }
-            writeQdataRegisters(theNodes[Data_node].diagnosticAddr + 1, theNodes[Data_node].status, DATA_OK); // STATUS
+            XX_GPIO_CLR_69(d);
+        }
+        pthread_mutex_unlock(&theCrosstableClientMutex);
+
+        // if necessary reset, with unlocked mutex
+        if (do_fieldbusReset) {
+            fieldbusReset(d);
         }
 
-        // manage the device status (after operation)
-        switch (theDevices[d].status) {
-
-        case ZERO:
-        case NO_HOPE:
-        case NOT_CONNECTED:
-            // FIXME: assert
-            break;
-
-        case CONNECTED:
-            // ok proceed with the fieldbus operations
-            if (error == TimeoutError) {
-                changeDeviceStatus(d, CONNECTED_WITH_ERRORS);
-            } else if (error == ConnReset) {
-                fieldbusReset(d);
-                changeDeviceStatus(d, NOT_CONNECTED);
-            }
-            break;
-
-        case CONNECTED_WITH_ERRORS:
-            // ok proceed with the fieldbus operations
-            if (error == NoError || error == CommError) {
-                changeDeviceStatus(d, CONNECTED);
-            } else if (error == ConnReset) {
-                fieldbusReset(d);
-                changeDeviceStatus(d, NOT_CONNECTED);
-            } else if (error == TimeoutError) {
-                updateDeviceTiming(d);
-                if (theDevices[d].elapsed_time_ns > THE_DEVICE_SILENCE_ns) {
-                    // too much silence
-                    fieldbusReset(d);
-                    changeDeviceStatus(d, NOT_CONNECTED);
-                }
-            }
-            break;
-
-        case DEVICE_BLACKLIST:
-            // FIXME: assert
-            break;
-        default:
-            ;
-        }
-
-        // wait, if necessary, after fieldbus operations
+        // if necessary respect the silence, with unlocked mutex
         switch (theDevices[d].protocol) {
-        case PLC:
-            // FIXME: assert
-            break;
         case RTU:
         case MECT:
             if (theDevices[d].silence_ms > 0) {
@@ -4159,19 +4172,13 @@ static void *clientThread(void *arg)
                 XX_GPIO_SET_69(d);
             }
             break;
-        case TCP:
-        case TCPRTU:
-        case CANOPEN:
-            // nothing to do
-            break;
-        case RTU_SRV:
-        case TCP_SRV:
-        case TCPRTU_SRV:
-            break;
         default:
             ;
         }
+
+        // while
     }
+    XX_GPIO_SET_69(d);
 
     // thread clean
     switch (theDevices[d].protocol) {
