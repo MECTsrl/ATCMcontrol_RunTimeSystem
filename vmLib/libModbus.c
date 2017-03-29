@@ -3638,8 +3638,9 @@ static void _modbus_rtu_close(modbus_t *ctx)
 		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
 		close(ctx->s);
 #else
-        fprintf(stderr, "%s(%s)\n", __func__, ctx_rtu->device);
+        fprintf(stderr, "%s(%s) ...", __func__, ctx_rtu->device);
         rt_dev_close(ctx->s);
+        fprintf(stderr, " ok (%s)\n", ctx_rtu->device);
 #endif
 	}
 #endif
