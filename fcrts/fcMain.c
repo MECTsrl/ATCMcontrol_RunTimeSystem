@@ -93,6 +93,7 @@ void ReleaseResources(void);
 static struct option long_options[] = {
     {"version", no_argument,        NULL, 'v'},
     {"xx_gpio", no_argument,        NULL, 'x'},
+    {"print",   no_argument,        NULL, 'p'},
     {NULL,      no_argument,        NULL,  0}
 };
 
@@ -101,7 +102,7 @@ static struct option long_options[] = {
  * FIXME: KEEP THEIR LETTERS IN SYNC WITH THE RETURN VALUE
  * FROM THE LONG OPTIONS!
  */
-static char short_options[] = "vx";
+static char short_options[] = "vxp";
 
 static int application_options(int argc, char *argv[])
 {
@@ -156,7 +157,12 @@ static int application_options(int argc, char *argv[])
                 XX_GPIO_CLOSE();
                 exit(0);
 
-			default:
+            case 'p':
+                printf("enabling verbose printing\n");
+                dataEnableVerbosePrint();
+                break;
+
+            default:
 				break;
 		}
 	}

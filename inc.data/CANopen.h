@@ -14,6 +14,7 @@ u_int8_t CANopenChannels();
 void CANopenStart(u_int8_t channel);
 int CANopenConfigured(u_int8_t channel);
 void CANopenStop(u_int8_t channel);
+void CANopenList(u_int8_t channel);
 
 u_int16_t CANopenGetVarIndex(u_int8_t channel, char *name);
 void CANopenGetChannelStatus(u_int8_t channel, struct CANopenStatus *status);

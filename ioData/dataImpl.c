@@ -63,6 +63,8 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 #undef VERBOSE_DEBUG
 #endif
 
+static int verbose_print_enabled = 0;
+
 #if 1
 // enabling FGPIO output (for clients 0,1,2,3)
 #define XX_GPIO_SET_69(n) if (n <= 3) { XX_GPIO_SET(6 + n); }
@@ -120,7 +122,7 @@ static u_int32_t the_UdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
 static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
 static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
-static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[5500]));
+static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[5500])) + 1;
 // Qdata states
 #define DATA_OK            0    // reading/writing success
 #define DATA_ERROR         1    // reading/writing failure
@@ -394,6 +396,11 @@ void dataGetVersionInfo(char *szVersion)
     }
 }
 
+void dataEnableVerbosePrint(void)
+{
+   verbose_print_enabled = 1;
+}
+
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t status)
 {
     switch (status) {
@@ -464,7 +471,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
 //1;P;TCP9_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5150;10  ;[RO]
 
 
-static inline void initServerDiagnostic(u_int16_t s)
+static void initServerDiagnostic(u_int16_t s)
 {
     u_int16_t addr = 0;
 
@@ -511,7 +518,7 @@ static inline void initServerDiagnostic(u_int16_t s)
     }
 }
 
-static inline void initDeviceDiagnostic(u_int16_t d)
+static void initDeviceDiagnostic(u_int16_t d)
 {
     u_int16_t addr = 0;
 
@@ -577,7 +584,7 @@ static inline void initDeviceDiagnostic(u_int16_t d)
 //1;P;NODE_01_DEV_NODE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
 //1;P;NODE_01_STATUS  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
 
-static inline void initNodeDiagnostic(u_int16_t n)
+static void initNodeDiagnostic(u_int16_t n)
 {
     u_int16_t addr = 0;
     u_int32_t value;
@@ -3357,7 +3364,7 @@ static void *serverThread(void *arg)
     return arg;
 }
 
-static inline void startDeviceTiming(u_int32_t d)
+static void startDeviceTiming(u_int32_t d)
 {
     struct timespec abstime;
     RTIME now_ns;
@@ -3383,10 +3390,11 @@ static inline void updateDeviceTiming(u_int32_t d)
 static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 {
     u_int16_t addr;
+    int n;
 
-#if 1 //def VERBOSE_DEBUG
-    fprintf(stderr, "device %u(%s): status = %s\n", d, theDevices[d].name, deviceStatusName[status]);
-#endif
+    if (verbose_print_enabled) {
+        fprintf(stderr, "%s: status = %s\n", theDevices[d].name, deviceStatusName[status]);
+    }
     theDevices[d].status = status;
     writeQdataRegisters(theDevices[d].diagnosticAddr + 2, status, DATA_OK); // STATUS
 
@@ -3399,9 +3407,9 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     case NOT_CONNECTED:
     case DEVICE_BLACKLIST:
         // zeroDeviceVariables
-        for (addr = 1; addr <= DimCrossTable; ++addr) {
-            if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d
-                    && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
+        for (n = 0; n < theDevices[d].var_num; ++n) {
+            addr = theDevices[d].device_vars[n].addr;
+            if (! CrossTable[addr].Output) {
                 writeQdataRegisters(addr, 0, DATA_ERROR);
             }
         }
@@ -3415,13 +3423,14 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     }
 }
 
-static inline void changeNodeStatus(u_int32_t node, enum NodeStatus status)
+static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus status)
 {
     u_int16_t addr;
+    int n;
 
-#if 1 //def VERBOSE_DEBUG
-    fprintf(stderr, "node #%02u: status = %s\n", node, nodeStatusName[status]);
-#endif
+    if (verbose_print_enabled) {
+        fprintf(stderr, "node #%02u: status = %s\n", node, nodeStatusName[status]);
+    }
     theNodes[node].status = status;
     writeQdataRegisters(theNodes[node].diagnosticAddr + 1, theNodes[node].status, DATA_OK); // STATUS
 
@@ -3434,10 +3443,13 @@ static inline void changeNodeStatus(u_int32_t node, enum NodeStatus status)
         break;
     case BLACKLIST:
         theNodes[node].blacklist = system_ini.system.blacklist;
-        // zeroDeviceVariables
-        for (addr = 1; addr <= DimCrossTable; ++addr) {
-            if (CrossTable[addr].Enable > 0 && CrossTable[addr].node == node
-                    && !(CrossTable[addr].Output && CrossTable[addr].Protocol == CANOPEN)) {
+        // zeroNodeVariables
+        for (n = 0; n < theDevices[d].var_num; ++n) {
+            addr = theDevices[d].device_vars[n].addr;
+            if (CrossTable[addr].node == node && ! CrossTable[addr].Output) {
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "\tnode #%02u, addr #%04u(%s): value=0 status = DATA_ERROR\n", node, addr, CrossTable[addr].Tag);
+#endif
                 writeQdataRegisters(addr, 0, DATA_ERROR);
             }
         }
@@ -3539,6 +3551,9 @@ static void *clientThread(void *arg)
 #endif
             }
         }
+        if (verbose_print_enabled) {
+            CANopenList(theDevices[d].u.can.bus);
+        }
     }   break;
     case MECT: // new (nothing to do)
         break;
@@ -3623,18 +3638,20 @@ static void *clientThread(void *arg)
             we_have_variables[prio] = 1; // also Htype
         }
     }
-    fprintf(stderr, "%s: reading variables {", theDevices[d].name);
-    for (prio = 0; prio < MAX_PRIORITY; ++prio) {
-        if (we_have_variables[prio]) {
-            fprintf(stderr, "\n\t%u:", prio + 1);
-            for (v = 0; v < theDevices[d].var_num; ++v) {
-                if (CrossTable[theDevices[d].device_vars[v].addr].Enable == (prio + 1)) {
-                    fprintf(stderr, " %u%s", theDevices[d].device_vars[v].addr, theDevices[d].device_vars[v].active ? "" : "(H)");
+    if (verbose_print_enabled) {
+        fprintf(stderr, "%s: reading variables {", theDevices[d].name);
+        for (prio = 0; prio < MAX_PRIORITY; ++prio) {
+            if (we_have_variables[prio]) {
+                fprintf(stderr, "\n\t%u:", prio + 1);
+                for (v = 0; v < theDevices[d].var_num; ++v) {
+                    if (CrossTable[theDevices[d].device_vars[v].addr].Enable == (prio + 1)) {
+                        fprintf(stderr, " %u%s", theDevices[d].device_vars[v].addr, theDevices[d].device_vars[v].active ? "" : "(H)");
+                    }
                 }
             }
         }
+        fprintf(stderr, "\n}\n");
     }
-    fprintf(stderr, "\n}\n");
 
     // start the fieldbus operations loop
     DataAddr = 0;
@@ -3976,7 +3993,7 @@ static void *clientThread(void *arg)
             case NoError:
                 // node status
                 if (theNodes[Data_node].status != NODE_OK)
-                    changeNodeStatus(Data_node, NODE_OK);
+                    changeNodeStatus(d, Data_node, NODE_OK);
                 // device status
                 if (theDevices[d].status != CONNECTED)
                     changeDeviceStatus(d, CONNECTED);
@@ -4000,7 +4017,7 @@ static void *clientThread(void *arg)
                         DataAddr = 0; // i.e. get next
                     } else if (system_ini.system.retries > 0) {
                         // write operation and we can retry
-                        changeNodeStatus(Data_node, TIMEOUT);
+                        changeNodeStatus(d, Data_node, TIMEOUT);
                         // data values and status
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
@@ -4008,14 +4025,14 @@ static void *clientThread(void *arg)
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // write operation and we cannot retry
-                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
                         DataAddr = 0; // i.e. we lose a write
                     }
                     break;
                 case TIMEOUT:
                     theNodes[Data_node].retries += 1;
                     if (readOperation) {
-                        changeNodeStatus(Data_node, NODE_OK);
+                        changeNodeStatus(d, Data_node, NODE_OK);
                         // data values and status
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
@@ -4029,7 +4046,7 @@ static void *clientThread(void *arg)
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // write operation and we cannot retry
-                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
                         DataAddr = 0; // i.e. we lose a write
                     }
                     break;
@@ -4052,7 +4069,7 @@ static void *clientThread(void *arg)
                 case NODE_OK:
                     if (system_ini.system.retries > 0) {
                         // any operation and we can retry
-                        changeNodeStatus(Data_node, TIMEOUT);
+                        changeNodeStatus(d, Data_node, TIMEOUT);
                         // data values and status
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
@@ -4060,7 +4077,7 @@ static void *clientThread(void *arg)
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // any operation and we cannot retry
-                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
                         if (readOperation) {
                             DataAddr = 0; // i.e. retry this after the others
                         } else {
@@ -4078,7 +4095,7 @@ static void *clientThread(void *arg)
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // any operation and we cannot retry
-                        changeNodeStatus(Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
+                        changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
                         if (readOperation) {
                             DataAddr = 0; // i.e. retry this after the others
                         } else {
@@ -4100,7 +4117,7 @@ static void *clientThread(void *arg)
                             DataAddr = 0; // i.e. we lose a write
                         }
                     } else {
-                        changeNodeStatus(Data_node, NODE_OK);
+                        changeNodeStatus(d, Data_node, TIMEOUT);
                         DataAddr = DataAddr; // i.e. RETRY this immediately
                     }
                     break;
@@ -4135,7 +4152,7 @@ static void *clientThread(void *arg)
             case ConnReset:
                 incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS(RESET)
                 // node status
-                changeNodeStatus(Data_node, DISCONNECTED);
+                changeNodeStatus(d, Data_node, DISCONNECTED);
                 // data values and status
                 for (i = 0; i < DataNumber; ++i) {
                     writeQdataRegisters(DataAddr + i, 0, DATA_ERROR);

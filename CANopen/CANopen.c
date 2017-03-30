@@ -72,6 +72,18 @@ void CANopenStart(u_int8_t channel)
      ***************************************/
 }
 
+void CANopenList(u_int8_t channel)
+{
+    if (channel >= CAN_CHANNELS) {
+        fprintf(stderr, "CANopenStart, ERROR: wrong channel %u\n", channel);
+        return;
+    }
+    // list
+    /***************************************
+     *           CANopen list              *
+     ***************************************/
+}
+
 int CANopenConfigured(u_int8_t channel)
 {
     if (channel > CAN_CHANNELS) {
