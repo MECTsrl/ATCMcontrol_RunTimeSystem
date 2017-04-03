@@ -380,6 +380,9 @@ static void PLCsync(void);
 static void doWriteDeviceRetentives(u_int32_t d);
 static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
+static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status);
+static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus status);
+
 static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms);
 static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value);
 static int mect_write_ascii(int fd, unsigned node, unsigned command, float value);
@@ -392,7 +395,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03dbeta GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -2540,10 +2543,6 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 #endif
             }
         } else {
-#ifdef VERBOSE_DEBUG
-            int saved_errno = errno;
-            char line[80];
-#endif
             if (e == -1) { // OTHER_ERROR
                 if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
                     retval = ConnReset;
@@ -2555,11 +2554,12 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             } else {
                 retval = CommError;
             }
-#ifdef VERBOSE_DEBUG
-            sprintf(line, "fieldbusWrite(%d, %u, %u): %d,%d --> %d", d, DataAddr, DataNumber, e, errno, retval);
-            errno = saved_errno;
-            perror(line);
-#endif
+	    if (verbose_print_enabled) {
+		    fprintf(stderr, "fieldbusRead(%d, %u, %u): %d,%d(%s) --> %d\n",
+			    d, DataAddr, DataNumber,
+			    e, errno, modbus_strerror(errno),
+			    retval);
+	    }
         }
         break;
     case CANOPEN:
@@ -2926,10 +2926,6 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         if (e == regs) {
             retval = NoError;
         } else {
-#ifdef VERBOSE_DEBUG
-            int saved_errno = errno;
-            char line[80];
-#endif
             if (e == -1) { // OTHER_ERROR
                 if ((errno == EBADF || errno == ECONNRESET || errno == EPIPE)) {
                     retval = ConnReset;
@@ -2941,11 +2937,12 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             } else {
                 retval = CommError;
             }
-#ifdef VERBOSE_DEBUG
-            sprintf(line, "fieldbusWrite(%d, %u, %u): %d,%d --> %d", d, DataAddr, DataNumber, e, errno, retval);
-            errno = saved_errno;
-            perror(line);
-#endif
+	    if (verbose_print_enabled) {
+		    fprintf(stderr, "fieldbusWrite(%d, %u, %u): %d,%d(%s) --> %d\n",
+			    d, DataAddr, DataNumber,
+			    e, errno, modbus_strerror(errno),
+			    retval);
+	    }
         }
         break;
     case CANOPEN:
@@ -3391,10 +3388,12 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
 {
     u_int16_t addr;
     int n;
+    enum DeviceStatus previous_status;
 
     if (verbose_print_enabled) {
         fprintf(stderr, "%s: status = %s\n", theDevices[d].name, deviceStatusName[status]);
     }
+    previous_status = theDevices[d].status;
     theDevices[d].status = status;
     writeQdataRegisters(theDevices[d].diagnosticAddr + 2, status, DATA_OK); // STATUS
 
@@ -3405,16 +3404,35 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     case NO_HOPE:
         break;
     case NOT_CONNECTED:
+        if (previous_status == CONNECTED_WITH_ERRORS) {
+            // set to 0 the input variables for all device nodes
+            for (n = 0; n < theDevices[d].var_num; ++n) {
+                addr = theDevices[d].device_vars[n].addr;
+                if (! CrossTable[addr].Output) {
+                    writeQdataRegisters(addr, 0, DATA_ERROR);
+                }
+            }
+        }
+        break;
     case DEVICE_BLACKLIST:
-        // zeroDeviceVariables
-        for (n = 0; n < theDevices[d].var_num; ++n) {
-            addr = theDevices[d].device_vars[n].addr;
-            if (! CrossTable[addr].Output) {
-                writeQdataRegisters(addr, 0, DATA_ERROR);
+        if (previous_status == NOT_CONNECTED) {
+            // stop the device nodes on connection failure
+            for (n = 0; n < theNodesNumber; ++n) {
+                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED) {
+                    changeNodeStatus(d, n, DISCONNECTED);
+                }
             }
         }
         break;
     case CONNECTED:
+        if (previous_status == NOT_CONNECTED) {
+            // try resurrecting the device nodes on connection success
+            for (n = 0; n < theNodesNumber; ++n) {
+                if (theNodes[n].device == d && theNodes[n].status != NODE_OK) {
+                    changeNodeStatus(d, n, NODE_OK);
+                }
+            }
+        }
         break;
     case CONNECTED_WITH_ERRORS:
         break;
@@ -3429,7 +3447,7 @@ static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus
     int n;
 
     if (verbose_print_enabled) {
-        fprintf(stderr, "node #%02u: status = %s\n", node, nodeStatusName[status]);
+        fprintf(stderr, "node #%02u: status = %s\n", node+1, nodeStatusName[status]);
     }
     theNodes[node].status = status;
     writeQdataRegisters(theNodes[node].diagnosticAddr + 1, theNodes[node].status, DATA_OK); // STATUS
@@ -3448,7 +3466,7 @@ static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus
             addr = theDevices[d].device_vars[n].addr;
             if (CrossTable[addr].node == node && ! CrossTable[addr].Output) {
 #ifdef VERBOSE_DEBUG
-                fprintf(stderr, "\tnode #%02u, addr #%04u(%s): value=0 status = DATA_ERROR\n", node, addr, CrossTable[addr].Tag);
+                fprintf(stderr, "\tnode #%02u, addr #%04u(%s): value=0 status = DATA_ERROR\n", node+1, addr, CrossTable[addr].Tag);
 #endif
                 writeQdataRegisters(addr, 0, DATA_ERROR);
             }
@@ -3968,9 +3986,9 @@ static void *clientThread(void *arg)
                     error = CommError;
                 }
             }
-            // fieldbusWait afterwards
-            writeQdataRegisters(theDevices[d].diagnosticAddr + 7, error, DATA_OK); // LAST_ERROR
+            // fieldbus wait silence_ms afterwards
         }
+        writeQdataRegisters(theDevices[d].diagnosticAddr + 7, error, DATA_OK); // LAST_ERROR
 
         // check error and set values and flags
         XX_GPIO_CLR_69(d);
