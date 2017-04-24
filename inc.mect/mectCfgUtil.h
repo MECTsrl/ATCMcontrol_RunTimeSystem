@@ -46,15 +46,18 @@ struct serial_conf {
 	u_int16_t stopbits;     // stopbits = 1
     u_int16_t silence_ms;   // silence_ms = 30
     u_int16_t timeout_ms;   // timeout_ms = 130
+    u_int16_t max_block_size; // max_block_size = 64
 };
 
 struct tcp_ip_conf {
     u_int16_t silence_ms;   // silence_ms = 30
     u_int16_t timeout_ms;   // timeout_ms = 130
+    u_int16_t max_block_size; // max_block_size = 64
 };
 
 struct canopen_conf {
     u_int32_t baudrate;     // baudrate = 125000
+    u_int16_t max_block_size; // max_block_size = 64
 };
 
 struct system_conf {

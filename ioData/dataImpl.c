@@ -56,8 +56,8 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 
-#define REVISION_HI  1
-#define REVISION_LO  32
+#define REVISION_HI  2
+#define REVISION_LO  1
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -266,6 +266,7 @@ struct ClientStruct {
     } u;
     int16_t silence_ms;
     u_int16_t timeout_ms;
+    u_int16_t max_block_size;
     //
     char name[MAX_THREADNAME_LEN]; // "(64)TCPRTUSRV_123.567.901.345_65535"
     enum DeviceStatus status;
@@ -1970,7 +1971,7 @@ static int checkServersDevicesAndNodes()
                                 theDevices[d].u.serial.stopbits = system_ini.serial_port[p].stopbits;
                                 theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
                                 theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
-                            }
+                                theDevices[d].max_block_size = system_ini.serial_port[p].max_block_size;
                             break;
                         default:
                             fprintf(stderr, "%s: bad %s port %u for variable #%u\n", __func__,
@@ -1984,12 +1985,14 @@ static int checkServersDevicesAndNodes()
                         theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
                         theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
                         theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
+                        theDevices[d].max_block_size = system_ini.tcp_ip_port.max_block_size;
                         break;
                     case TCPRTU:
                         theDevices[d].u.tcp_ip.IPaddr = CrossTable[i].IPAddress;
                         theDevices[d].u.tcp_ip.port = CrossTable[i].Port;
                         theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
                         theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
+                        theDevices[d].max_block_size = system_ini.tcp_ip_port.max_block_size;
                         break;
                     case CANOPEN:
                         switch (p) {
@@ -1999,6 +2002,7 @@ static int checkServersDevicesAndNodes()
                             theDevices[d].u.can.baudrate = system_ini.canopen[p].baudrate;
                             theDevices[d].silence_ms = 0;
                             theDevices[d].timeout_ms = 0;
+                            theDevices[d].max_block_size = system_ini.canopen[p].max_block_size;
                             break;
                         default:
                             fprintf(stderr, "%s: bad CANOPEN port %u for variable #%u", __func__, p, i);
@@ -2009,12 +2013,14 @@ static int checkServersDevicesAndNodes()
                         theDevices[d].server = s; // searched before
                         theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
                         theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
+                        theDevices[d].max_block_size = system_ini.serial_port[p].max_block_size;
                         break;
                     case TCP_SRV:
                     case TCPRTU_SRV:
                         theDevices[d].server = s; // searched before
                         theDevices[d].silence_ms = system_ini.tcp_ip_port.silence_ms;
                         theDevices[d].timeout_ms = system_ini.tcp_ip_port.timeout_ms;
+                        theDevices[d].max_block_size = system_ini.tcp_ip_port.max_block_size;
                         break;
                     default:
                         ;
@@ -2023,6 +2029,10 @@ static int checkServersDevicesAndNodes()
                     if (theDevices[d].timeout_ms == 0 && theDevices[d].protocol == RTU) {
                         theDevices[d].timeout_ms = 300;
                         fprintf(stderr, "%s: TimeOut of device '%s' forced to %u ms\n", __func__, theDevices[d].name, theDevices[d].timeout_ms);
+                    }
+                    if (i == base && CrossTable[i].BlockSize > theDevices[d].max_block_size) {
+                        fprintf(stderr, "%s: warning: variable #%u block #%u size %u, exceeding max_block_size %u (%s)\n",
+                                __func__, i, block, CrossTable[i].BlockSize, theDevices[d].max_block_size, theDevices[d].name);
                     }
                     theDevices[d].elapsed_time_ns = 0;
                     theDevices[d].status = ZERO;
@@ -4444,7 +4454,7 @@ void dataEngineStart(void)
     // initialize
     theDataSyncThread_id = -1;
     theDataSyncThreadStatus = NOT_STARTED;
-    int s, d;
+    int s, d, n;
 
     // read the configuration file
     if (app_config_load(&system_ini)) {
@@ -4453,9 +4463,21 @@ void dataEngineStart(void)
     } else {
         system_ini_ok = TRUE;
     }
-#ifdef DEBUG
-    app_config_dump(&system_ini);
-#endif
+    // non null default values
+    for (n = 0; n < MAX_SERIAL_PORT; ++n) {
+        if (system_ini->serial_port[n].max_block_size <= 0 || system_ini->serial_port[n].max_block_size > MAX_VALUES)
+            system_ini->serial_port[n].max_block_size = MAX_VALUES;
+    }
+    if (system_ini->tcp_ip_port.max_block_size <= 0 || system_ini->tcp_ip_port.max_block_size > MAX_VALUES)
+        system_ini->tcp_ip_port.max_block_size = MAX_VALUES;
+    for (n = 0; n < MAX_CANOPEN; ++n) {
+        if (system_ini->canopen[n].max_block_size <= 0 || system_ini->canopen[n].max_block_size> MAX_VALUES)
+            system_ini->canopen[n].max_block_size = MAX_VALUES;
+    }
+
+    if (verbose_print_enabled) {
+        app_config_dump(&system_ini);
+    }
 
     // cleanup variables
     bzero(the_QdataRegisters, sizeof(the_QdataRegisters));

@@ -230,6 +230,8 @@ int get_serial_conf(char *ptr, struct serial_conf *serial, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "timeout_ms", &serial->timeout_ms, line_num, filename);
     if (r) { return r; }
+    r = get_u_int16(ptr, "max_block_size", &serial->max_block_size, line_num, filename);
+    if (r) { return r; }
     if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_SERIAL_PORT_n);
         return -1;
@@ -245,6 +247,8 @@ int get_tcp_ip_conf(char *ptr, struct tcp_ip_conf *tcp_ip, unsigned line_num, co
     if (r) { return r; }
     r = get_u_int16(ptr, "timeout_ms", &tcp_ip->timeout_ms, line_num, filename);
     if (r) { return r; }
+    r = get_u_int16(ptr, "max_block_size", &tcp_ip->max_block_size, line_num, filename);
+    if (r) { return r; }
     if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_TCP_IP_PORT);
         return -1;
@@ -257,6 +261,8 @@ int get_canopen_conf(char *ptr, struct canopen_conf *canopen, unsigned line_num,
     int r;
 
     r = get_u_int32(ptr, "baudrate", &canopen->baudrate, line_num, filename);
+    if (r) { return r; }
+    r = get_u_int16(ptr, "max_block_size", &canopen->max_block_size, line_num, filename);
     if (r) { return r; }
     if (*ptr != '\0') {
         fprintf(stderr, "%s: unknown property %s for %s\n", __func__, ptr, TAG_CONF_CANOPEN_n);
@@ -281,7 +287,7 @@ int app_config_load(struct system_ini *system_ini)
 	unsigned line_num = 0;
     enum app_conf_section actual_section = APP_CONF_NONE;
 
-	/* reset value */
+    /* reset values */
     if (system_ini == NULL) {
         return 1;
     }
@@ -398,14 +404,17 @@ void app_config_dump(struct system_ini *system_ini)
         fprintf(stderr, "stopbits = %u\n", system_ini->serial_port[n].stopbits);
         fprintf(stderr, "silence_ms = %u\n", system_ini->serial_port[n].silence_ms);
         fprintf(stderr, "timeout_ms = %u\n", system_ini->serial_port[n].timeout_ms);
+        fprintf(stderr, "max_block_size = %u\n", system_ini->serial_port[n].max_block_size);
     }
 
     fprintf(stderr, "%s\n", TAG_CONF_TCP_IP_PORT);
     fprintf(stderr, "silence_ms = %u\n", system_ini->tcp_ip_port.silence_ms);
     fprintf(stderr, "timeout_ms = %u\n", system_ini->tcp_ip_port.timeout_ms);
+    fprintf(stderr, "max_block_size = %u\n", system_ini->tcp_ip_port.max_block_size);
 
     for (n = 0; n < MAX_CANOPEN; ++n) {
         fprintf(stderr, "%s %d\n", TAG_CONF_CANOPEN_n, n);
-        fprintf(stderr, "baudrate = %u\n", system_ini->serial_port[n].baudrate);
+        fprintf(stderr, "baudrate = %u\n", system_ini->canopen[n].baudrate);
+        fprintf(stderr, "max_block_size = %u\n", system_ini->canopen[n].max_block_size);
     }
 }
