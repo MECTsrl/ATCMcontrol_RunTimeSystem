@@ -1972,6 +1972,7 @@ static int checkServersDevicesAndNodes()
                                 theDevices[d].silence_ms = system_ini.serial_port[p].silence_ms;
                                 theDevices[d].timeout_ms = system_ini.serial_port[p].timeout_ms;
                                 theDevices[d].max_block_size = system_ini.serial_port[p].max_block_size;
+                            }
                             break;
                         default:
                             fprintf(stderr, "%s: bad %s port %u for variable #%u\n", __func__,
