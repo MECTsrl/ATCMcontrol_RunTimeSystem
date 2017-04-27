@@ -4466,14 +4466,14 @@ void dataEngineStart(void)
     }
     // non null default values
     for (n = 0; n < MAX_SERIAL_PORT; ++n) {
-        if (system_ini->serial_port[n].max_block_size <= 0 || system_ini->serial_port[n].max_block_size > MAX_VALUES)
-            system_ini->serial_port[n].max_block_size = MAX_VALUES;
+        if (system_ini.serial_port[n].max_block_size <= 0 || system_ini.serial_port[n].max_block_size > MAX_VALUES)
+            system_ini.serial_port[n].max_block_size = MAX_VALUES;
     }
-    if (system_ini->tcp_ip_port.max_block_size <= 0 || system_ini->tcp_ip_port.max_block_size > MAX_VALUES)
-        system_ini->tcp_ip_port.max_block_size = MAX_VALUES;
+    if (system_ini.tcp_ip_port.max_block_size <= 0 || system_ini.tcp_ip_port.max_block_size > MAX_VALUES)
+        system_ini.tcp_ip_port.max_block_size = MAX_VALUES;
     for (n = 0; n < MAX_CANOPEN; ++n) {
-        if (system_ini->canopen[n].max_block_size <= 0 || system_ini->canopen[n].max_block_size> MAX_VALUES)
-            system_ini->canopen[n].max_block_size = MAX_VALUES;
+        if (system_ini.canopen[n].max_block_size <= 0 || system_ini.canopen[n].max_block_size> MAX_VALUES)
+            system_ini.canopen[n].max_block_size = MAX_VALUES;
     }
 
     if (verbose_print_enabled) {
