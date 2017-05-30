@@ -102,9 +102,6 @@ static int verbose_print_enabled = 0;
 
 // --------
 #define DimCrossTable   5472
-#define DimCrossTable_2 22004
-#define DimCrossTable_3 44004
-#define DimCrossTable_4 (DimCrossTable_3 + 2 * DimCrossTable + 2 + 2)
 #define DimAlarmsCT     1152
 #define LAST_RETENTIVE  192
 
@@ -112,7 +109,7 @@ static struct system_ini system_ini;
 static int system_ini_ok;
 
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
-#define REG_DATA_NUMBER     7680 // 1+5472+(5500-5473)+5473/2+...
+#define REG_DATA_NUMBER     7680 // 1 + 5472 + (5500-5473) + 5472 / 4 + ...
 #define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(u_int32_t)) // 30720 = 0x00007800 30 kiB
 #define THE_DATA_UDP_SIZE   THE_DATA_SIZE
 #define	THE_DATA_RECV_PORT	34903
@@ -407,6 +404,10 @@ void dataEnableVerbosePrint(void)
 
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t status)
 {
+    if (addr > DimCrossTable) {
+        fprintf(stderr, "writeQdataRegisters(addr=%u, value=0x%08x, status=%u): wrong addr\n", addr, value,status);
+        return;
+    }
     switch (status) {
 
     case DATA_OK:
@@ -600,7 +601,16 @@ static void initNodeDiagnostic(u_int16_t n)
     writeQdataRegisters(addr + 1, theNodes[n].status, DATA_OK); // STATUS
 }
 
-static inline void incQdataRegisters(u_int16_t addr, u_int16_t offset)
+static inline void setDiagnostic(u_int16_t addr, u_int16_t offset, u_int32_t value)
+{
+    if (addr == 0 || addr + offset > DimCrossTable) {
+        return;
+    }
+    addr += offset;
+    writeQdataRegisters(addr, value, DATA_OK);
+}
+
+static inline void incDiagnostic(u_int16_t addr, u_int16_t offset)
 {
     if (addr == 0 || addr + offset > DimCrossTable) {
         return;
@@ -3084,7 +3094,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
 static inline void changeServerStatus(u_int32_t s, enum ServerStatus status)
 {
     theServers[s].status = status;
-    writeQdataRegisters(theServers[s].diagnosticAddr + 2, status, DATA_OK); // STATUS
+    setDiagnostic(theServers[s].diagnosticAddr, 2, status); // STATUS
 #ifdef VERBOSE_DEBUG
     fprintf(stderr, "%s: status = %d\n", theServers[s].name, status);
 #endif
@@ -3237,18 +3247,18 @@ static void *serverThread(void *arg)
                     case _FC_READ_INPUT_REGISTERS:
                     case _FC_READ_EXCEPTION_STATUS:
                     case _FC_REPORT_SLAVE_ID:
-                        incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                        incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
                         break;
                     case _FC_WRITE_SINGLE_COIL:
                     case _FC_WRITE_SINGLE_REGISTER:
                     case _FC_WRITE_MULTIPLE_COILS:
                     case _FC_WRITE_MULTIPLE_REGISTERS:
                     case _FC_MASK_WRITE_REGISTER:
-                        incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                        incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
                         break;
                     case _FC_WRITE_AND_READ_REGISTERS:
-                        incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
-                        incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                        incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
+                        incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
                         break;
                     default:
                         break;
@@ -3304,18 +3314,18 @@ static void *serverThread(void *arg)
                             case _FC_READ_INPUT_REGISTERS:
                             case _FC_READ_EXCEPTION_STATUS:
                             case _FC_REPORT_SLAVE_ID:
-                                incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                                incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
                                 break;
                             case _FC_WRITE_SINGLE_COIL:
                             case _FC_WRITE_SINGLE_REGISTER:
                             case _FC_WRITE_MULTIPLE_COILS:
                             case _FC_WRITE_MULTIPLE_REGISTERS:
                             case _FC_MASK_WRITE_REGISTER:
-                                incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
+                                incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
                                 break;
                             case _FC_WRITE_AND_READ_REGISTERS:
-                                incQdataRegisters(theServers[s].diagnosticAddr, 4); // WRITES
-                                incQdataRegisters(theServers[s].diagnosticAddr, 3); // READS
+                                incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
+                                incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
                                 break;
                             default:
                                 ;
@@ -3406,7 +3416,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     }
     previous_status = theDevices[d].status;
     theDevices[d].status = status;
-    writeQdataRegisters(theDevices[d].diagnosticAddr + 2, status, DATA_OK); // STATUS
+    setDiagnostic(theDevices[d].diagnosticAddr, 2, status); // STATUS
 
     theDevices[d].elapsed_time_ns = 0;
 
@@ -3461,7 +3471,7 @@ static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus
         fprintf(stderr, "node #%02u: status = %s\n", node+1, nodeStatusName[status]);
     }
     theNodes[node].status = status;
-    writeQdataRegisters(theNodes[node].diagnosticAddr + 1, theNodes[node].status, DATA_OK); // STATUS
+    setDiagnostic(theNodes[node].diagnosticAddr, 1, theNodes[node].status); // STATUS
 
     switch (status) {
     case NO_NODE:
@@ -3687,10 +3697,12 @@ static void *clientThread(void *arg)
     DataNumber = 0;
     readOperation = TRUE;
     error = NoError;
-    theDevices[d].thread_status = RUNNING;
 
     // pre-charge the output retentives
     doWriteDeviceRetentives(d);
+
+    // let the engine continue
+    theDevices[d].thread_status = RUNNING;
 
     while (engineStatus != enExiting) {
 
@@ -3802,7 +3814,7 @@ static void *clientThread(void *arg)
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
 
-                    writeQdataRegisters(theDevices[d].diagnosticAddr + 8, theDevices[d].PLCwriteRequestNumber, DATA_OK); // WRITE_QUEUE
+                    setDiagnostic(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
 #ifdef VERBOSE_DEBUG
                     fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
@@ -3987,10 +3999,10 @@ static void *clientThread(void *arg)
 
             // the device is connected, so operate, without locking the mutex
             if (readOperation) {
-                incQdataRegisters(theDevices[d].diagnosticAddr, 3); // READS
+                incDiagnostic(theDevices[d].diagnosticAddr, 3); // READS
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
             } else {
-                incQdataRegisters(theDevices[d].diagnosticAddr, 4); // WRITES
+                incDiagnostic(theDevices[d].diagnosticAddr, 4); // WRITES
                 if (CrossTable[DataAddr].Output) {
                     error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
                 } else {
@@ -3999,7 +4011,7 @@ static void *clientThread(void *arg)
             }
             // fieldbus wait silence_ms afterwards
         }
-        writeQdataRegisters(theDevices[d].diagnosticAddr + 7, error, DATA_OK); // LAST_ERROR
+        setDiagnostic(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
 
         // check error and set values and flags
         XX_GPIO_CLR_69(d);
@@ -4034,7 +4046,7 @@ static void *clientThread(void *arg)
                 break;
 
             case CommError:
-                incQdataRegisters(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
+                incDiagnostic(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4092,7 +4104,7 @@ static void *clientThread(void *arg)
                 break;
 
             case TimeoutError:
-                incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
+                incDiagnostic(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4179,7 +4191,7 @@ static void *clientThread(void *arg)
                 break;
 
             case ConnReset:
-                incQdataRegisters(theDevices[d].diagnosticAddr, 5); // TIMEOUTS(RESET)
+                incDiagnostic(theDevices[d].diagnosticAddr, 5); // TIMEOUTS(RESET)
                 // node status
                 changeNodeStatus(d, Data_node, DISCONNECTED);
                 // data values and status
@@ -4706,7 +4718,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
             theDevices[d].PLCwriteRequestNumber += 1;
 
             // add the write request of 'value'
-            writeQdataRegisters(theDevices[d].diagnosticAddr + 8, theDevices[d].PLCwriteRequestNumber, DATA_OK); // WRITE_QUEUE
+            setDiagnostic(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
             theDevices[d].PLCwriteRequests[i].Addr = addr;
             theDevices[d].PLCwriteRequests[i].Number = 1;
 
@@ -4741,7 +4753,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                         break;
                     }
                     // in Modbus clients we cannot mix BIT and non BIT variables
-                    if ((type == RTU || type == TCP || type == TCPRTU)
+                    if ((type == RTU || type == TCP || type == TCPRTU || type == RTU_SRV || type == TCP_SRV || type == TCPRTU_SRV)
                         && ((type == BIT && CrossTable[addr + n].Types != BIT)
                            || (type != BIT && CrossTable[addr + n].Types == BIT))) {
                         break;
@@ -4802,6 +4814,7 @@ static void doWriteDeviceRetentives(u_int32_t d)
     for (addr = 1;  addr <= LAST_RETENTIVE; ++addr) {
         if (CrossTable[addr].device == d && CrossTable[addr].Output) {
 
+            //                        addr  value                     values              flags addrMax
             written = doWriteVariable(addr, the_QdataRegisters[addr], the_QdataRegisters, NULL, LAST_RETENTIVE);
             if (written > 1)
                 addr += written - 1;
