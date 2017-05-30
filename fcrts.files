@@ -162,7 +162,6 @@ vmLib/funDatalog.h
 vmLib/funFile.h
 vmLib/funHW119.h
 vmLib/funIec.h
-vmLib/funMBRTU.h
 vmLib/funMBus2.h
 vmLib/funMect.h
 vmLib/funMectUserUtility.h
