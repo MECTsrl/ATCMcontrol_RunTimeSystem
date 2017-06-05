@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  2
-#define REVISION_LO  1
+#define REVISION_LO  2
 
 #if DEBUG
 #undef VERBOSE_DEBUG
