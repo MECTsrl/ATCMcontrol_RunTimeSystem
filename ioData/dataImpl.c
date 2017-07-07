@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  2
-#define REVISION_LO  2
+#define REVISION_LO  3
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -2401,10 +2401,12 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_input_registers(theDevices[d].modbus_ctx,
                     CrossTable[DataAddr].Offset - 30001, regs, uintRegs);
+#if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx,
                     CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
+#endif
             } else {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
@@ -2895,12 +2897,14 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                 e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
             } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
                 e = -1; // cannot write inputs
+#if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
                 if (regs == 1){
                     e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, uintRegs[0]);
                 } else {
                     e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
                 }
+#endif
             } else {
                 if (regs == 1){
                     e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, uintRegs[0]);
