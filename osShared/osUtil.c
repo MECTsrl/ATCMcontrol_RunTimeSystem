@@ -229,7 +229,7 @@ static struct {
 	{ 0x0720, 0x00100000 },		//DOUT2, page 801
 
     // XX_GPIO( 5) FGPIO_6 bank 3, pin 2 (pin 70, AUART0_CTS)
-	{ 0x0730, 0x00000002 },		//DOUT3, page 801
+    { 0x0730, 0x00000004 },		//DOUT3, page 801
 
     // XX_GPIO( 6) FGPIO_7 bank 3, pin 4 (pin 81, AUART1_RX)
 	{ 0x0730, 0x00000010 },		//DOUT3, page 801
