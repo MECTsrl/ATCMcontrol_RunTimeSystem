@@ -738,9 +738,10 @@ IEC_UINT osFree(IEC_DATA OS_LPTR **pData);
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 void xx_gpio_init();
+void xx_gpio_config(unsigned n, int output);
 void xx_gpio_set(unsigned n);
 void xx_gpio_clr(unsigned n);
-unsigned char xx_gpio_get(unsigned n);
+int xx_gpio_get(unsigned n);
 void xx_gpio_close();
 #endif
 

@@ -408,7 +408,7 @@
 
 #define RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
-#undef	RTS_CFG_DEBUG_GPIO
+#define	RTS_CFG_DEBUG_GPIO
 #undef	RTS_CFG_COMM_TRACE
 #undef	RTS_CFG_IPC_TRACE
 #undef	RTS_CFG_IPC_TRACE_IO
@@ -431,7 +431,7 @@
 
 #undef 	RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
-#undef	RTS_CFG_DEBUG_GPIO
+#define	RTS_CFG_DEBUG_GPIO
 #undef	RTS_CFG_COMM_TRACE
 #undef	RTS_CFG_IPC_TRACE
 #undef	RTS_CFG_IPC_TRACE_IO
@@ -1196,9 +1196,12 @@ typedef struct
 
 #endif	/* RTS_CFG_DEBUG_OUTPUT */
 
+#define XX_GPIO_MAX 8
+
 #if defined(RTS_CFG_DEBUG_GPIO)
 
 #define XX_GPIO_INIT()				xx_gpio_init()
+#define XX_GPIO_CONFIG(n, o)		xx_gpio_config(n, o)
 #define XX_GPIO_SET(n)				xx_gpio_set(n)
 #define XX_GPIO_CLR(n)				xx_gpio_clr(n)
 #define XX_GPIO_GET(n)				xx_gpio_get(n)
@@ -1207,6 +1210,7 @@ typedef struct
 #else
 
 #define XX_GPIO_INIT()
+#define XX_GPIO_CONFIG(n, o)
 #define XX_GPIO_SET(n)
 #define XX_GPIO_CLR(n)
 #define XX_GPIO_GET(n)

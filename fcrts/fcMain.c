@@ -107,7 +107,7 @@ static char short_options[] = "vxp";
 static int application_options(int argc, char *argv[])
 {
 	int option_index = 0;
-	int c = 0;
+    int c = 0, n;
     char version[VMM_MAX_IEC_STRLEN];
 
 	if (argc <= 0)
@@ -134,24 +134,32 @@ static int application_options(int argc, char *argv[])
 				exit(0);
 
             case 'x':
-                printf("xx_gpio testing:\n");
+                fprintf(stderr, "xx_gpio testing:\n");
                 XX_GPIO_INIT();
+                fprintf(stderr, "    XX_GPIO_CONFIG(");
+                for (n = 0; n < XX_GPIO_MAX; ++n) {
+                    fprintf(stderr, "%02d, 1", n);
+                    XX_GPIO_CONFIG(n, 1);
+                    fprintf(stderr, ")\n");
+                }
+                fprintf(stderr, ")\n");
                 while (1) {
-                    printf("    XX_GPIO_SET(");
-                    for (c = 0; c < 16; ++c) {
-                        printf("%02d ", c);
-                        XX_GPIO_SET(c);
-                        XX_GPIO_CLR(c);
-                        XX_GPIO_SET(c);
+                    int n;
+                    fprintf(stderr, "    XX_GPIO_SET(");
+                    for (n = 0; n < XX_GPIO_MAX; ++n) {
+                        fprintf(stderr, "%02d ", n);
+                        XX_GPIO_SET(n);
+                        XX_GPIO_CLR(n);
+                        XX_GPIO_SET(n);
                     }
-                    printf("), XX_GPIO_CLR(");
-                    for (c = 0; c < 16; ++c) {
-                        printf("%02d ", c);
-                        XX_GPIO_CLR(c);
-                        XX_GPIO_SET(c);
-                        XX_GPIO_CLR(c);
+                    fprintf(stderr, "), XX_GPIO_CLR(");
+                    for (n = 0; n < XX_GPIO_MAX; ++n) {
+                        fprintf(stderr, "%02d ", n);
+                        XX_GPIO_CLR(n);
+                        XX_GPIO_SET(n);
+                        XX_GPIO_CLR(n);
                     }
-                    printf(")\n");
+                    fprintf(stderr, ")\n");
                     sleep(1);
                 }
                 XX_GPIO_CLOSE();
