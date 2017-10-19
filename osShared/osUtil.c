@@ -432,20 +432,20 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
  *
  * Suspend the task until the given absolute time (in ms).
  *
- * @param			ulTime		Suspend time in ms.
+ * @param			ullTime		Suspend time in ms. (64bit)
  * @return			OK if successful else error number.
  */
-IEC_UINT osSleepAbsolute(IEC_UDINT ulTime)
+IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
 {
 	IEC_UINT uRes = OK;
 
 #ifdef __XENO__
     struct timespec timer_next;
-	ldiv_t x;
+    lldiv_t x;
 	int retval; 
 
 	// compute time
-    x = ldiv(ulTime, 1000L);
+    x = lldiv(ullTime, 1000ULL);
     timer_next.tv_sec = x.quot;
     timer_next.tv_nsec = x.rem * 1E6;
 	// do wait
@@ -453,10 +453,11 @@ IEC_UINT osSleepAbsolute(IEC_UDINT ulTime)
        	retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
 	} while (retval == EINTR);
 #else
-	IEC_UDINT now = osGetTime32();
+    IEC_ULINT now = osGetTime64();
 
-	if (ulTime > now) {
-		usleep((ulTime - now) * 1000);
+    if (ullTime > now) {
+        IEC_UDINT delta_ms = ullTime - now;
+        usleep(delta_ms * 1000);
 	}
 #endif
 	RETURN(uRes);

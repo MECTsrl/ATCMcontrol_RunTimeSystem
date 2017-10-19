@@ -719,7 +719,7 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 			const char *name, size_t stacksize);
 int osPthreadSetSched(int policy, int sched_priority);
 IEC_UINT osSleep(IEC_UDINT ulTime);
-IEC_UINT osSleepAbsolute(IEC_UDINT ulTime);
+IEC_UINT osSleepAbsolute(IEC_ULINT ulTime);
 
 IEC_UDINT osGetTime32(void);
 IEC_ULINT osGetTime64(void);
