@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  2
-#define REVISION_LO  2
+#define REVISION_LO  5
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -65,7 +65,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 static int verbose_print_enabled = 0;
 
-#if 1
+#if 0
 // enabling FGPIO output (for clients 0,1,2,3)
 #define XX_GPIO_SET_69(n) if (n <= 3) { XX_GPIO_SET(6 + n); }
 #define XX_GPIO_CLR_69(n) if (n <= 3) { XX_GPIO_CLR(6 + n); }
@@ -167,10 +167,10 @@ enum threadStatus {NOT_STARTED = 0, RUNNING, EXITING};
 enum ServerStatus {SRV_RUNNING0 = 0, SRV_RUNNING1, SRV_RUNNING2, SRV_RUNNING3, SRV_RUNNING4};
 enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST, DISCONNECTED};
-#if 1 //def VERBOSE_DEBUG
+
 static const char *deviceStatusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
 static const char *nodeStatusName[] = {"NO_NODE", "NODE_OK", "TIMEOUT", "BLACKLIST", "DISCONNECTED" };
-#endif
+
 enum fieldbusError {NoError = 0, CommError, TimeoutError, ConnReset};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
@@ -309,7 +309,7 @@ struct CrossTableRecord {
     u_int32_t IPAddress;
     u_int16_t Port;
     u_int8_t NodeId;
-    u_int16_t Offset;
+    u_int32_t Offset;
     u_int16_t Block;
     u_int16_t BlockBase;
     int16_t BlockSize;
@@ -2323,7 +2323,7 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
         case WORD_BIT:
         case DWORD_BIT: {
             register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-            register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+            register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
             do {
                 // skip the other *_BIT variables of the same offset
@@ -2397,14 +2397,16 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             if (CrossTable[DataAddr].Types == BIT) {
                 bzero(bitRegs, sizeof(bitRegs));
                 e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+            } else if (CrossTable[DataAddr].Offset >= 300000 && CrossTable[DataAddr].Offset < 365536) {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_input_registers(theDevices[d].modbus_ctx,
-                    CrossTable[DataAddr].Offset - 30001, regs, uintRegs);
+                    CrossTable[DataAddr].Offset - 300000, regs, uintRegs);
+#if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx,
                     CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
+#endif
             } else {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, uintRegs);
@@ -2419,7 +2421,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 if (server != 0xffff && theServers[server].mb_mapping != NULL) {
                     pthread_mutex_lock(&theServers[server].mutex);
                     {
-                        register u_int16_t base = CrossTable[DataAddr].Offset;
+                        register u_int32_t base = CrossTable[DataAddr].Offset;
                         bzero(uintRegs, sizeof(uintRegs));
                         for (r = 0; r < regs; ++r) {
                             if ((base + r) < REG_SRV_NUMBER) {
@@ -2503,7 +2505,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     case WORD_BIT:
                     case DWORD_BIT: {
                         register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                        register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                         do {
                             // manage this and the other *_BIT variables of the same offset
@@ -2589,7 +2591,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             u_int8_t channel = theDevices[device].port;
             for (i = 0; i < DataNumber; ++i) {
                 register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 // cannot read outputs, anyway
                 if (CrossTable[DataAddr + i].Output) {
@@ -2763,7 +2765,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int16_t addr;
                     register u_int16_t base = CrossTable[DataAddr + i].BlockBase;
                     register u_int16_t size = CrossTable[DataAddr + i].BlockSize;
-                    register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                    register u_int32_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
 
                     // init the buffer bits with ALL the other actual bit values from the_QdataRegisters
@@ -2828,7 +2830,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             case WORD_BIT:
             case DWORD_BIT: {
                 register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 do {
                     // manage this and the other *_BIT variables of the same offset
@@ -2893,14 +2895,16 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         case TCPRTU:
             if (CrossTable[DataAddr].Types == BIT) {
                 e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+            } else if (CrossTable[DataAddr].Offset >= 300000 && CrossTable[DataAddr].Offset < 365536) {
                 e = -1; // cannot write inputs
+#if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
                 if (regs == 1){
                     e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, uintRegs[0]);
                 } else {
                     e = modbus_write_registers(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset - 40001, regs, uintRegs);
                 }
+#endif
             } else {
                 if (regs == 1){
                     e = modbus_write_register(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, uintRegs[0]);
@@ -2971,7 +2975,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         if (device != 0xffff) {
             u_int8_t channel = theDevices[device].port;
             for (i = 0; i < DataNumber; ++i) {
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
@@ -2983,7 +2987,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int16_t addr;
                     register u_int16_t base = CrossTable[DataAddr + i].BlockBase;
                     register u_int16_t size = CrossTable[DataAddr + i].BlockSize;
-                    register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                    register u_int32_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
                     u_int32_t buffer = 0x00000000; // BYTE_BIT, WORD_BIT, DWORD_BIT
 

@@ -37,8 +37,8 @@
 
 typedef struct 
 {
-	IEC_UDINT	tCycle;
-	IEC_UDINT	tNextExec;
+    IEC_ULINT	tCycle;
+    IEC_ULINT	tNextExec;
 	
 } SVMAction;
 
@@ -91,10 +91,10 @@ IEC_UINT timMain(void *pPara)
 	IEC_UDINT i;
 	IEC_UINT  uRes		= OK;
 
-	IEC_UDINT tCurrent	= 0ul;
-	IEC_UDINT tDiff 	= 0ul;
-	IEC_UDINT tSuspend	= 0xfffffffful;
-	IEC_UDINT tCheckMsg = 0ul;
+    IEC_ULINT tCurrent	= 0ull;
+    IEC_ULINT tDiff 	= 0ull;
+    IEC_ULINT tSuspend	= 0xffffFFFFffffFFFFull;
+    IEC_ULINT tCheckMsg = 0ull;
 
 	IEC_UDINT ulTasks	= 0ul;
 
@@ -144,7 +144,7 @@ IEC_UINT timMain(void *pPara)
     XX_GPIO_SET(12); /* vedi tim_osSleep() */
 	for ( ; ; )
 	{
-		tCurrent = osGetTime32Ex();
+        tCurrent = osGetTime64Ex();
 		
 	  #if defined(VMM_TIMER_DEBUG)
 		tTimExec = tCurrent;
@@ -295,7 +295,7 @@ IEC_UINT timMain(void *pPara)
 		 * --------------------------------------------------------------------
 		 */
 		tSuspend = 0xfffffffful;
-		tCurrent = osGetTime32Ex();
+        tCurrent = osGetTime64Ex();
 
 		for (i = 0; i < ulTasks; i++)
 		{
