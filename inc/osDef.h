@@ -1196,11 +1196,13 @@ typedef struct
 
 #endif	/* RTS_CFG_DEBUG_OUTPUT */
 
-#define XX_GPIO_MAX 8
+#define XX_GPIO_MAX 18
+#define XX_GPIO_MAX_TEST 8
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 
 #define XX_GPIO_INIT()				xx_gpio_init()
+#define XX_GPIO_ENABLE(n)           xx_gpio_enable(n)
 #define XX_GPIO_CONFIG(n, o)		xx_gpio_config(n, o)
 #define XX_GPIO_SET(n)				xx_gpio_set(n)
 #define XX_GPIO_CLR(n)				xx_gpio_clr(n)
@@ -1210,6 +1212,7 @@ typedef struct
 #else
 
 #define XX_GPIO_INIT()
+#define XX_GPIO_ENABLE(n)
 #define XX_GPIO_CONFIG(n, o)
 #define XX_GPIO_SET(n)
 #define XX_GPIO_CLR(n)

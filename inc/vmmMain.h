@@ -738,11 +738,21 @@ IEC_UINT osFree(IEC_DATA OS_LPTR **pData);
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 void xx_gpio_init();
+void xx_gpio_enable(unsigned n);
 void xx_gpio_config(unsigned n, int output);
 void xx_gpio_set(unsigned n);
 void xx_gpio_clr(unsigned n);
 int xx_gpio_get(unsigned n);
 void xx_gpio_close();
+
+void xx_watchdog_enable();
+void xx_watchdog_disable();
+void xx_watchdog_reset(unsigned value_ms);
+unsigned xx_watchdog_get();
+
+void xx_pwm3_set(unsigned duty_cycle);
+void xx_pwm3_enable();
+void xx_pwm3_disable();
 #endif
 
 void *osMemCpy(void *dest, const void *src, size_t n) __attribute__ ((optimize("O0")));

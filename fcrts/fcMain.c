@@ -137,8 +137,9 @@ static int application_options(int argc, char *argv[])
                 fprintf(stderr, "xx_gpio testing:\n");
                 XX_GPIO_INIT();
                 fprintf(stderr, "    XX_GPIO_CONFIG(");
-                for (n = 0; n < XX_GPIO_MAX; ++n) {
+                for (n = 0; n < XX_GPIO_MAX_TEST; ++n) {
                     fprintf(stderr, "%02d, 1", n);
+                    XX_GPIO_ENABLE(n);
                     XX_GPIO_CONFIG(n, 1);
                     fprintf(stderr, ")\n");
                 }
@@ -146,14 +147,14 @@ static int application_options(int argc, char *argv[])
                 while (1) {
                     int n;
                     fprintf(stderr, "    XX_GPIO_SET(");
-                    for (n = 0; n < XX_GPIO_MAX; ++n) {
+                    for (n = 0; n < XX_GPIO_MAX_TEST; ++n) {
                         fprintf(stderr, "%02d ", n);
                         XX_GPIO_SET(n);
                         XX_GPIO_CLR(n);
                         XX_GPIO_SET(n);
                     }
                     fprintf(stderr, "), XX_GPIO_CLR(");
-                    for (n = 0; n < XX_GPIO_MAX; ++n) {
+                    for (n = 0; n < XX_GPIO_MAX_TEST; ++n) {
                         fprintf(stderr, "%02d ", n);
                         XX_GPIO_CLR(n);
                         XX_GPIO_SET(n);

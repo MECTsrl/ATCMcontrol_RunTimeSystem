@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  2
-#define REVISION_LO  4
+#define REVISION_LO  6
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -73,6 +73,84 @@ static int verbose_print_enabled = 0;
 #define XX_GPIO_SET_69(n)
 #define XX_GPIO_CLR_69(n)
 #endif
+
+#define PLC_time         5390
+#define PLC_timeMin      5391
+#define PLC_timeMax      5392
+#define PLC_timeWin      5393
+#define PLC_Version      5394
+#define PLC_EngineStatus 5395
+#define PLC_ResetValues  5396
+#define PLC_buzzerOn     5397
+#define PLC_PLC_Version  5398 // UINT;3;[RW] viewable in hmi menu > info
+#define PLC_HMI_Version  5399 // UINT;3;[RW] viewable in hmi menu > info
+
+#define PLC_5400         5400 // TPLC100_01_AA/AB CH0_NETRUN
+#define PLC_5401         5401 // TPLC100_01_AA/AB CH0_NETGOOD
+#define PLC_5402         5402 // TPLC100_01_AA/AB CH0_NETERR
+#define PLC_5403         5403 // TPLC100_01_AA/AB CH0_NETRST
+#define PLC_5404         5404 // TPLC100_01_AA/AB CH0_NETDIS
+#define PLC_5405         5405 // TPLC100_01_AA/AB CH0_01_NODERUN
+#define PLC_5406         5406 // TPLC100_01_AA/AB CH0_01_NODEGOOD
+#define PLC_5407         5407 // TPLC100_01_AA/AB CH0_01_NODEERR
+#define PLC_5408         5408 // TPLC100_01_AA/AB CH0_01_NODERST
+#define PLC_5409         5409 // TPLC100_01_AA/AB CH0_01_NODEDIS
+
+#define PLC_Year         5410 // [RO] 2017
+#define PLC_Month        5411 // [RO] 1..12
+#define PLC_Day          5412 // [RO] 1..31
+#define PLC_Hours        5413 // [RO] 0..23
+#define PLC_Minutes      5414 // [RO] 0..59
+#define PLC_Seconds      5415 // [RO] 0..59
+#define PLC_SetDate      5416 // [RW] year*65536 + month*256 + day
+#define PLC_SetTime      5417 // [RW] hours*65536 + minutes*256 + seconds
+#define PLC_WATCHDOGEN   5418 // BIT;;[RW] Enable Watchdog
+#define PLC_WATCHDOG_ms  5419 // UDINT;0;[RW] Reset Watchdog Timer
+
+#define PLC_5420         5420
+
+#define PLC_5430         5430
+
+#define PLC_BUZZER       5438 // UDINT;0[RW] 0x44332211 up=0x11[%] on=0x22[cs] off=0x33[cs] rep=0x44[times]
+#define PLC_FastIO_Ena   5439 // UDINT;0[RW] TPAC1008_03_AX=0x000000FF TPAC1005=0x0003FF01
+#define PLC_FastIO_Dir   5440 // UDINT;0[RW] TPAC1008_03_AX=0x0000000F TPAC1005=0x00020000
+
+#define PLC_FastIO_1     5441 // BIT;;[RW] GPIO 2,14 PIN  21 SSP1_DATA0  TPAC1005=T2 TPAC1008_03_AX=FastOUT_1
+#define PLC_FastIO_2     5442 // BIT;;[RW] GPIO 0,17 PIN 131 GPMI_CE1N               TPAC1008_03_AX=FastOUT_2
+#define PLC_FastIO_3     5443 // BIT;;[RW] GPIO 2,12 PIN  11 SSP1_SCK                TPAC1008_03_AX=FastOUT_3
+#define PLC_FastIO_4     5444 // BIT;;[RW] GPIO 3,06 PIN  78 AUART1_CTS              TPAC1008_03_AX=FastOUT_4
+#define PLC_FastIO_5     5445 // BIT;;[RW] GPIO 2,20 PIN   7 SSP2_SS1                TPAC1008_03_AX=FastIN_1
+#define PLC_FastIO_6     5446 // BIT;;[RW] GPIO 3,02 PIN  70 AUART0_CTS              TPAC1008_03_AX=FastIN_2
+#define PLC_FastIO_7     5447 // BIT;;[RW] GPIO 3,04 PIN  81 AUART1_RX               TPAC1008_03_AX=FastIN_3
+#define PLC_FastIO_8     5448 // BIT;;[RW] GPIO 3,05 PIN  65 AUART1_TX               TPAC1008_03_AX=FastIN_4
+
+#define PLC_FastIO_9     5449 // BIT;;[RW] GPIO 2,24 PIN 286 SSP3_SCK    TPAC1005=T1 TP*=PFO
+#define PLC_FastIO_10    5450 // BIT;;[RW] GPIO 2,27 PIN  15 SSP3_SS0    TPAC1005=T3
+#define PLC_FastIO_11    5451 // BIT;;[RW] GPIO 2,17 PIN   1 SSP2_MOSI   TPAC1005=T4 TP*=RTC:SSP2_MOSI
+#define PLC_FastIO_12    5452 // BIT;;[RW] GPIO 2,18 PIN 288 SSP2_MISO   TPAC1005=T5 TP*=RTC:SSP2_MISO
+#define PLC_FastIO_13    5453 // BIT;;[RW] GPIO 2,16 PIN 280 SSP2_SCK    TPAC1005=T6 TP*=RTC:SSP2_SCK
+#define PLC_FastIO_14    5454 // BIT;;[RW] GPIO 2,19 PIN   4 SSP2_SS0    TPAC1005=T7 TP*=RTC:SSP2_S0
+#define PLC_FastIO_15    5455 // BIT;;[RW] GPIO 2,21 PIN  18 SSP2_SS2    TPAC1005=T8 TP*=CS
+#define PLC_FastIO_16    5456 // BIT;;[RW] GPIO 2,25 PIN   9 SSP3_MOSI   TPAC1005=T9 TPAC1008*=RESET_WIFI
+
+#define PLC_FastIO_17    5457 // BIT;;[RW] GPIO 2,26 PIN   3 SSP3_MISO   TPAC1005=T10
+#define PLC_FastIO_18    5458 // BIT;;[RW] GPIO 2, 9 PIN 275 SSP0_DETECT TPAC1005=GPIO_A
+#define PLC_FastIO_19    5459 // BIT;;[RW] GPIO 4,20 PIN 230 JTAG_RTCK   TPAC1005=GPIO_B
+#define PLC_FastIO_20    5460
+#define PLC_FastIO_21    5461
+#define PLC_FastIO_22    5462
+#define PLC_FastIO_23    5463
+#define PLC_FastIO_24    5464
+
+#define PLC_FastIO_25    5465
+#define PLC_FastIO_26    5466
+#define PLC_FastIO_27    5467
+#define PLC_FastIO_28    5468
+#define PLC_FastIO_29    5469
+#define PLC_FastIO_30    5470
+#define PLC_FastIO_31    5471
+#define PLC_FastIO_32    5472
+
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
@@ -167,10 +245,10 @@ enum threadStatus {NOT_STARTED = 0, RUNNING, EXITING};
 enum ServerStatus {SRV_RUNNING0 = 0, SRV_RUNNING1, SRV_RUNNING2, SRV_RUNNING3, SRV_RUNNING4};
 enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
 enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST, DISCONNECTED};
-#if 1 //def VERBOSE_DEBUG
+
 static const char *deviceStatusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
 static const char *nodeStatusName[] = {"NO_NODE", "NODE_OK", "TIMEOUT", "BLACKLIST", "DISCONNECTED" };
-#endif
+
 enum fieldbusError {NoError = 0, CommError, TimeoutError, ConnReset};
 #undef WORD_BIT
 enum varTypes {BIT = 0, BYTE_BIT, WORD_BIT, DWORD_BIT,
@@ -190,7 +268,7 @@ static sem_t newOperations[MAX_DEVICES];
 
 #define MAX_IPADDR_LEN      17 // 123.567.901.345.
 #define MAX_NUMBER_LEN      12 // -2147483648. -32768.
-#define MAX_IDNAME_LEN      17 // abcdefghijklmno.
+#define MAX_IDNAME_LEN      32 // abcdefghijklmno.
 #define MAX_VARTYPE_LEN      9 // UDINTABCD.
 #define MAX_PROTOCOL_LEN     9 // TCPRTUSRV.
 #define MAX_DEVICE_LEN      13 // /dev/ttyUSB0.
@@ -309,7 +387,7 @@ struct CrossTableRecord {
     u_int32_t IPAddress;
     u_int16_t Port;
     u_int8_t NodeId;
-    u_int16_t Offset;
+    u_int32_t Offset;
     u_int16_t Block;
     u_int16_t BlockBase;
     int16_t BlockSize;
@@ -364,6 +442,16 @@ static enum threadStatus theDataSyncThreadStatus = NOT_STARTED;
 
 static STaskInfoVMM *pVMM = NULL;
 
+static unsigned buzzer_beep_ms = 0;
+static unsigned buzzer_on_cs = 0;
+static unsigned buzzer_off_cs = 0;
+static unsigned buzzer_replies = 0;
+
+static unsigned buzzer_period_tics = 0;
+static unsigned buzzer_tic = 0;
+static unsigned buzzer_periods = 0;
+
+
 /* ----  Local Functions:	--------------------------------------------------- */
 
 static void *engineThread(void *statusAdr);
@@ -409,28 +497,67 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
         return;
     }
 
-    if (addr == 5456) {
-        // PLC_FastIO_Dir; BYTE
-        XX_GPIO_CONFIG(0, (value & 0x01));
-        XX_GPIO_CONFIG(1, (value & 0x02));
-        XX_GPIO_CONFIG(2, (value & 0x04));
-        XX_GPIO_CONFIG(3, (value & 0x08));
-        XX_GPIO_CONFIG(4, (value & 0x10));
-        XX_GPIO_CONFIG(5, (value & 0x20));
-        XX_GPIO_CONFIG(6, (value & 0x40));
-        XX_GPIO_CONFIG(7, (value & 0x80));
-
-    } else if (addr >= 5457 && addr < 5465) {
-        // PLC_FastIn_1..8; BIT
-        // NB: called by engineThread()
-
-    } else if (addr >= 5465) {
-        // PLC_FastOut_1..8; BIT
+    if (addr == PLC_WATCHDOGEN) {
         if (value) {
-            XX_GPIO_SET(addr - 5465);
+            xx_watchdog_enable();
         } else {
-            XX_GPIO_CLR(addr - 5465);
+            xx_watchdog_disable();
         }
+
+    } if (addr == PLC_WATCHDOG_ms) {
+        xx_watchdog_reset(value);
+
+    } else if (addr == PLC_FastIO_Ena) {
+        register unsigned n;
+
+        for (n = 0; n < XX_GPIO_MAX; ++n) {
+            if (value & (1 << n)) {
+                xx_gpio_enable(n);
+            }
+        }
+
+    } else if (addr == PLC_FastIO_Dir) {
+        register unsigned n;
+
+        for (n = 0; n < XX_GPIO_MAX; ++n) {
+
+            // NB filtered on enabled in xx_gpio_config
+            if (value & (1 << n)) {
+                xx_gpio_config(n, 1);
+            } else {
+                xx_gpio_config(n, 0);
+            }
+        }
+
+    } else if (addr >= PLC_FastIO_1 && addr <= PLC_FastIO_32) {
+        // NB filtered on enabled in xx_gpio_set/clr
+        if (value) {
+            xx_gpio_set(addr - PLC_FastIO_1);
+        } else {
+            xx_gpio_clr(addr - PLC_FastIO_1);
+        }
+
+    } else if (addr == PLC_BUZZER) {
+
+        buzzer_beep_ms =  value & 0x000000FF;
+        buzzer_on_cs   = (value & 0x0000FF00) >> 8;
+        buzzer_off_cs  = (value & 0x00FF0000) >> 16;
+        buzzer_replies = (value & 0xFF000000) >> 24;
+
+        buzzer_period_tics = buzzer_on_cs + buzzer_off_cs;
+        buzzer_tic = 0;
+
+        xx_pwm3_disable();
+        if (buzzer_on_cs > 0 && buzzer_beep_ms > 0 && buzzer_replies > 0) {
+            buzzer_tic = 1;
+            buzzer_periods = 1;
+            xx_pwm3_set(buzzer_beep_ms);
+            xx_pwm3_enable();
+        } else {
+            buzzer_tic = 0;
+            buzzer_periods = 0;
+        }
+
     }
 
     switch (status) {
@@ -822,11 +949,11 @@ static char *strtok_csv(char *string, const char *separators, char **savedptr)
 static u_int32_t str2ipaddr(char *str)
 {
     u_int32_t ipaddr = 0;
-    char buffer[17];
+    char buffer[MAX_IPADDR_LEN];
     char *s, *r;
     int i;
 
-    strncpy(buffer, str, 17);
+    strncpy(buffer, str, MAX_IPADDR_LEN);
     buffer[16] = 0;
 
     s = strtok_csv(buffer, ".", &r);
@@ -2164,7 +2291,7 @@ static int checkServersDevicesAndNodes()
 static void setEngineStatus(enum EngineStatus status)
 {
     engineStatus = status;
-    writeQdataRegisters(5395, status, DATA_OK);
+    writeQdataRegisters(PLC_EngineStatus, status, DATA_OK);
 }
 
 static void *engineThread(void *statusAdr)
@@ -2226,7 +2353,9 @@ static void *engineThread(void *statusAdr)
 
     exit_initialization:
          // XX_GPIO_CLR(1);
-        ;
+        buzzer_periods = 0;
+        buzzer_tic = 0;
+        xx_pwm3_disable();
     }
     pthread_mutex_unlock(&theCrosstableClientMutex);
 
@@ -2244,11 +2373,11 @@ static void *engineThread(void *statusAdr)
     struct timespec abstime;
     clock_gettime(CLOCK_REALTIME, &abstime);
 
-    // default Fast I/O config
-    writeQdataRegisters(5456, 0x0F, DATA_OK);
+    // NO default Fast I/O config PLC_FastIO_Dir
 
     pthread_mutex_lock(&theCrosstableClientMutex);
     // XX_GPIO_SET(1);
+    int tic = 0;
     while (engineStatus != enExiting) {
 
         // trivial scenario
@@ -2279,33 +2408,53 @@ static void *engineThread(void *statusAdr)
             AlarmMngr();
         }
 
-        // TICtimer
-        float PLC_time, PLC_timeMin, PLC_timeMax, PLC_timeWin;
-        u_int32_t tic_ms;
+        tic = (tic + 1) % 10;
+        if (tic == 1) {
+            // datetime   NB no writeQdataRegisters();
+            struct timespec tv;
+            struct tm datetime;
 
-        tic_ms = osGetTime32Ex() % (86400 * 1000); // 1 day overflow
-        PLC_time = tic_ms / 1000.0;
-        // PLC_timeWin    AT %QD0.21572: REAL; 5393
-        memcpy(&PLC_timeWin, &the_QdataRegisters[5393], sizeof(u_int32_t));
-        if (PLC_timeWin < 5.0) {
-            PLC_timeWin = 5.0;
+            clock_gettime(CLOCK_HOST_REALTIME, &tv);
+            if (localtime_r(&tv.tv_sec, &datetime)) {
+
+                the_QdataRegisters[PLC_Seconds] = datetime.tm_sec;
+                the_QdataRegisters[PLC_Minutes] = datetime.tm_min;
+                the_QdataRegisters[PLC_Hours] = datetime.tm_hour;
+                the_QdataRegisters[PLC_Day] = datetime.tm_mday;
+                the_QdataRegisters[PLC_Month] = datetime.tm_mon;
+                the_QdataRegisters[PLC_Year] = 1900 + datetime.tm_year;
+            }
         }
-        if (PLC_time <= PLC_timeWin) {
-            PLC_timeMin = 0;
-            PLC_timeMax = PLC_timeWin;
-        } else {
-            PLC_timeMin = PLC_time - PLC_timeWin;
-            PLC_timeMax = PLC_time;
+
+        if (tic == 1 || tic == 6) {
+            // TICtimer  NB no writeQdataRegisters();
+
+            struct timespec tv;
+            float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;
+            u_int32_t tic_ms;
+
+            clock_gettime(CLOCK_REALTIME, &tv);
+            tic_ms = tv.tv_sec * 1000u + tv.tv_nsec / 1000000u;
+            tic_ms = tic_ms % (86400 * 1000); // 1 day overflow
+            plc_time = tic_ms / 1000.0;
+            memcpy(&plc_timeWin, &the_QdataRegisters[PLC_timeWin], sizeof(u_int32_t));
+            if (plc_timeWin < 5.0) {
+                plc_timeWin = 5.0;
+            }
+            if (plc_time <= plc_timeWin) {
+                plc_timeMin = 0;
+                plc_timeMax = plc_timeWin;
+            } else {
+                plc_timeMin = plc_time - plc_timeWin;
+                plc_timeMax = plc_time;
+            }
+            memcpy(&the_QdataRegisters[PLC_time], &plc_time, sizeof(u_int32_t));
+            memcpy(&the_QdataRegisters[PLC_timeMin], &plc_timeMin, sizeof(u_int32_t));
+            memcpy(&the_QdataRegisters[PLC_timeMax], &plc_timeMax, sizeof(u_int32_t));
+            memcpy(&the_QdataRegisters[PLC_timeWin], &plc_timeWin, sizeof(u_int32_t));
         }
-        // PLC_time         AT %ID0.21560: REAL; 5390
-        // PLC_timeMin      AT %ID0.21564: REAL; 5391
-        // PLC_timeMax      AT %ID0.21568: REAL; 5392
-        memcpy(&the_QdataRegisters[5390], &PLC_time, sizeof(u_int32_t));
-        memcpy(&the_QdataRegisters[5391], &PLC_timeMin, sizeof(u_int32_t));
-        memcpy(&the_QdataRegisters[5392], &PLC_timeMax, sizeof(u_int32_t));
-        memcpy(&the_QdataRegisters[5393], &PLC_timeWin, sizeof(u_int32_t));
-        // NB no writeQdataRegisters();
-        if (the_QdataRegisters[5396]) { // PLC_ResetValues
+
+        if (the_QdataRegisters[PLC_ResetValues]) {
             u_int16_t addr;
             for (addr = 5000; addr < 5160; addr += 10) {
                 the_QdataRegisters[addr + 3] = 0; // READS
@@ -2314,17 +2463,45 @@ static void *engineThread(void *statusAdr)
                 the_QdataRegisters[addr + 6] = 0; // COMM_ERRORS
                 the_QdataRegisters[addr + 7] = 0; // LAST_ERROR
             }
-            the_QdataRegisters[5396] = 0;
+            the_QdataRegisters[PLC_ResetValues] = 0;
         }
 
-        // PLC_FastIn_1..8; BIT; 5457
-        unsigned n;
-        int value;
+        // PLC_FastIO, both In and Out
+        unsigned addr;
+        unsigned value;
 
-        for (n = 0; n < XX_GPIO_MAX; ++ n) {
-            value = XX_GPIO_GET(n);
-            if (value != the_QdataRegisters[5457 + n]) {
-                writeQdataRegisters(5457 + n, value, DATA_OK);
+        for (addr = PLC_FastIO_1; addr < (PLC_FastIO_1 + XX_GPIO_MAX); ++addr) {
+            value = xx_gpio_get(addr - PLC_FastIO_1);
+
+            if (value != the_QdataRegisters[addr]) {
+                writeQdataRegisters(addr, value, DATA_OK);
+            }
+        }
+
+        addr = PLC_WATCHDOG_ms;
+        value = xx_watchdog_get();
+        if (value != the_QdataRegisters[addr]) {
+            // NB no writeQdataRegisters();
+            the_QdataRegisters[addr] = value;
+        }
+
+        // BUZZER
+        if (buzzer_periods > 0) {
+            ++buzzer_tic;
+
+            if (buzzer_tic > buzzer_period_tics) {
+                ++buzzer_periods;
+
+                if (buzzer_periods > buzzer_replies) {
+                    xx_pwm3_disable();
+                    buzzer_tic = 0;
+                    buzzer_periods = 0;
+                } else {
+                    xx_pwm3_enable();
+                    buzzer_tic = 1;
+                }
+            } else if (buzzer_tic == buzzer_on_cs) {
+                xx_pwm3_disable();
             }
         }
     }
@@ -2363,7 +2540,7 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
         case WORD_BIT:
         case DWORD_BIT: {
             register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-            register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+            register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
             do {
                 // skip the other *_BIT variables of the same offset
@@ -2437,10 +2614,10 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             if (CrossTable[DataAddr].Types == BIT) {
                 bzero(bitRegs, sizeof(bitRegs));
                 e = modbus_read_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+            } else if (CrossTable[DataAddr].Offset >= 300000 && CrossTable[DataAddr].Offset < 365536) {
                 bzero(uintRegs, sizeof(uintRegs));
                 e = modbus_read_input_registers(theDevices[d].modbus_ctx,
-                    CrossTable[DataAddr].Offset - 30001, regs, uintRegs);
+                    CrossTable[DataAddr].Offset - 300000, regs, uintRegs);
 #if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
                 bzero(uintRegs, sizeof(uintRegs));
@@ -2461,7 +2638,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 if (server != 0xffff && theServers[server].mb_mapping != NULL) {
                     pthread_mutex_lock(&theServers[server].mutex);
                     {
-                        register u_int16_t base = CrossTable[DataAddr].Offset;
+                        register u_int32_t base = CrossTable[DataAddr].Offset;
                         bzero(uintRegs, sizeof(uintRegs));
                         for (r = 0; r < regs; ++r) {
                             if ((base + r) < REG_SRV_NUMBER) {
@@ -2545,7 +2722,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     case WORD_BIT:
                     case DWORD_BIT: {
                         register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                        register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                        register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                         do {
                             // manage this and the other *_BIT variables of the same offset
@@ -2631,7 +2808,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             u_int8_t channel = theDevices[device].port;
             for (i = 0; i < DataNumber; ++i) {
                 register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 // cannot read outputs, anyway
                 if (CrossTable[DataAddr + i].Output) {
@@ -2805,7 +2982,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int16_t addr;
                     register u_int16_t base = CrossTable[DataAddr + i].BlockBase;
                     register u_int16_t size = CrossTable[DataAddr + i].BlockSize;
-                    register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                    register u_int32_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
 
                     // init the buffer bits with ALL the other actual bit values from the_QdataRegisters
@@ -2870,7 +3047,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             case WORD_BIT:
             case DWORD_BIT: {
                 register enum varTypes vartype = CrossTable[DataAddr + i].Types;
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 do {
                     // manage this and the other *_BIT variables of the same offset
@@ -2935,7 +3112,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         case TCPRTU:
             if (CrossTable[DataAddr].Types == BIT) {
                 e = modbus_write_bits(theDevices[d].modbus_ctx, CrossTable[DataAddr].Offset, regs, bitRegs);
-            } else if (CrossTable[DataAddr].Offset >= 30001 && CrossTable[DataAddr].Offset < 40000) {
+            } else if (CrossTable[DataAddr].Offset >= 300000 && CrossTable[DataAddr].Offset < 365536) {
                 e = -1; // cannot write inputs
 #if 0
             } else if (CrossTable[DataAddr].Offset >= 40001 && CrossTable[DataAddr].Offset < 50000) {
@@ -3015,7 +3192,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
         if (device != 0xffff) {
             u_int8_t channel = theDevices[device].port;
             for (i = 0; i < DataNumber; ++i) {
-                register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                register u_int32_t offset = CrossTable[DataAddr + i].Offset;
 
                 switch (CrossTable[DataAddr + i].Types) {
                 case       BIT:
@@ -3027,7 +3204,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int16_t addr;
                     register u_int16_t base = CrossTable[DataAddr + i].BlockBase;
                     register u_int16_t size = CrossTable[DataAddr + i].BlockSize;
-                    register u_int16_t offset = CrossTable[DataAddr + i].Offset;
+                    register u_int32_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
                     u_int32_t buffer = 0x00000000; // BYTE_BIT, WORD_BIT, DWORD_BIT
 
@@ -4558,8 +4735,8 @@ void dataEngineStart(void)
 #endif
 
     // initialize data array
-    u_int32_t PLC_Version = REVISION_HI * 1000 + REVISION_LO;
-    writeQdataRegisters(5394, PLC_Version, DATA_OK);
+    u_int32_t plc_Version = REVISION_HI * 1000 + REVISION_LO;
+    writeQdataRegisters(PLC_Version, plc_Version, DATA_OK);
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
     pthread_cond_init(&theAlarmsEventsCondvar, NULL);
     for (s = 0; s < MAX_SERVERS; ++s) {
