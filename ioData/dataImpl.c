@@ -2421,7 +2421,7 @@ static void *engineThread(void *statusAdr)
                 the_QdataRegisters[PLC_Minutes] = datetime.tm_min;
                 the_QdataRegisters[PLC_Hours] = datetime.tm_hour;
                 the_QdataRegisters[PLC_Day] = datetime.tm_mday;
-                the_QdataRegisters[PLC_Month] = datetime.tm_mon;
+                the_QdataRegisters[PLC_Month] = datetime.tm_mon + 1;
                 the_QdataRegisters[PLC_Year] = 1900 + datetime.tm_year;
             }
         }
