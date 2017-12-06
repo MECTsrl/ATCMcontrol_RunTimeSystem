@@ -57,7 +57,7 @@ typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
 
 
 #define REVISION_HI  2
-#define REVISION_LO  6
+#define REVISION_LO  7
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -111,6 +111,9 @@ static int verbose_print_enabled = 0;
 
 #define PLC_5430         5430
 
+#define PLC_BEEP_VOLUME  5435 // BYTE;0[RW] when buzzerOn
+#define PLC_TOUCH_VOLUME 5436 // BYTE;0[RW] when QEvent::MouseButtonPress
+#define PLC_ALARM_VOLUME 5437 // BYTE;0[RW] when alarm
 #define PLC_BUZZER       5438 // UDINT;0[RW] 0x44332211 up=0x11[%] on=0x22[cs] off=0x33[cs] rep=0x44[times]
 #define PLC_FastIO_Ena   5439 // UDINT;0[RW] TPAC1008_03_AX=0x000000FF TPAC1005=0x0003FF01
 #define PLC_FastIO_Dir   5440 // UDINT;0[RW] TPAC1008_03_AX=0x0000000F TPAC1005=0x00020000
@@ -420,7 +423,7 @@ struct Alarms {
     char ALCompareVar[MAX_IDNAME_LEN];
     u_int16_t SourceAddr;
     u_int16_t CompareAddr;
-    int32_t ALCompareVal;
+    u_int32_t ALCompareVal;
     u_int16_t ALOperator;
     u_int16_t ALFilterTime;
     u_int16_t ALFilterCount;
@@ -1706,17 +1709,17 @@ static void AlarmMngr(void)
                 float fvalue;
             } SourceValue, CompareVal;
 
-            SourceValue.ivalue = the_QdataRegisters[SourceAddr];
+            SourceValue.uvalue = the_QdataRegisters[SourceAddr];
 
             // checking either against fixed value or against variable value
             if (CompareAddr == 0) {
                 // fixed value
-                CompareVal.ivalue = ALCrossTable[i].ALCompareVal;
+                CompareVal.uvalue = ALCrossTable[i].ALCompareVal;
             } else if (the_QdataStates[CompareAddr] != DATA_OK) {
                 // unreliable values
                 continue;
             } else {
-                CompareVal.ivalue = the_QdataRegisters[CompareAddr];
+                CompareVal.uvalue = the_QdataRegisters[CompareAddr];
                 // FIXME: align decimals and types
 
             }
@@ -4719,6 +4722,12 @@ void dataEngineStart(void)
     bzero(the_QsyncRegisters, sizeof(the_QsyncRegisters));
     bzero(the_IsyncRegisters, sizeof(the_IsyncRegisters));
 
+    // default values
+    the_QdataRegisters[PLC_Version] = REVISION_HI * 1000 + REVISION_LO;
+    the_QdataRegisters[PLC_BEEP_VOLUME] = 0x00000064; // duty=100%
+    the_QdataRegisters[PLC_TOUCH_VOLUME] = 0x00000064; // duty=100%
+    the_QdataRegisters[PLC_ALARM_VOLUME] = 0x00000064; // duty=100%
+
     // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
     if (ptRetentive == MAP_FAILED) {
@@ -4735,8 +4744,6 @@ void dataEngineStart(void)
 #endif
 
     // initialize data array
-    u_int32_t plc_Version = REVISION_HI * 1000 + REVISION_LO;
-    writeQdataRegisters(PLC_Version, plc_Version, DATA_OK);
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
     pthread_cond_init(&theAlarmsEventsCondvar, NULL);
     for (s = 0; s < MAX_SERVERS; ++s) {
