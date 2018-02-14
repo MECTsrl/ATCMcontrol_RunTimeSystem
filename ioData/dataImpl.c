@@ -485,7 +485,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d+ GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d++ GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -2451,7 +2451,7 @@ static void *engineThread(void *statusAdr)
 
             struct timespec tv;
             float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;
-            u_int32_t tic_ms;
+            RTIME tic_ms;
 
             clock_gettime(CLOCK_REALTIME, &tv);
             tic_ms = tv.tv_sec * 1000u + tv.tv_nsec / 1000000u;
