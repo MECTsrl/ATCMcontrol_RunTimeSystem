@@ -413,8 +413,9 @@ struct CrossTableRecord {
 #define OPER_FALLING    48
 
 #define COMP_UNSIGNED   77
-#define COMP_SIGNED     78
-#define COMP_FLOATING      79
+#define COMP_SIGNED16   78
+#define COMP_SIGNED32   79
+#define COMP_FLOATING   80
 
 struct Alarms {
     enum EventAlarm ALType;
@@ -484,7 +485,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d+ GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -1308,12 +1309,15 @@ static int LoadXTable(void)
             break;
         case INT16:
         case INT16BA:
+            ALCrossTable[indx].comparison = COMP_SIGNED16;
+            fprintf(stderr, " (s16)");
+            break;
         case DINT:
         case DINTDCBA:
         case DINTCDAB:
         case DINTBADC:
-            ALCrossTable[indx].comparison = COMP_SIGNED;
-            fprintf(stderr, " (s)");
+            ALCrossTable[indx].comparison = COMP_SIGNED32;
+            fprintf(stderr, " (s32)");
             break;
         case UINT8:
         case UINT16:
@@ -1601,7 +1605,8 @@ static int LoadXTable(void)
                 case COMP_UNSIGNED:
                     fprintf(stderr, " %u", ALCrossTable[indx].ALCompareVal);
                     break;
-                case COMP_SIGNED:
+                case COMP_SIGNED16:
+                case COMP_SIGNED32:
                     fprintf(stderr, " %d", ALCrossTable[indx].ALCompareVal);
                     break;
                 case COMP_FLOATING:
@@ -1704,7 +1709,8 @@ static void AlarmMngr(void)
         } else {
             register u_int16_t CompareAddr = ALCrossTable[i].CompareAddr;
             union {
-                int32_t ivalue;
+                int32_t i32value;
+                int16_t i16value;
                 u_int32_t uvalue;
                 float fvalue;
             } SourceValue, CompareVal;
@@ -1737,14 +1743,25 @@ static void AlarmMngr(void)
                 default             : ;
                 }
                 break;
-            case COMP_SIGNED:
+            case COMP_SIGNED16:
                 switch (Operator) {
-                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.ivalue == CompareVal.ivalue); break;
-                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.ivalue != CompareVal.ivalue); break;
-                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.ivalue >  CompareVal.ivalue); break;
-                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.ivalue >= CompareVal.ivalue); break;
-                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.ivalue <  CompareVal.ivalue); break;
-                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.ivalue <= CompareVal.ivalue); break;
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i16value == CompareVal.i16value); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i16value != CompareVal.i16value); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i16value >  CompareVal.i16value); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i16value >= CompareVal.i16value); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i16value <  CompareVal.i16value); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i16value <= CompareVal.i16value); break;
+                default             : ;
+                }
+                break;
+            case COMP_SIGNED32:
+                switch (Operator) {
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i32value == CompareVal.i32value); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i32value != CompareVal.i32value); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i32value >  CompareVal.i32value); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i32value >= CompareVal.i32value); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i32value <  CompareVal.i32value); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i32value <= CompareVal.i32value); break;
                 default             : ;
                 }
                 break;
