@@ -35,7 +35,7 @@ ARCH_INCLUDE      = \
   #-I/opt/freescale/usr/local/gcc-4.4.4-glibc-2.11.1-multilib-1.0/arm-fsl-linux-gnueabi/arm-fsl-linux-gnueabi/multi-libs/usr/include/
 XENO_CC = gcc
 XENO_CFLAGS  = -I$(MECT_ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(MECT_ROOTFS)/usr/xenomai/include/posix
-XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lnative -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(MECT_ROOTFS)/usr/xenomai/lib
 
 else ifeq ($(SOURCERY_GCC), 1)
@@ -51,7 +51,7 @@ ARCH_INCLUDE      = \
 	-I$(MECT_CC_DIRECTORY)/$(MECT_CC_VERSION)/$(MECT_CC_RADIX)
 XENO_CC = gcc
 XENO_CFLAGS = -I$(MECT_ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Wall -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(MECT_ROOTFS)/usr/xenomai/include/posix
-XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lnative -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(MECT_ROOTFS)/usr/xenomai/lib
 
 else
@@ -69,7 +69,7 @@ XENO_CC = gcc
 ##XENO_CFLAGS  = -D_GNU_SOURCE -D_REENTRANT -Werror-implicit-function-declaration -pipe
 ##XENO_LDFLAGS = -lpthread -lrt
 XENO_CFLAGS  = -I$(MECT_ROOTFS)/usr/xenomai/include -D_GNU_SOURCE -D_REENTRANT -Werror-implicit-function-declaration -pipe -D__XENO__ -I$(MECT_ROOTFS)/usr/xenomai/include/posix
-XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
+XENO_LDFLAGS = -Wl,@$(MECT_ROOTFS)/usr/xenomai/lib/posix.wrappers -L$(MECT_ROOTFS)/usr/xenomai/lib -lnative -lpthread_rt -lxenomai -lrtdm -lpthread -lrt
 XENO_LDFLAGS += -Xlinker -rpath -Xlinker $(MECT_ROOTFS)/usr/xenomai/lib
 
 ## XENOCONFIG   = /usr/bin/xeno-config

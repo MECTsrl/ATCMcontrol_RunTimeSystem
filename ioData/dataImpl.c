@@ -51,8 +51,7 @@
 #include "libModbus.h"
 #include "CANopen.h"
 
-typedef unsigned long long RTIME; // from /usr/xenomai/include/native/types.h
-#define RTIME_FROM_TIMESPEC(rt, ts) { rt = ts.tv_sec * 1000000000ULL + ts.tv_nsec; }
+#include <native/timer.h>
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 
@@ -352,6 +351,10 @@ struct ClientStruct {
     enum threadStatus thread_status;
     RTIME current_time_ns;
     RTIME elapsed_time_ns;
+    RTIME idle_time_ns;
+    RTIME busy_time_ns;
+    RTIME last_time_ns;
+    RTIME last_update_ns;
     u_int16_t server; // for RTUSRV, TCPSRV, TCPRUSRV
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
     int mect_fd; // for MECT
@@ -485,7 +488,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d++ GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d+++ GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -613,7 +616,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
 //1;P;RTU0_COMM_ERRORS;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
 //1;P;RTU0_LAST_ERROR ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
 //1;P;RTU0_WRITE_QUEUE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_READ_QUEUE ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_BUS_LOAD   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO] ex RTU0_READ_QUEUE
 
 //1;P;RTU1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5010;10  ;[RO]
 //1;P;RTU3_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5020;10  ;[RO]
@@ -2218,6 +2221,10 @@ static int checkServersDevicesAndNodes()
                                 __func__, i, block, CrossTable[i].BlockSize, theDevices[d].max_block_size, theDevices[d].name);
                     }
                     theDevices[d].elapsed_time_ns = 0;
+                    theDevices[d].idle_time_ns = 0;
+                    theDevices[d].busy_time_ns = 0;
+                    theDevices[d].last_time_ns = 0;
+                    theDevices[d].last_update_ns = 0;
                     theDevices[d].status = ZERO;
                     // theDevices[d].thread_id = 0;
                     theDevices[d].thread_status = NOT_STARTED;
@@ -2449,12 +2456,9 @@ static void *engineThread(void *statusAdr)
         if (tic == 1 || tic == 6) {
             // TICtimer  NB no writeQdataRegisters();
 
-            struct timespec tv;
             float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;
-            RTIME tic_ms;
+            RTIME tic_ms = rt_timer_read() / 1000000u;
 
-            clock_gettime(CLOCK_REALTIME, &tv);
-            tic_ms = tv.tv_sec * 1000u + tv.tv_nsec / 1000000u;
             tic_ms = tic_ms % (86400 * 1000); // 1 day overflow
             plc_time = tic_ms / 1000.0;
             memcpy(&plc_timeWin, &the_QdataRegisters[PLC_timeWin], sizeof(u_int32_t));
@@ -3625,25 +3629,45 @@ static void *serverThread(void *arg)
 
 static void startDeviceTiming(u_int32_t d)
 {
-    struct timespec abstime;
-    RTIME now_ns;
+    RTIME now_ns = rt_timer_read();
 
-    clock_gettime(CLOCK_REALTIME, &abstime);
-    RTIME_FROM_TIMESPEC(now_ns, abstime);
     theDevices[d].elapsed_time_ns = 0;
     theDevices[d].current_time_ns = now_ns;
+
+    theDevices[d].idle_time_ns = 0;
+    theDevices[d].busy_time_ns = 0;
+    theDevices[d].last_time_ns = now_ns;
+    theDevices[d].last_update_ns = now_ns;
 }
 
 static inline void updateDeviceTiming(u_int32_t d)
 {
-    struct timespec abstime;
-    RTIME now_ns, delta_ns;
+    RTIME now_ns = rt_timer_read();
 
-    clock_gettime(CLOCK_REALTIME, &abstime);
-    RTIME_FROM_TIMESPEC(now_ns, abstime);
-    delta_ns = now_ns - theDevices[d].current_time_ns;
+    RTIME delta_ns = now_ns - theDevices[d].current_time_ns;
     theDevices[d].elapsed_time_ns += delta_ns;
     theDevices[d].current_time_ns = now_ns;
+
+    // update idle/busy statistics each 5 seconds
+    if ((now_ns - theDevices[d].last_update_ns) > 5000000000ULL) {
+        // add last idle time
+        delta_ns = now_ns - theDevices[d].last_time_ns;
+        theDevices[d].idle_time_ns += delta_ns;
+
+        // update diagnostics: busy load percentage is: (100 * busy_time / total_time)
+        lldiv_t x;
+        unsigned bus_load;
+
+        x = lldiv((100 * theDevices[d].busy_time_ns), (theDevices[d].busy_time_ns + theDevices[d].idle_time_ns));
+        bus_load = x.quot;
+        setDiagnostic(theDevices[d].diagnosticAddr, 9, bus_load); // BUS_LOAD
+
+        // reset
+        theDevices[d].idle_time_ns = 0;
+        theDevices[d].busy_time_ns = 0;
+        theDevices[d].last_time_ns = now_ns;
+        theDevices[d].last_update_ns = now_ns;
+    }
 }
 
 static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
@@ -4238,6 +4262,12 @@ static void *clientThread(void *arg)
 #endif
         } else {
 
+            // updating idle time
+            RTIME now_ns = rt_timer_read();
+            RTIME delta_ns = now_ns - theDevices[d].last_time_ns;
+            theDevices[d].idle_time_ns += delta_ns;
+            theDevices[d].last_time_ns = now_ns;
+
             // the device is connected, so operate, without locking the mutex
             if (readOperation) {
                 incDiagnostic(theDevices[d].diagnosticAddr, 3); // READS
@@ -4250,6 +4280,13 @@ static void *clientThread(void *arg)
                     error = CommError;
                 }
             }
+
+            // updating busy time
+            now_ns = rt_timer_read();
+            delta_ns = now_ns - theDevices[d].last_time_ns;
+            theDevices[d].busy_time_ns += delta_ns;
+            theDevices[d].last_time_ns = now_ns;
+
             // fieldbus wait silence_ms afterwards
         }
         setDiagnostic(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
