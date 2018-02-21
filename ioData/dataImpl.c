@@ -54,7 +54,6 @@
 #include <native/timer.h>
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
-
 #define REVISION_HI  2
 #define REVISION_LO  7
 
@@ -308,6 +307,10 @@ struct ServerStruct {
     modbus_mapping_t *mb_mapping;
     u_int8_t *can_buffer;
     u_int16_t diagnosticAddr;
+    RTIME idle_time_ns;
+    RTIME busy_time_ns;
+    RTIME last_time_ns;
+    RTIME last_update_ns;
 } theServers[MAX_SERVERS];
 static u_int16_t theServersNumber = 0;
 
@@ -607,6 +610,17 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
 #endif
 }
 
+#define DIAGNOSTIC_TYPE_PORT    0
+#define DIAGNOSTIC_BAUDRATE     1 // IP_ADDRESS/BAUDRATE
+#define DIAGNOSTIC_STATUS       2
+#define DIAGNOSTIC_READS        3
+#define DIAGNOSTIC_WRITES       4
+#define DIAGNOSTIC_TIMEOUTS     5
+#define DIAGNOSTIC_COMM_ERRORS  6
+#define DIAGNOSTIC_LAST_ERROR   7
+#define DIAGNOSTIC_WRITE_QUEUE  8
+#define DIAGNOSTIC_BUS_LOAD     9
+
 //1;P;RTU0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
 //1;P;RTU0_BAUDRATE   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
 //1;P;RTU0_STATUS     ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
@@ -633,7 +647,6 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
 //1;P;TCP7_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5130;10  ;[RO]
 //1;P;TCP8_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5140;10  ;[RO]
 //1;P;TCP9_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5150;10  ;[RO]
-
 
 static void initServerDiagnostic(u_int16_t s)
 {
@@ -664,7 +677,7 @@ static void initServerDiagnostic(u_int16_t s)
         u_int32_t value;
 
         value = (theServers[s].protocol << 16) + theServers[s].port;
-        writeQdataRegisters(addr + 0, value, DATA_OK); // TYPE_PORT
+        writeQdataRegisters(addr + DIAGNOSTIC_TYPE_PORT, value, DATA_OK);
 
         switch (theServers[s].protocol) {
         case RTU_SRV:
@@ -678,7 +691,7 @@ static void initServerDiagnostic(u_int16_t s)
         default:
             value = 0;
         }
-        writeQdataRegisters(addr + 1, value, DATA_OK); // IP_ADDRESS/BAUDRATE
+        writeQdataRegisters(addr + DIAGNOSTIC_BAUDRATE, value, DATA_OK); // IP_ADDRESS/BAUDRATE
     }
 }
 
@@ -725,7 +738,7 @@ static void initDeviceDiagnostic(u_int16_t d)
         u_int32_t value;
 
         value = (theDevices[d].protocol << 16) + theDevices[d].port;
-        writeQdataRegisters(addr + 0, value, DATA_OK); // TYPE_PORT
+        writeQdataRegisters(addr + DIAGNOSTIC_TYPE_PORT, value, DATA_OK);
 
         switch (theDevices[d].protocol) {
         case RTU:
@@ -741,10 +754,12 @@ static void initDeviceDiagnostic(u_int16_t d)
         default:
             value = 0;
         }
-        writeQdataRegisters(addr + 1, value, DATA_OK); // IP_ADDRESS/BAUDRATE
+        writeQdataRegisters(addr + DIAGNOSTIC_BAUDRATE, value, DATA_OK); // IP_ADDRESS/BAUDRATE
     }
 }
 
+#define DIAGNOSTIC_DEV_NODE     0
+#define DIAGNOSTIC_NODE_STATUS  1
 //1;P;NODE_01_DEV_NODE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
 //1;P;NODE_01_STATUS  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
 
@@ -756,8 +771,8 @@ static void initNodeDiagnostic(u_int16_t n)
     addr = 5172 + 2 * n;
     theNodes[n].diagnosticAddr = addr;
     value = (theNodes[n].device << 16) + theNodes[n].NodeID;
-    writeQdataRegisters(addr + 0, value, DATA_OK); // DEV_NODE
-    writeQdataRegisters(addr + 1, theNodes[n].status, DATA_OK); // STATUS
+    writeQdataRegisters(addr + DIAGNOSTIC_DEV_NODE, value, DATA_OK);
+    writeQdataRegisters(addr + DIAGNOSTIC_NODE_STATUS, theNodes[n].status, DATA_OK);
 }
 
 static inline void setDiagnostic(u_int16_t addr, u_int16_t offset, u_int32_t value)
@@ -2084,6 +2099,10 @@ static int checkServersDevicesAndNodes()
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
                     snprintf(theServers[s].name, MAX_THREADNAME_LEN, "srv[%d]%s_0x%08x_%d", s, fieldbusName[theServers[s].protocol], theServers[s].IPaddress, theServers[s].port);
                     initServerDiagnostic(s);
+                    theServers[s].idle_time_ns = 0;
+                    theServers[s].busy_time_ns = 0;
+                    theServers[s].last_time_ns = 0;
+                    theServers[s].last_update_ns = 0;
                 }
                 break;
             default:
@@ -3339,10 +3358,70 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
 static inline void changeServerStatus(u_int32_t s, enum ServerStatus status)
 {
     theServers[s].status = status;
-    setDiagnostic(theServers[s].diagnosticAddr, 2, status); // STATUS
+    setDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_STATUS, status);
 #ifdef VERBOSE_DEBUG
     fprintf(stderr, "%s: status = %d\n", theServers[s].name, status);
 #endif
+}
+
+static void startServerTiming(u_int32_t s)
+{
+    RTIME now_ns = rt_timer_read();
+
+    theServers[s].idle_time_ns = 0;
+    theServers[s].busy_time_ns = 0;
+    theServers[s].last_time_ns = now_ns;
+    theServers[s].last_update_ns = now_ns;
+}
+
+static inline void updateServerTiming(u_int32_t s)
+{
+    RTIME now_ns = rt_timer_read();
+
+    // update idle/busy statistics each 5 seconds
+    if ((now_ns - theServers[s].last_update_ns) > 5000000000ULL) {
+        RTIME delta_ns;
+        unsigned bus_load;
+
+        // add last idle time
+        delta_ns = now_ns - theServers[s].last_time_ns;
+        theServers[s].idle_time_ns += delta_ns;
+
+        // update diagnostics: busy load percentage is: (100 * busy_time / total_time)
+        if (theServers[s].busy_time_ns == 0) {
+            bus_load = 0;
+        } else {
+            lldiv_t x;
+
+            x = lldiv((100 * theServers[s].busy_time_ns), (theServers[s].busy_time_ns + theServers[s].idle_time_ns));
+            bus_load = x.quot;
+        }
+        setDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_BUS_LOAD, bus_load);
+
+        // reset
+        theServers[s].idle_time_ns = 0;
+        theServers[s].busy_time_ns = 0;
+        theServers[s].last_time_ns = now_ns;
+        theServers[s].last_update_ns = now_ns;
+    }
+}
+
+static inline void updateServerIdleTime(u_int32_t s)
+{
+    RTIME now_ns = rt_timer_read();
+
+    RTIME delta_ns = now_ns - theServers[s].last_time_ns;
+    theServers[s].idle_time_ns += delta_ns;
+    theServers[s].last_time_ns = now_ns;
+}
+
+static inline void updateServerBusyTime(u_int32_t s)
+{
+    RTIME now_ns = rt_timer_read();
+
+    RTIME delta_ns = now_ns - theServers[s].last_time_ns;
+    theServers[s].busy_time_ns += delta_ns;
+    theServers[s].last_time_ns = now_ns;
 }
 
 static void *serverThread(void *arg)
@@ -3403,10 +3482,13 @@ static void *serverThread(void *arg)
         changeServerStatus(s, SRV_RUNNING1);
     else
         changeServerStatus(s, SRV_RUNNING2);
+    startServerTiming(s);
 
     while (engineStatus != enExiting) {
 
         // XX_GPIO_SET(4);
+        updateServerTiming(s);
+
         // trivial scenario
         if (engineStatus != enRunning || !threadInitOK) {
             // XX_GPIO_CLR(4);
@@ -3453,15 +3535,28 @@ static void *serverThread(void *arg)
         } else {
             // (multiple connection) wait on server socket, only until timeout
             rdset = refset;
-            if (select(fdmax+1, &rdset, NULL, NULL, &timeout_tv) <= 0) {
-                // timeout or error
-                osSleep(theServers[s].timeout_ms);
+            do {
+                timeout_tv.tv_sec = theServers[s].timeout_ms  / 1000;
+                timeout_tv.tv_usec = (theServers[s].timeout_ms % 1000) * 1000;
+                rc = select(fdmax+1, &rdset, NULL, NULL, &timeout_tv);
+            } while ((rc == 0 || (rc < 0 && errno == EINTR)) && engineStatus != enExiting);
+            // condition above for:
+            // 1) avoid useless mode-switches (gatekeeper at high cpu%)
+            // 2) optimize response time
+            // 3) clean exiting
+
+            if (rc == 0 || engineStatus == enExiting) { // timeout and/or exiting
+                continue;
+            } else if (rc < 0) { // error
+                osSleep(THE_SERVER_DELAY_ms);
                 continue;
             }
         }
 
         // XX_GPIO_SET(4);
         changeServerStatus(s, SRV_RUNNING4);
+        updateServerIdleTime(s);
+
         // accept requests
 #define _FC_READ_COILS                0x01
 #define _FC_READ_DISCRETE_INPUTS      0x02
@@ -3492,18 +3587,18 @@ static void *serverThread(void *arg)
                     case _FC_READ_INPUT_REGISTERS:
                     case _FC_READ_EXCEPTION_STATUS:
                     case _FC_REPORT_SLAVE_ID:
-                        incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
+                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
                         break;
                     case _FC_WRITE_SINGLE_COIL:
                     case _FC_WRITE_SINGLE_REGISTER:
                     case _FC_WRITE_MULTIPLE_COILS:
                     case _FC_WRITE_MULTIPLE_REGISTERS:
                     case _FC_MASK_WRITE_REGISTER:
-                        incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
+                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
                         break;
                     case _FC_WRITE_AND_READ_REGISTERS:
-                        incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
-                        incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
+                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
+                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
                         break;
                     default:
                         break;
@@ -3559,18 +3654,18 @@ static void *serverThread(void *arg)
                             case _FC_READ_INPUT_REGISTERS:
                             case _FC_READ_EXCEPTION_STATUS:
                             case _FC_REPORT_SLAVE_ID:
-                                incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
+                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
                                 break;
                             case _FC_WRITE_SINGLE_COIL:
                             case _FC_WRITE_SINGLE_REGISTER:
                             case _FC_WRITE_MULTIPLE_COILS:
                             case _FC_WRITE_MULTIPLE_REGISTERS:
                             case _FC_MASK_WRITE_REGISTER:
-                                incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
+                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
                                 break;
                             case _FC_WRITE_AND_READ_REGISTERS:
-                                incDiagnostic(theServers[s].diagnosticAddr, 4); // WRITES
-                                incDiagnostic(theServers[s].diagnosticAddr, 3); // READS
+                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
+                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
                                 break;
                             default:
                                 ;
@@ -3595,6 +3690,7 @@ static void *serverThread(void *arg)
             ;
         }
         changeServerStatus(s, SRV_RUNNING3);
+        updateServerBusyTime(s);
     }
 
     // thread clean
@@ -3650,24 +3746,46 @@ static inline void updateDeviceTiming(u_int32_t d)
 
     // update idle/busy statistics each 5 seconds
     if ((now_ns - theDevices[d].last_update_ns) > 5000000000ULL) {
+        unsigned bus_load;
+
         // add last idle time
         delta_ns = now_ns - theDevices[d].last_time_ns;
         theDevices[d].idle_time_ns += delta_ns;
 
         // update diagnostics: busy load percentage is: (100 * busy_time / total_time)
-        lldiv_t x;
-        unsigned bus_load;
+        if (theDevices[d].busy_time_ns == 0) {
+            bus_load = 0;
+        } else {
+            lldiv_t x;
 
-        x = lldiv((100 * theDevices[d].busy_time_ns), (theDevices[d].busy_time_ns + theDevices[d].idle_time_ns));
-        bus_load = x.quot;
-        setDiagnostic(theDevices[d].diagnosticAddr, 9, bus_load); // BUS_LOAD
-
+            x = lldiv((100 * theDevices[d].busy_time_ns), (theDevices[d].busy_time_ns + theDevices[d].idle_time_ns));
+            bus_load = x.quot;
+        }
+        setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_BUS_LOAD, bus_load);
         // reset
         theDevices[d].idle_time_ns = 0;
         theDevices[d].busy_time_ns = 0;
         theDevices[d].last_time_ns = now_ns;
         theDevices[d].last_update_ns = now_ns;
     }
+}
+
+static inline void updateDeviceIdleTime(u_int32_t d)
+{
+    RTIME now_ns = rt_timer_read();
+    RTIME delta_ns = now_ns - theDevices[d].last_time_ns;
+
+    theDevices[d].idle_time_ns += delta_ns;
+    theDevices[d].last_time_ns = now_ns;
+}
+
+static inline void updateDeviceBusyTime(u_int32_t d)
+{
+    RTIME now_ns = rt_timer_read();
+
+    RTIME delta_ns = now_ns - theDevices[d].last_time_ns;
+    theDevices[d].busy_time_ns += delta_ns;
+    theDevices[d].last_time_ns = now_ns;
 }
 
 static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
@@ -3681,7 +3799,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     }
     previous_status = theDevices[d].status;
     theDevices[d].status = status;
-    setDiagnostic(theDevices[d].diagnosticAddr, 2, status); // STATUS
+    setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_STATUS, status);
 
     theDevices[d].elapsed_time_ns = 0;
 
@@ -3736,7 +3854,7 @@ static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus
         fprintf(stderr, "node #%02u: status = %s\n", node+1, nodeStatusName[status]);
     }
     theNodes[node].status = status;
-    setDiagnostic(theNodes[node].diagnosticAddr, 1, theNodes[node].status); // STATUS
+    setDiagnostic(theNodes[node].diagnosticAddr, DIAGNOSTIC_NODE_STATUS, theNodes[node].status);
 
     switch (status) {
     case NO_NODE:
@@ -4079,7 +4197,7 @@ static void *clientThread(void *arg)
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
 
-                    setDiagnostic(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
+                    setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevices[d].PLCwriteRequestNumber);
 #ifdef VERBOSE_DEBUG
                     fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
 #endif
@@ -4262,34 +4380,24 @@ static void *clientThread(void *arg)
 #endif
         } else {
 
-            // updating idle time
-            RTIME now_ns = rt_timer_read();
-            RTIME delta_ns = now_ns - theDevices[d].last_time_ns;
-            theDevices[d].idle_time_ns += delta_ns;
-            theDevices[d].last_time_ns = now_ns;
-
             // the device is connected, so operate, without locking the mutex
+            updateDeviceIdleTime(d);
             if (readOperation) {
-                incDiagnostic(theDevices[d].diagnosticAddr, 3); // READS
+                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_READS);
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
             } else {
-                incDiagnostic(theDevices[d].diagnosticAddr, 4); // WRITES
+                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITES);
                 if (CrossTable[DataAddr].Output) {
                     error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
                 } else {
                     error = CommError;
                 }
             }
-
-            // updating busy time
-            now_ns = rt_timer_read();
-            delta_ns = now_ns - theDevices[d].last_time_ns;
-            theDevices[d].busy_time_ns += delta_ns;
-            theDevices[d].last_time_ns = now_ns;
+            updateDeviceBusyTime(d);
 
             // fieldbus wait silence_ms afterwards
         }
-        setDiagnostic(theDevices[d].diagnosticAddr, 7, error); // LAST_ERROR
+        setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_LAST_ERROR, error);
 
         // check error and set values and flags
         // XX_GPIO_CLR_69(d);
@@ -4324,7 +4432,7 @@ static void *clientThread(void *arg)
                 break;
 
             case CommError:
-                incDiagnostic(theDevices[d].diagnosticAddr, 6); // COMM_ERRORS
+                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_COMM_ERRORS);
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4382,7 +4490,7 @@ static void *clientThread(void *arg)
                 break;
 
             case TimeoutError:
-                incDiagnostic(theDevices[d].diagnosticAddr, 5); // TIMEOUTS
+                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_TIMEOUTS);
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4469,7 +4577,7 @@ static void *clientThread(void *arg)
                 break;
 
             case ConnReset:
-                incDiagnostic(theDevices[d].diagnosticAddr, 5); // TIMEOUTS(RESET)
+                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_TIMEOUTS); // TIMEOUTS(RESET)
                 // node status
                 changeNodeStatus(d, Data_node, DISCONNECTED);
                 // data values and status
@@ -4680,13 +4788,15 @@ static void *datasyncThread(void *statusAdr)
         // XX_GPIO_CLR(2);
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
-            // XX_GPIO_SET(2);
-            memcpy(the_IdataRegisters, the_UdataBuffer, sizeof(the_IdataRegisters));
-            memcpy(the_IsyncRegisters, the_UsyncBuffer, sizeof(the_IsyncRegisters));
-            PLCsync();
-            memcpy(the_UdataBuffer, the_QdataRegisters, sizeof(the_UdataBuffer));
-            memcpy(the_UsyncBuffer, the_QsyncRegisters, sizeof(the_UsyncBuffer));
-            // XX_GPIO_CLR(2);
+            if (engineStatus != enExiting) {
+                // XX_GPIO_SET(2);
+                memcpy(the_IdataRegisters, the_UdataBuffer, sizeof(the_IdataRegisters));
+                memcpy(the_IsyncRegisters, the_UsyncBuffer, sizeof(the_IsyncRegisters));
+                PLCsync();
+                memcpy(the_UdataBuffer, the_QdataRegisters, sizeof(the_UdataBuffer));
+                memcpy(the_UsyncBuffer, the_QsyncRegisters, sizeof(the_UsyncBuffer));
+                // XX_GPIO_CLR(2);
+            }
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
 
@@ -5000,7 +5110,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
             theDevices[d].PLCwriteRequestNumber += 1;
 
             // add the write request of 'value'
-            setDiagnostic(theDevices[d].diagnosticAddr, 8, theDevices[d].PLCwriteRequestNumber); // WRITE_QUEUE
+            setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevices[d].PLCwriteRequestNumber);
             theDevices[d].PLCwriteRequests[i].Addr = addr;
             theDevices[d].PLCwriteRequests[i].Number = 1;
 

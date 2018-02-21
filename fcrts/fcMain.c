@@ -483,17 +483,13 @@ void termination_handler(int signum)
     if (term_handler_active == 0) {
         term_handler_active = 1;
 
+         ReleaseResources();
 #if defined(RTS_CFG_MECT_RETAIN)
         /* Save the retentive variables
          */
         dump_ret_handler(signum, NULL, NULL);
 #endif
 
-        /* Clean Up
-         */
-        /* ... */
-
-        ReleaseResources();
         //ByeBye();
     }
 
@@ -795,7 +791,8 @@ static char *get_signal(int signum)
 #if defined(RTS_CFG_MECT_RETAIN)
 		case SIGPWRFAIL: return "SIGPWRFAIL";
 #endif
-		default : 
+        case SIGINT:  return "SIGINT";
+        default :
 		{
 			static char szDummy[100];
 			sprintf(szDummy, "%d", signum);
