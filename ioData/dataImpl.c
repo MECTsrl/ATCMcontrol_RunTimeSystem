@@ -169,8 +169,8 @@ static int verbose_print_enabled = 0;
 #define THE_SERVER_DELAY_ms     1000
 #define THE_CONNECTION_DELAY_ms 1000
 
-#define THE_DEVICE_BLACKLIST_ns 4E9
-#define THE_DEVICE_SILENCE_ns   20E9 // tpac boot time
+#define THE_DEVICE_BLACKLIST_ns  4000000000LL //  4s
+#define THE_DEVICE_SILENCE_ns   20000000000LL // 20s = tpac boot time
 
 #define THE_MAX_CLIENT_SLEEP_ns 1E9
 
@@ -2352,7 +2352,7 @@ static void *engineThread(void *statusAdr)
 
     pthread_mutex_lock(&theCrosstableClientMutex);
     {
-        int s, d;
+        int s, d, n;
 
         // XX_GPIO_SET(1);
         // load configuration
@@ -2366,6 +2366,20 @@ static void *engineThread(void *statusAdr)
             goto exit_initialization;
         }
 
+        if (verbose_print_enabled) {
+            fprintf(stderr, "engineThread(): %u servers, %u devices, %u nodes\n", theServersNumber, theDevicesNumber, theNodesNumber);
+            for (s = 0; s < theServersNumber; ++s) {
+                fprintf(stderr, "\t0x%02x: %s\n", s, theServers[s].name);
+            }
+            for (d = 0; d < theDevicesNumber; ++d) {
+                fprintf(stderr, "\t0x%02x: %s\n", d, theDevices[d].name);
+                for (n = 0; n < theNodesNumber; ++n) {
+                    if (theNodes[n].device == d) {
+                        fprintf(stderr, "\t\tnode#%2d NodeID=%u\n", n+1, theNodes[n].NodeID);
+                    }
+                }
+            }
+        }
         // create servers
         for (s = 0; s < theServersNumber; ++s) {
             theServers[s].thread_status = NOT_STARTED;
@@ -2837,12 +2851,12 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             } else {
                 retval = CommError;
             }
-	    if (verbose_print_enabled) {
-		    fprintf(stderr, "fieldbusRead(%d, %u, %u): %d,%d(%s) --> %d\n",
-			    d, DataAddr, DataNumber,
-			    e, errno, modbus_strerror(errno),
-			    retval);
-	    }
+            if (verbose_print_enabled) {
+                fprintf(stderr, "fieldbusRead(%d, %u, %u): %d,%d(%s) --> %d\n",
+                    d, DataAddr, DataNumber,
+                    e, errno, modbus_strerror(errno),
+                    retval);
+            }
         }
         break;
     case CANOPEN:
@@ -3814,6 +3828,12 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
                 addr = theDevices[d].device_vars[n].addr;
                 if (! CrossTable[addr].Output) {
                     writeQdataRegisters(addr, 0, DATA_ERROR);
+                }
+            }
+            // stop the device nodes on connection failure
+            for (n = 0; n < theNodesNumber; ++n) {
+                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED) {
+                    changeNodeStatus(d, n, DISCONNECTED);
                 }
             }
         }
