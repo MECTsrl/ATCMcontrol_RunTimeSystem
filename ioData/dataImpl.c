@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  7
+#define REVISION_LO  8
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -491,7 +491,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d+++ GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -2004,6 +2004,9 @@ static int checkServersDevicesAndNodes()
 
         if (CrossTable[i].Enable > 0) {
             u_int16_t s = MAX_SERVERS;
+            u_int16_t d;
+            u_int16_t n;
+            u_int16_t p;
 
             // server variables =---> enable the server thread
             switch (CrossTable[i].Protocol) {
@@ -2018,17 +2021,54 @@ static int checkServersDevicesAndNodes()
                 // nothing to do for server
                 break;
             case RTU_SRV:
+                // add unique variable's server
+                for (s = 0; s < theServersNumber; ++s) {
+                    if (RTU_SRV == theServers[s].protocol && CrossTable[i].Port == theServers[s].port) {
+                        // already present
+                        if (theServers[s].IPaddress != CrossTable[i].IPAddress) {
+                            char str1[42];
+                            char str2[42];
+                            fprintf(stderr,
+                                "%s() WARNING in variable #%u wrong 'IP Address' %s (should be %s)\n",
+                                __func__, i, ipaddr2str(CrossTable[i].IPAddress, str2), ipaddr2str(theServers[s].IPaddress, str1));
+                        }
+                        if (theServers[s].NodeId != CrossTable[i].NodeId) {
+                            fprintf(stderr,
+                                "%s() WARNING in variable #%u wrong 'Node ID' %u (should be %u)\n",
+                                __func__, i, CrossTable[i].NodeId, theServers[s].NodeId);
+                        }
+                        break;
+                    }
+                }
+                goto add_server;
+                // no break;
             case TCP_SRV:
             case TCPRTU_SRV:
                 // add unique variable's server
                 for (s = 0; s < theServersNumber; ++s) {
-                    if (CrossTable[i].Protocol == theServers[s].protocol
-                     && CrossTable[i].IPAddress == theServers[s].IPaddress
-                     && CrossTable[i].Port == theServers[s].port) {
+                    if (CrossTable[i].Protocol == theServers[s].protocol) {
                         // already present
+                        if (theServers[s].IPaddress != CrossTable[i].IPAddress) {
+                            char str1[42];
+                            char str2[42];
+                            fprintf(stderr,
+                                "%s() WARNING in variable #%u wrong 'IP Address' %s (should be %s)\n",
+                                __func__, i, ipaddr2str(CrossTable[i].IPAddress, str2), ipaddr2str(theServers[s].IPaddress, str1));
+                        }
+                        if (theServers[s].port != CrossTable[i].Port) {
+                            fprintf(stderr,
+                                "%s() WARNING in variable #%u wrong 'Port' %s (should be %u)\n",
+                                __func__, i, CrossTable[i].Port, theServers[s].port);
+                        }
+                        if (theServers[s].NodeId != CrossTable[i].NodeId) {
+                            fprintf(stderr,
+                                "%s() WARNING in variable #%u wrong 'Node ID' %u (should be %u)\n",
+                                __func__, i, CrossTable[i].NodeId, theServers[s].NodeId);
+                        }
                         break;
                     }
                 }
+            add_server:
                 if (s < theServersNumber) {
                     // ok already present
                 } else if (theServersNumber >= MAX_SERVERS) {
@@ -2121,13 +2161,7 @@ static int checkServersDevicesAndNodes()
             case TCPRTU:
             case CANOPEN:
             case MECT:
-            case RTU_SRV:
-            case TCP_SRV:
-            case TCPRTU_SRV: {
-                u_int16_t d;
-                u_int16_t n;
-                u_int16_t p;
-                // add unique variable's device
+                // add unique variable's device (Protocol, IPAddress, Port, --)
                 for (d = 0; d < theDevicesNumber; ++d) {
                     if (CrossTable[i].Protocol == theDevices[d].protocol
                      && CrossTable[i].IPAddress == theDevices[d].IPaddress
@@ -2136,6 +2170,29 @@ static int checkServersDevicesAndNodes()
                         break;
                     }
                 }
+                goto add_device;
+                // no break
+            case RTU_SRV:
+                // add unique variable's device (Protocol, --, Port, --)
+                for (d = 0; d < theDevicesNumber; ++d) {
+                    if (CrossTable[i].Protocol == theDevices[d].protocol
+                     && CrossTable[i].Port == theDevices[d].port) {
+                        // already present
+                        break;
+                    }
+                }
+                goto add_device;
+                // no break
+            case TCP_SRV:
+            case TCPRTU_SRV:
+                // add unique variable's device (Protocol, --, --, --)
+                for (d = 0; d < theDevicesNumber; ++d) {
+                    if (CrossTable[i].Protocol == theDevices[d].protocol) {
+                        // already present
+                        break;
+                    }
+                }
+            add_device:
                 if (d < theDevicesNumber) {
                     CrossTable[i].device = d; // found
                     theDevices[d].var_num += 1; // this one, also Htype
@@ -2254,14 +2311,19 @@ static int checkServersDevicesAndNodes()
                     // theDevices[d].modbus_ctx .last_good_ms, PLCwriteRequests, PLCwriteRequestNumber, PLCwriteRequestGet, PLCwriteRequestPut
                     initDeviceDiagnostic(d);
                 }
-                // add variable's node
+                // add unique variable's node
                 for (n = 0; n < theNodesNumber; ++n) {
-                    if (CrossTable[i].device == theNodes[n].device
-                     && CrossTable[i].NodeId == theNodes[n].NodeID) {
-                        // already present
-                        break;
+                     if (CrossTable[i].device == theNodes[n].device) {
+                         if (CrossTable[i].Protocol == RTU_SRV || CrossTable[i].Protocol == TCP_SRV  || CrossTable[i].Protocol == TCPRTU_SRV) {
+                             // already present (any NodeId)
+                             break;
+                         } else if (CrossTable[i].NodeId == theNodes[n].NodeID) {
+                             // already present
+                             break;
+                         }
                     }
                 }
+            add_node:
                 if (n < theNodesNumber) {
                     CrossTable[i].node = n; // found
                 } else if (theNodesNumber >= MAX_NODES) {
@@ -2278,7 +2340,7 @@ static int checkServersDevicesAndNodes()
                     // theNodes[n].RetryCounter .JumpRead
                     initNodeDiagnostic(n);
                 }
-            }   break;
+                break;
             default:
                 break;
             }
