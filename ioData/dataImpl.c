@@ -3610,8 +3610,8 @@ static void *serverThread(void *arg)
             osSleep(theServers[s].silence_ms);
         } else {
             // (multiple connection) wait on server socket, only until timeout
-            rdset = refset;
             do {
+                rdset = refset;
                 timeout_tv.tv_sec = theServers[s].timeout_ms  / 1000;
                 timeout_tv.tv_usec = (theServers[s].timeout_ms % 1000) * 1000;
                 rc = select(fdmax+1, &rdset, NULL, NULL, &timeout_tv);
