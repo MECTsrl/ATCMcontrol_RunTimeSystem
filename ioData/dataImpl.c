@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  9
+#define REVISION_LO  10
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -2442,6 +2442,11 @@ static void *engineThread(void *statusAdr)
                 }
             }
         }
+
+        // i.MX28 workaround
+        xx_pwm3_set(0);
+        xx_pwm3_enable();
+
         // create servers
         for (s = 0; s < theServersNumber; ++s) {
             theServers[s].thread_status = NOT_STARTED;
