@@ -491,7 +491,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d+ GPL", REVISION_HI, REVISION_LO);
     }
 }
 
@@ -1581,6 +1581,19 @@ static int LoadXTable(void)
                     break;
                 case INT16:
                 case INT16BA:
+                    for (n = 0; n < CrossTable[addr].Decimal; ++n) {
+                        fvalue *= 10;
+                    }
+                    if (fvalue <= 0.0) {
+                        // NB this may either overflow or underflow
+                        int16_t val = fvalue;
+                        ALCrossTable[indx].ALCompareVal = 0;
+                        memcpy(&ALCrossTable[indx].ALCompareVal, &val, sizeof(int16_t));
+                    } else {
+                        // NB this may either overflow or underflow
+                        ALCrossTable[indx].ALCompareVal = fvalue;
+                    }
+                    break;
                 case DINT:
                 case DINTDCBA:
                 case DINTCDAB:
@@ -1588,8 +1601,14 @@ static int LoadXTable(void)
                     for (n = 0; n < CrossTable[addr].Decimal; ++n) {
                         fvalue *= 10;
                     }
-                    // NB this may either overflow or underflow
-                    ALCrossTable[indx].ALCompareVal = fvalue;
+                    if (fvalue <= 0.0) {
+                        // NB this may either overflow or underflow
+                        int32_t val = fvalue;
+                        memcpy(&ALCrossTable[indx].ALCompareVal, &val, sizeof(u_int32_t));
+                    } else {
+                        // NB this may either overflow or underflow
+                        ALCrossTable[indx].ALCompareVal = fvalue;
+                    }
                     break;
                 case UINT8:
                 case UINT16:
@@ -1598,8 +1617,8 @@ static int LoadXTable(void)
                 case UDINTDCBA:
                 case UDINTCDAB:
                 case UDINTBADC:
-                    if (fvalue <= 0) {
-                        fvalue = 0; // why check unsigned with a negative value?
+                    if (fvalue <= 0.0) {
+                        fvalue = 0.0; // why check unsigned with a negative value?
                     } else {
                         for (n = 0; n < CrossTable[addr].Decimal; ++n) {
                             fvalue *= 10;
@@ -1618,14 +1637,24 @@ static int LoadXTable(void)
                     ; // FIXME: assert
                 }
 
+                union {
+                    int32_t i32value;
+                    int16_t i16value;
+                    u_int32_t uvalue;
+                    float fvalue;
+                } CompareVal;
+                CompareVal.uvalue = ALCrossTable[indx].ALCompareVal;
+
                 switch (ALCrossTable[indx].comparison)
                 {
                 case COMP_UNSIGNED:
-                    fprintf(stderr, " %u", ALCrossTable[indx].ALCompareVal);
+                    fprintf(stderr, " %u", CompareVal.uvalue);
                     break;
                 case COMP_SIGNED16:
+                    fprintf(stderr, " %d", CompareVal.i16value);
+                    break;
                 case COMP_SIGNED32:
-                    fprintf(stderr, " %d", ALCrossTable[indx].ALCompareVal);
+                    fprintf(stderr, " %d", CompareVal.i32value);
                     break;
                 case COMP_FLOATING:
                     fprintf(stderr, " %f", fvalue);
