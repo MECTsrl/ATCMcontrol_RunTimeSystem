@@ -3074,10 +3074,16 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                 float value;
                 e = mect_read_ascii(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, &value);
                 memcpy(&DataValue[i], &value, sizeof(u_int32_t));
+                if (verbose_print_enabled) {
+                    fprintf(stderr, "%s: %s=%f err=%d\n", theDevices[d].name, CrossTable[DataAddr + i].Tag, value, e);
+                }
             } else if (CrossTable[DataAddr + i].Types == UINT16) {
                 unsigned value;
                 e = mect_read_hexad(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, &value);
                 DataValue[i] = value;
+                if (verbose_print_enabled) {
+                    fprintf(stderr, "%s: %s=0x%04x err=%d\n", theDevices[d].name, CrossTable[DataAddr + i].Tag, value, e);
+                }
             }
             if (e == -1) {
                 retval = CommError;
@@ -5616,7 +5622,6 @@ static int mect_bcc(char *buf, unsigned len)
     return bcc;
 }
 
-#ifdef VERBOSE_DEBUG
 static void mect_printbuf(char *msg, char *buf, unsigned len)
 {
     int i;
@@ -5626,7 +5631,6 @@ static void mect_printbuf(char *msg, char *buf, unsigned len)
     }
     fprintf(stderr, "\n");
 }
-#endif
 
 static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value)
 {
@@ -5647,31 +5651,35 @@ static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value
     snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
     snprintf(buf, 8+1, "\004%c%c%c%c%s\005", nn[0], nn[0], nn[1], nn[1], cc);
     rt_dev_write(fd, buf, 8);
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_read_ascii: wrote", buf, 8);
-#endif
+    if (verbose_print_enabled)
+        mect_printbuf("mect_read_ascii: wrote", buf, 8);
 
     // answer: STX 'R' 'O' '1' '2' '3' '4' '.' '6' '7' '8' ETX BCC
     //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
+    // answer: STX 'R' '0' '1' '2' '3' '.' '5' '6' ETX BCC
+    //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10]
+    memset(buf, 0, 13+1);
     retval = rt_dev_read(fd, buf, 13);
 
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_read_ascii: read", buf, 13);
-#endif
-    if (retval <= 0 || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[11] != '\003'
-        || buf[12] != mect_bcc(&buf[1], 11)) {
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_ascii: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
-            retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
-#endif
-        return -1;
+    if (verbose_print_enabled)
+        mect_printbuf("mect_read_ascii: read", buf, (retval > 0) ? retval : 0);
+
+    if ((retval != 11 && retval != 13) || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[retval - 2] != '\003'
+            || (buf[retval - 1] != mect_bcc(&buf[1], retval - 2))) {
+        if (verbose_print_enabled)
+            fprintf(stderr, "mect_read_ascii: error retval=%u 0:%02x 1:%02x 2:%02x %d:%02x %d:%02x\n",
+            retval, buf[0], buf[1], buf[2], retval - 2, buf[retval - 2], retval - 1, buf[retval - 1]);
+        if (retval > 0) {
+            return -1;
+        } else {
+            return -2;
+        }
     }
     buf[11] = '\0';
     *value = strtof(&buf[3], &p);
     if (p == &buf[3]) {
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_ascii: error float\n");
-#endif
+        if (verbose_print_enabled)
+            fprintf(stderr, "mect_read_ascii: error float\n");
         return -1;
     }
 #ifdef VERBOSE_DEBUG
@@ -5738,30 +5746,36 @@ static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *va
     snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
     snprintf(buf, 8+1, "\004%c%c%c%c%s\005", nn[0], nn[0], nn[1], nn[1], cc);
     rt_dev_write(fd, buf, 8);
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_read_hexad: wrote", buf, 8);
-#endif
+    if (verbose_print_enabled)
+        mect_printbuf("mect_read_hexad: wrote", buf, 8);
+
 
     // answer: STX 'R' 'O' ' ' ' ' ' ' '>' '0' '0' 'F' 'F' ETX BCC
     //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
+    // answer: STX 'R' 'O' ' ' '>' '0' '0' 'F' 'F' ETX BCC
+    //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10]
     retval = rt_dev_read(fd, buf, 13);
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_write_ascii: read", buf, 13);
-#endif
-    if (retval < 0 || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[3] != ' ' || buf[4] != ' '
-        || buf[5] != ' '  || buf[6] != '>'|| buf[11] != '\003' || buf[12] != mect_bcc(&buf[1], 11)) {
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_hexad: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
-            retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
-#endif
-        return -1;
+    if (verbose_print_enabled)
+        mect_printbuf("mect_read_hexad: read", buf, (retval > 0) ? retval : 0);
+
+    if ((retval != 11 && retval != 13) || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[3] != ' '
+            || ((retval == 13) && (buf[4] != ' ' || buf[5] != ' '  || buf[6] != '>'))
+            || ((retval == 11) && (buf[4] != '>'))
+            || buf[retval - 2] != '\003' || buf[retval - 1] != mect_bcc(&buf[1], retval - 2)) {
+        if (verbose_print_enabled)
+            fprintf(stderr, "mect_read_hexad: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
+                retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
+        if (retval > 0) {
+            return -1;
+        } else {
+            return -2;
+        }
     }
     buf[11] = '\0';
-    *value = strtoul(&buf[7], &p, 16);
-    if (p == &buf[7]) {
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_read_hexad: error hexadecimal\n");
-#endif
+    *value = strtoul(&buf[retval - 6], &p, 16);
+    if (p == &buf[retval - 6]) {
+        if (verbose_print_enabled)
+            fprintf(stderr, "mect_read_hexad: error hexadecimal\n");
         return -1;
     }
 #ifdef VERBOSE_DEBUG
