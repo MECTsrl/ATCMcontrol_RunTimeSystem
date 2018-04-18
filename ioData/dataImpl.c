@@ -5637,7 +5637,7 @@ static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value
     char nn[2+1];
     char cc[2+1];
     char buf[13+1];
-    int retval;
+    int retval = 0;
     char *p;
 
     if (fd < 0 || value == NULL) {
@@ -5656,7 +5656,7 @@ static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value
 
     // answer: STX 'R' 'O' '1' '2' '3' '4' '.' '6' '7' '8' ETX BCC
     //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12]
-    // answer: STX 'R' '0' '1' '2' '3' '.' '5' '6' ETX BCC
+    // answer: STX 'R' 'O' '1' '2' '3' '.' '5' '6' ETX BCC
     //         [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10]
     memset(buf, 0, 13+1);
     retval = rt_dev_read(fd, buf, 13);
@@ -5664,8 +5664,8 @@ static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value
     if (verbose_print_enabled)
         mect_printbuf("mect_read_ascii: read", buf, (retval > 0) ? retval : 0);
 
-    if ((retval != 11 && retval != 13) || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[retval - 2] != '\003'
-            || (buf[retval - 1] != mect_bcc(&buf[1], retval - 2))) {
+    if ((retval != 11 && retval != 13) || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1]
+	    || buf[retval - 2] != '\003' || (buf[retval - 1] != mect_bcc(&buf[1], retval - 2))) {
         if (verbose_print_enabled)
             fprintf(stderr, "mect_read_ascii: error retval=%d 0:%02x 1:%02x 2:%02x %d:%02x %d:%02x\n",
             retval, buf[0], buf[1], buf[2], retval - 2, buf[retval - 2], retval - 1, buf[retval - 1]);
@@ -5703,25 +5703,25 @@ static int mect_write_ascii(int fd, unsigned node, unsigned command, float value
     //          [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12][13][14][15][16][17]
     snprintf(nn, 2+1, "%02u", node);
     snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
-    snprintf(buf, 18+1, "\004%c%c%c%c\002%s%8.0f\003%c",
+    snprintf(buf, 18+1, "\004%c%c%c%c\002%s%8.2f\003%c",
         nn[0], nn[0], nn[1], nn[1], cc, value, 0x00);
     buf[17] = mect_bcc(&buf[6], 11);
     rt_dev_write(fd, buf, 18);
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_write_ascii: wrote", buf, 18);
-#endif
+    if (verbose_print_enabled) {
+        mect_printbuf("mect_write_ascii: wrote", buf, 18);
+    }
 
     // reply: ACK / NAK
     //        [0]
     retval = rt_dev_read(fd, buf, 1);
-#ifdef VERBOSE_DEBUG
-    mect_printbuf("mect_write_ascii: read", buf, 1);
-#endif
+    if (verbose_print_enabled) {
+        mect_printbuf("mect_write_ascii: read", buf, 1);
+    }
     if (retval < 0 || buf[0] != '\006') {
-#ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_write_ascii: error retval=%d 0:%02x\n",
-            retval, buf[0]);
-#endif
+        if (verbose_print_enabled) {
+            fprintf(stderr, "mect_write_ascii: error retval=%d 0:%02x\n",
+                retval, buf[0]);
+        }
         return -1;
     }
     return 0;
@@ -5799,7 +5799,7 @@ static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned va
     //          [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] [10][11][12][13][14][15][16][17]
     snprintf(nn, 2+1, "%02u", node);
     snprintf(cc, 2+1, "%c%c", (command & 0x7F00) >> 8, (command & 0x007F));
-    snprintf(buf, 18+1, "\004%c%c%c%c\002%s   >%04x\003%c",
+    snprintf(buf, 18+1, "\004%c%c%c%c\002%s   >%04X\003%c",
         nn[0], nn[0], nn[1], nn[1], cc, (value & 0xFFFF), 0x00);
     buf[17] = mect_bcc(&buf[6], 11);
     rt_dev_write(fd, buf, 18);
