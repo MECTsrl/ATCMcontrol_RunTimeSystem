@@ -3078,7 +3078,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     fprintf(stderr, "%s: %s=%f err=%d\n", theDevices[d].name, CrossTable[DataAddr + i].Tag, value, e);
                 }
             } else if (CrossTable[DataAddr + i].Types == UINT16) {
-                unsigned value;
+                unsigned value = 0;
                 e = mect_read_hexad(theDevices[d].mect_fd, CrossTable[DataAddr + i].NodeId, CrossTable[DataAddr + i].Offset, &value);
                 DataValue[i] = value;
                 if (verbose_print_enabled) {
@@ -5667,7 +5667,7 @@ static int mect_read_ascii(int fd, unsigned node, unsigned command, float *value
     if ((retval != 11 && retval != 13) || buf[0] != '\002' || buf[1] != cc[0] || buf[2] != cc[1] || buf[retval - 2] != '\003'
             || (buf[retval - 1] != mect_bcc(&buf[1], retval - 2))) {
         if (verbose_print_enabled)
-            fprintf(stderr, "mect_read_ascii: error retval=%u 0:%02x 1:%02x 2:%02x %d:%02x %d:%02x\n",
+            fprintf(stderr, "mect_read_ascii: error retval=%d 0:%02x 1:%02x 2:%02x %d:%02x %d:%02x\n",
             retval, buf[0], buf[1], buf[2], retval - 2, buf[retval - 2], retval - 1, buf[retval - 1]);
         if (retval > 0) {
             return -1;
@@ -5719,7 +5719,7 @@ static int mect_write_ascii(int fd, unsigned node, unsigned command, float value
 #endif
     if (retval < 0 || buf[0] != '\006') {
 #ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_write_ascii: error retval=%u 0:%02x\n",
+        fprintf(stderr, "mect_write_ascii: error retval=%d 0:%02x\n",
             retval, buf[0]);
 #endif
         return -1;
@@ -5763,7 +5763,7 @@ static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *va
             || ((retval == 11) && (buf[4] != '>'))
             || buf[retval - 2] != '\003' || buf[retval - 1] != mect_bcc(&buf[1], retval - 2)) {
         if (verbose_print_enabled)
-            fprintf(stderr, "mect_read_hexad: error retval=%u 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
+            fprintf(stderr, "mect_read_hexad: error retval=%d 0:%02x 1:%02x 2:%02x 11:%02x 12:%02x\n",
                 retval, buf[0], buf[1], buf[2], buf[11], buf[12]);
         if (retval > 0) {
             return -1;
@@ -5815,7 +5815,7 @@ static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned va
 #endif
     if (retval < 0 || buf[0] != '\006') {
 #ifdef VERBOSE_DEBUG
-        fprintf(stderr, "mect_write_hexad: error retval=%u 0:%02x\n",
+        fprintf(stderr, "mect_write_hexad: error retval=%d 0:%02x\n",
             retval, buf[0]);
 #endif
         return -1;
