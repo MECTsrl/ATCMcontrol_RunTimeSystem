@@ -491,7 +491,7 @@ static void mect_close(int fd);
 void dataGetVersionInfo(char *szVersion)
 {
     if (szVersion) {
-        sprintf(szVersion, "v%d.%03d+ GPL", REVISION_HI, REVISION_LO);
+        sprintf(szVersion, "v%d.%03d GPL", REVISION_HI, REVISION_LO);
     }
 }
 
