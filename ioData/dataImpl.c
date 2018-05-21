@@ -5424,9 +5424,22 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                 // notify from others
                 IEC_UDINT ulStart = vmm_max(pNotify->ulOffset, pIO->Q.ulOffs);
                 IEC_UDINT ulStop = vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->Q.ulOffs + pIO->Q.ulSize);
+
                 if (pNotify->usBit == 0) {
                     // write a byte region
                     if (ulStart < ulStop) {
+#ifdef VERBOSE_DEBUG
+                        int i;
+                        unsigned char *p;
+
+                        fprintf(stderr, "calling doWriteBytes() uTask=0x%04x ulStart=%u ulOffs=%u len=%u data[]=",
+                            pNotify->uTask, ulStart, pIO->Q.ulOffs, pNotify->uLen);
+                        p = pIO->Q.pAdr + (ulStart - pIO->Q.ulOffs);
+                        for (i = 0; i < (pNotify->uLen + 2); ++i) {
+                            fprintf(stderr, " %02x", p[i]);
+                        }
+                        fprintf(stderr, "\n");
+#endif
                         doWriteBytes((u_int32_t *)(pIO->Q.pAdr), NULL, (ulStart - pIO->Q.ulOffs), pNotify->uLen);
                     }
                 } else {

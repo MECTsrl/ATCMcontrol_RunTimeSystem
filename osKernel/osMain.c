@@ -914,7 +914,17 @@ IEC_UINT osNotifySetValue(STaskInfoVMM *pVMM, IEC_DATA *pVal, IEC_UINT uSegment,
 {
 	IEC_UINT uRes = OK;
 
+#ifdef VERBOSE_DEBUG
+    int i;
+    unsigned char *p;
 
+    fprintf(stderr, "osNotifySetValue() uSegment=0x%04x ulOffset=%u len=%u data[]=", uSegment, ulOffset, uLen);
+    p = pVal;
+    for (i = 0; i < (uLen + 2); ++i) {
+        fprintf(stderr, " %02x", p[i]);
+    }
+    fprintf(stderr, "\n");
+#endif
 	RETURN(uRes);
 }
 
