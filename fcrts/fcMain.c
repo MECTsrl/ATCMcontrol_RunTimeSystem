@@ -45,6 +45,7 @@
 #include <sys/ioctl.h>
 #endif
 #include <getopt.h>
+#include <sys/reboot.h>
 
 #include "libMect.h"
 #include "dataMain.h" // dataEngineStop()
@@ -77,13 +78,14 @@ int configfd;
 
 void termination_handler(int signum);
 void crash_handler(int signum, siginfo_t *siginfo, void *context);
-void dump_ret_handler(int signum, siginfo_t *siginfo, void *context);
+void pwrfail_handler(int signum, siginfo_t *siginfo, void *context);
 
 static char *get_signal(int signum);
 
 IEC_UINT writepid(void);
 
 void ReleaseResources(void);
+void dump_retentives(void);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -319,7 +321,7 @@ int main(int argc, char *argv[])
 	/* Install Dump Retentive Handler
 	 * ------------------------------------------------------------------------
 	 */
-	new_action.sa_sigaction = dump_ret_handler;
+    new_action.sa_sigaction = pwrfail_handler;
 	if (sigaction(SIGPWRFAIL, &new_action, NULL) == -1)
 	{
 		fprintf(stdout, "sigaction (SIGPWRFAIL) failed (reason:%d (%s))\r\n", os_errno, OS_STRERROR);
@@ -484,11 +486,6 @@ void termination_handler(int signum)
         term_handler_active = 1;
 
          ReleaseResources();
-#if defined(RTS_CFG_MECT_RETAIN)
-        /* Save the retentive variables
-         */
-        dump_ret_handler(signum, NULL, NULL);
-#endif
 
         //ByeBye();
     }
@@ -709,43 +706,56 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
  * Dump retentive variable handler
  *
  */
-void dump_ret_handler(int signum, siginfo_t *siginfo, void *context)
+void dump_retentives()
 {
-	IEC_UINT uRes;
+    IEC_UINT uRes;
 #ifdef DBG_MAIN
-	printf("%s Retain variables dumping...\n", __func__);
+    printf("%s Retain variables dumping...\n", __func__);
 #endif
 
 #ifdef RTS_NATIVE_RETAIN
-	/* Stop Retain Update task
-	 */
-	uRes = msgTXCommand(MSG_RT_CLOSE, Q_LIST_RET, Q_RESP_VMM_RET, VMM_TO_IPC_MSG_LONG, TRUE);
-	if (uRes != OK)
-	{
-		printf("%s CANNOT dump retain variables!\n", __func__);
-	}
+    /* Stop Retain Update task
+     */
+    uRes = msgTXCommand(MSG_RT_CLOSE, Q_LIST_RET, Q_RESP_VMM_RET, VMM_TO_IPC_MSG_LONG, TRUE);
+    if (uRes != OK)
+    {
+        printf("%s CANNOT dump retain variables!\n", __func__);
+    }
 #else
-	uRes = msync((void *)ptRetentive, lenRetentive, MS_SYNC);
-	if (uRes != OK)
-	{
-		fprintf(stderr,"%s CANNOT sync retain variables!\n", __func__);
-	}
-	uRes = munmap((void *)ptRetentive, lenRetentive);
-	if (uRes != OK)
-	{
-		fprintf(stderr,"%s CANNOT unmap retain variables!\n", __func__);
-	}
+
+    uRes = msync((void *)ptRetentive, lenRetentive, MS_SYNC);
+    if (uRes != OK)
+    {
+        fprintf(stderr,"%s CANNOT sync retain variables!\n", __func__);
+    }
+    uRes = munmap((void *)ptRetentive, lenRetentive);
+    if (uRes != OK)
+    {
+        fprintf(stderr,"%s CANNOT unmap retain variables!\n", __func__);
+    }
 #ifdef MECT_RETAIN_DEBUG
-	ioctl(configfd, RETENTIVE_GPIOCTRL);	
-	fprintf(stderr,"[%s], called ioctl\n", __func__);
+    ioctl(configfd, RETENTIVE_GPIOCTRL);
+    fprintf(stderr,"[%s], called ioctl\n", __func__);
 #endif
+    sync();
 
 #endif
 
 #ifdef DBG_MAIN
-	fprintf(stderr,"%s Retain variables dumped!\n", __func__);
+    fprintf(stderr,"%s Retain variables dumped!\n", __func__);
 #endif
-//	system("poweroff");
+}
+
+void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
+{
+    // immediately block the engine
+    dataEnginePwrFailStop();
+    dump_retentives();
+
+    // in case of power hole we will have the chance of rebooting
+    sleep(1);
+    reboot(RB_AUTOBOOT);
+    // unreachable code
 }
 
 /* kernel needs to know our pid to be able to send us a signal ->
@@ -808,6 +818,7 @@ void ReleaseResources(void)
 #endif
 
     dataEngineStop();
+    dump_retentives();
 
 #ifdef DBG_MAIN
 	fprintf(stdout, "[%s] - done.\n", __func__);

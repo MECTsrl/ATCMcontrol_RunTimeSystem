@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  12
+#define REVISION_LO  13
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -604,7 +604,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
 
 #if defined(RTS_CFG_MECT_RETAIN)
     // if the variable is a retentive one then also update the copy
-    if (retentive && addr <= LAST_RETENTIVE && status != DATA_WARNING) {
+    if (retentive && addr > 0 && addr <= LAST_RETENTIVE && status != DATA_WARNING) {
         retentive[addr -1] = value;
     }
 #endif
@@ -5082,6 +5082,15 @@ void dataEngineStop(void)
         theEngineThread_id = -1;
         fprintf(stderr, "joined engine\n");
     }
+}
+
+void dataEnginePwrFailStop(void)
+{
+    // in case o power failure we have no time for waiting the threads,
+    // so we only block the variables writes
+    // NB: there is no unlock, it's correct
+
+    pthread_mutex_lock(&theCrosstableClientMutex);
 }
 
 /* ---------------------------------------------------------------------------- */
