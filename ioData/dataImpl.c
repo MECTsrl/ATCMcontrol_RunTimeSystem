@@ -315,6 +315,12 @@ struct ServerStruct {
 static u_int16_t theServersNumber = 0;
 
 #define MaxLocalQueue 64
+struct PLCwriteRequest {
+    u_int16_t Addr;
+    u_int16_t Number;
+    u_int32_t Values[MAX_VALUES];
+};
+
 struct ClientStruct {
     // for clientThread
     enum FieldbusType protocol;
@@ -362,11 +368,7 @@ struct ClientStruct {
     modbus_t * modbus_ctx; // for RTU, TCP, TCPRTU
     int mect_fd; // for MECT
     // local queue
-    struct PLCwriteRequestStruct {
-        u_int16_t Addr;
-        u_int16_t Number;
-        u_int32_t Values[MAX_VALUES];
-    } PLCwriteRequests[MaxLocalQueue];
+    struct PLCwriteRequest PLCwriteRequests[MaxLocalQueue];
     u_int16_t PLCwriteRequestNumber;
     u_int16_t PLCwriteRequestGet;
     u_int16_t PLCwriteRequestPut;
@@ -5226,39 +5228,30 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
             // wrote none
             retval = 0;
         }
-        else if (theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
-            fprintf(stderr, "%s() buffer full error (%u), writing addr=%u to device=%u\n",
-                 __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
-            // wrote none
-            retval = 0;
-        }
         else {
-            register int base, size, type, node, n, offset;
+            struct PLCwriteRequest request;
 
-            // write requests circular buffer
-            register int i = theDevices[d].PLCwriteRequestPut;
-            theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
-            theDevices[d].PLCwriteRequestNumber += 1;
-
-            // add the write request of 'value'
-            setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevices[d].PLCwriteRequestNumber);
-            theDevices[d].PLCwriteRequests[i].Addr = addr;
-            theDevices[d].PLCwriteRequests[i].Number = 1;
-
+            // (1 of 3) extract the request for the first variable
+            request.Addr = addr;
+            request.Number = 1;
             if (CrossTable[addr].Types == BIT || CrossTable[addr].Types == BYTE_BIT
-                || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT ) {
+                || CrossTable[addr].Types == WORD_BIT || CrossTable[addr].Types == DWORD_BIT )
+            {
                 // the engine uses only the bit#0 for bool variables
                 if (value & 1)
-                    theDevices[d].PLCwriteRequests[i].Values[0] = 1;
+                    request.Values[0] = 1;
                 else
-                    theDevices[d].PLCwriteRequests[i].Values[0] = 0;
-            } else
-                theDevices[d].PLCwriteRequests[i].Values[0] = value;
-
+                    request.Values[0] = 0;
+            } else {
+                request.Values[0] = value;
+            }
             // wrote one
             retval = 1;
 
+            // (2 of 3) extract the requests for the other variables
             if (values) {
+                register int base, size, type, node, offset, n;
+
                 // are there any other consecutive writes to the same block?
                 base = CrossTable[addr].BlockBase;
                 size = CrossTable[addr].BlockSize;
@@ -5268,7 +5261,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
 
                 for (n = 1; (addr + n) < (base + size) && (addr + n) <= addrMax; ++n)
                 {
-                    if (theDevices[d].PLCwriteRequests[i].Number >= MAX_VALUES) {
+                    if (request.Number >= MAX_VALUES) {
                         break;
                     }
                     // must be same device and node (should already be checked by Crosstable editor)
@@ -5291,22 +5284,22 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                     }
 
                     // ok, add another one
-                    theDevices[d].PLCwriteRequests[i].Number = 1 + n;
+                    request.Number = 1 + n;
                     if (flags && flags[addr + n] == 0) {
                         // in the exception of *_BIT, we get the actual value
-                        theDevices[d].PLCwriteRequests[i].Values[n] = the_QdataRegisters[addr + n];
+                        request.Values[n] = the_QdataRegisters[addr + n];
                     } else {
                         // normal case
                         if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
                          || CrossTable[addr + n].Types == WORD_BIT || CrossTable[addr + n].Types == DWORD_BIT ) {
                             // the engine uses only the bit#0 for bool variables
                             if (values[addr + n] & 1) {
-                                theDevices[d].PLCwriteRequests[i].Values[n] = 1;
+                                request.Values[n] = 1;
                             } else {
-                                theDevices[d].PLCwriteRequests[i].Values[n] = 0;
+                                request.Values[n] = 0;
                             }
                         } else {
-                            theDevices[d].PLCwriteRequests[i].Values[n] = values[addr + n];
+                            request.Values[n] = values[addr + n];
                         }
                     }
 
@@ -5314,14 +5307,62 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                     retval += 1;
                 }
             }
-#ifdef VERBOSE_DEBUG
+
+            // (3 of 3) add the request to the circular buffer:
+            //     -- avoiding duplicates
+            //     -- losing the oldest if buffer full
+            register int i, duplicate;
+
+            for (i = theDevices[d].PLCwriteRequestGet, duplicate = FALSE;
+                 i != theDevices[d].PLCwriteRequestPut;
+                 i = ((i + 1) % MaxLocalQueue))
             {
-                int z;
-                fprintf(stderr, "\tqueued %u values in slot #%d\n", retval, i);
-                for (z = 0; z < retval; ++z)
-                    fprintf(stderr, "\t%02d 0x%08x\n", z, theDevices[d].PLCwriteRequests[i].Values[z]);
+                // searching for duplicates
+                if (request.Addr == theDevices[d].PLCwriteRequests[i].Addr
+                 && request.Number == theDevices[d].PLCwriteRequests[i].Number) {
+                    register int n;
+
+                    for (n = 0; n < request.Number; ++ n) {
+                        theDevices[d].PLCwriteRequests[i].Values[n] = request.Values[n];
+                    }
+                    duplicate = TRUE;
+                    break;
+                }
             }
+            if (! duplicate) {
+                register int n;
+
+                if (theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
+                    // buffer full
+                    fprintf(stderr, "%s() buffer full error (%u), writing addr=%u to device=%u\n",
+                         __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
+                    // losing the oldest
+                    theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
+                    theDevices[d].PLCwriteRequestNumber -= 1;
+                }
+                // add new
+                i = theDevices[d].PLCwriteRequestPut;
+                theDevices[d].PLCwriteRequests[i].Addr = request.Addr;
+                theDevices[d].PLCwriteRequests[i].Number = request.Number;
+                for (n = 0; n < request.Number; ++ n) {
+                    theDevices[d].PLCwriteRequests[i].Values[n] = request.Values[n];
+                }
+                theDevices[d].PLCwriteRequestPut = (i + 1) % MaxLocalQueue;
+                theDevices[d].PLCwriteRequestNumber += 1;
+
+                // add the write request of 'value'
+                setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevices[d].PLCwriteRequestNumber);
+
+#ifdef VERBOSE_DEBUG
+                {
+                    int z;
+                    fprintf(stderr, "\tqueued %u values in slot #%d\n", retval, i);
+                    for (z = 0; z < retval; ++z)
+                        fprintf(stderr, "\t%02d 0x%08x\n", z, theDevices[d].PLCwriteRequests[i].Values[z]);
+                }
 #endif
+            }
+
             // awake the device thread
             sem_post(&newOperations[d]);
         }
