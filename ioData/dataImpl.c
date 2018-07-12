@@ -152,6 +152,51 @@ static int verbose_print_enabled = 0;
 #define PLC_FastIO_31    5471
 #define PLC_FastIO_32    5472
 
+// -------------------------------------------------------------------------------------------
+#define DIAGNOSTIC_TYPE_PORT    0
+#define DIAGNOSTIC_BAUDRATE     1 // IP_ADDRESS/BAUDRATE
+#define DIAGNOSTIC_STATUS       2
+#define DIAGNOSTIC_READS        3
+#define DIAGNOSTIC_WRITES       4
+#define DIAGNOSTIC_TIMEOUTS     5
+#define DIAGNOSTIC_COMM_ERRORS  6
+#define DIAGNOSTIC_LAST_ERROR   7
+#define DIAGNOSTIC_WRITE_QUEUE  8
+#define DIAGNOSTIC_BUS_LOAD     9
+
+//1;P;RTU0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_BAUDRATE   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_STATUS     ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_READS      ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_WRITES     ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_TIMEOUTS   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_COMM_ERRORS;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_LAST_ERROR ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_WRITE_QUEUE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
+//1;P;RTU0_BUS_LOAD   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO] ex RTU0_READ_QUEUE
+
+//1;P;RTU1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5010;10  ;[RO]
+//1;P;RTU3_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5020;10  ;[RO]
+//1;P;CAN0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5030;10  ;[RO]
+//1;P;CAN1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5040;10  ;[RO]
+//1;P;TCPS_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5050;10  ;[RO]
+//1;P;TCP0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5060;10  ;[RO]
+//1;P;TCP1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5070;10  ;[RO]
+//1;P;TCP2_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5080;10  ;[RO]
+//1;P;TCP3_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5080;10  ;[RO]
+//1;P;TCP4_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5100;10  ;[RO]
+//1;P;TCP5_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5110;10  ;[RO]
+//1;P;TCP6_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5120;10  ;[RO]
+//1;P;TCP7_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5130;10  ;[RO]
+//1;P;TCP8_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5140;10  ;[RO]
+//1;P;TCP9_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5150;10  ;[RO]
+
+// -------------------------------------------------------------------------------------------
+#define DIAGNOSTIC_DEV_NODE     0
+#define DIAGNOSTIC_NODE_STATUS  1
+//1;P;NODE_01_DEV_NODE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
+//1;P;NODE_01_STATUS  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
+
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
@@ -245,7 +290,7 @@ static const char *fieldbusName[] = {"PLC", "RTU", "TCP", "TCPRTU", "CANOPEN", "
 enum threadStatus {NOT_STARTED = 0, RUNNING, EXITING};
 enum ServerStatus {SRV_RUNNING0 = 0, SRV_RUNNING1, SRV_RUNNING2, SRV_RUNNING3, SRV_RUNNING4};
 enum DeviceStatus {ZERO = 0, NOT_CONNECTED, CONNECTED, CONNECTED_WITH_ERRORS, DEVICE_BLACKLIST, NO_HOPE};
-enum NodeStatus    {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST, DISCONNECTED};
+enum NodeStatus   {NO_NODE = 0, NODE_OK, TIMEOUT, BLACKLIST, DISCONNECTED, NODE_DISABLED};
 
 static const char *deviceStatusName[] = {"ZERO", "NOT_CONNECTED", "CONNECTED", "CONNECTED_WITH_ERRORS", "DEVICE_BLACKLIST", "NO_HOPE" };
 static const char *nodeStatusName[] = {"NO_NODE", "NODE_OK", "TIMEOUT", "BLACKLIST", "DISCONNECTED" };
@@ -570,6 +615,31 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
             buzzer_periods = 0;
         }
 
+    } else {
+        register unsigned n;
+
+        for (n = 0; n < theNodesNumber; ++n) {
+            if (addr == (theNodes[n].diagnosticAddr + DIAGNOSTIC_NODE_STATUS)) {
+                if (value == 0) {
+                    if (theNodes[n].status != NODE_DISABLED) {
+                        // cannot use: changeNodeStatus(theNodes[n].device, n, NODE_DISABLED);
+                        theNodes[n].status = NODE_DISABLED;
+                        value = NODE_DISABLED;
+                    } else {
+                        value = theNodes[n].status;
+                    }
+                } else {
+                    if (theNodes[n].status == NODE_DISABLED) {
+                        // cannot use: changeNodeStatus(theNodes[n].device, n, NODE_OK);
+                        theNodes[n].status = NODE_OK;
+                        value = NODE_OK;
+                    } else {
+                        value = theNodes[n].status;
+                    }
+                }
+                break;
+            }
+        }
     }
 
     switch (status) {
@@ -611,44 +681,6 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
     }
 #endif
 }
-
-#define DIAGNOSTIC_TYPE_PORT    0
-#define DIAGNOSTIC_BAUDRATE     1 // IP_ADDRESS/BAUDRATE
-#define DIAGNOSTIC_STATUS       2
-#define DIAGNOSTIC_READS        3
-#define DIAGNOSTIC_WRITES       4
-#define DIAGNOSTIC_TIMEOUTS     5
-#define DIAGNOSTIC_COMM_ERRORS  6
-#define DIAGNOSTIC_LAST_ERROR   7
-#define DIAGNOSTIC_WRITE_QUEUE  8
-#define DIAGNOSTIC_BUS_LOAD     9
-
-//1;P;RTU0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_BAUDRATE   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_STATUS     ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_READS      ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_WRITES     ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_TIMEOUTS   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_COMM_ERRORS;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_LAST_ERROR ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_WRITE_QUEUE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO]
-//1;P;RTU0_BUS_LOAD   ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5000;10  ;[RO] ex RTU0_READ_QUEUE
-
-//1;P;RTU1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5010;10  ;[RO]
-//1;P;RTU3_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5020;10  ;[RO]
-//1;P;CAN0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5030;10  ;[RO]
-//1;P;CAN1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5040;10  ;[RO]
-//1;P;TCPS_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5050;10  ;[RO]
-//1;P;TCP0_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5060;10  ;[RO]
-//1;P;TCP1_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5070;10  ;[RO]
-//1;P;TCP2_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5080;10  ;[RO]
-//1;P;TCP3_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5080;10  ;[RO]
-//1;P;TCP4_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5100;10  ;[RO]
-//1;P;TCP5_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5110;10  ;[RO]
-//1;P;TCP6_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5120;10  ;[RO]
-//1;P;TCP7_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5130;10  ;[RO]
-//1;P;TCP8_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5140;10  ;[RO]
-//1;P;TCP9_TYPE_PORT  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5150;10  ;[RO]
 
 static void initServerDiagnostic(u_int16_t s)
 {
@@ -759,11 +791,6 @@ static void initDeviceDiagnostic(u_int16_t d)
         writeQdataRegisters(addr + DIAGNOSTIC_BAUDRATE, value, DATA_OK); // IP_ADDRESS/BAUDRATE
     }
 }
-
-#define DIAGNOSTIC_DEV_NODE     0
-#define DIAGNOSTIC_NODE_STATUS  1
-//1;P;NODE_01_DEV_NODE;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
-//1;P;NODE_01_STATUS  ;UDINT    ;0   ;PLC       ;               ;    ;    ;    ;5172;2   ;[RO]
 
 static void initNodeDiagnostic(u_int16_t n)
 {
@@ -2354,7 +2381,7 @@ static int checkServersDevicesAndNodes()
                          }
                     }
                 }
-            add_node:
+            //add_node:
                 if (n < theNodesNumber) {
                     CrossTable[i].node = n; // found
                 } else if (theNodesNumber >= MAX_NODES) {
@@ -3936,7 +3963,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
             }
             // stop the device nodes on connection failure
             for (n = 0; n < theNodesNumber; ++n) {
-                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED) {
+                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED && theNodes[n].status != NODE_DISABLED) {
                     changeNodeStatus(d, n, DISCONNECTED);
                 }
             }
@@ -3946,7 +3973,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
         if (previous_status == NOT_CONNECTED) {
             // stop the device nodes on connection failure
             for (n = 0; n < theNodesNumber; ++n) {
-                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED) {
+                if (theNodes[n].device == d && theNodes[n].status != DISCONNECTED && theNodes[n].status != NODE_DISABLED) {
                     changeNodeStatus(d, n, DISCONNECTED);
                 }
             }
@@ -3956,7 +3983,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
         if (previous_status == NOT_CONNECTED) {
             // try resurrecting the device nodes on connection success
             for (n = 0; n < theNodesNumber; ++n) {
-                if (theNodes[n].device == d && theNodes[n].status != NODE_OK) {
+                if (theNodes[n].device == d && theNodes[n].status != NODE_OK && theNodes[n].status != NODE_DISABLED) {
                     changeNodeStatus(d, n, NODE_OK);
                 }
             }
@@ -4001,6 +4028,7 @@ static inline void changeNodeStatus(u_int32_t d, u_int16_t node, enum NodeStatus
         }
         break;
     case DISCONNECTED:
+    case NODE_DISABLED:
     default:
         ;
     }
@@ -4350,8 +4378,10 @@ static void *clientThread(void *arg)
                                 if (theDevices[d].device_vars[v].active) {
                                     addr = theDevices[d].device_vars[v].addr;
                                     if (CrossTable[addr].Enable == (prio + 1) && addr == CrossTable[addr].BlockBase) {
-                                        found = TRUE;
-                                        break;
+                                        if (theNodes[CrossTable[addr].node].status != NODE_DISABLED) {
+                                            found = TRUE;
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -4502,6 +4532,12 @@ static void *clientThread(void *arg)
                         DataNumber, DataAddr);
               }
 #endif
+        } else if (theNodes[Data_node].status == NODE_DISABLED) {
+            int i;
+            error = NoError;
+            for (i = 0; i < DataNumber; ++i) {
+                DataValue[i] = 0;
+            }
         } else {
 
             // the device is connected, so operate, without locking the mutex
@@ -4543,7 +4579,7 @@ static void *clientThread(void *arg)
 
             case NoError:
                 // node status
-                if (theNodes[Data_node].status != NODE_OK)
+                if (theNodes[Data_node].status != NODE_OK && theNodes[Data_node].status != NODE_DISABLED)
                     changeNodeStatus(d, Data_node, NODE_OK);
                 // device status
                 if (theDevices[d].status != CONNECTED)
@@ -4603,6 +4639,7 @@ static void *clientThread(void *arg)
                     break;
                 case BLACKLIST:
                 case DISCONNECTED:
+                case NODE_DISABLED:
                 default:
                     ;
                 }
@@ -4683,6 +4720,7 @@ static void *clientThread(void *arg)
                         DataAddr = 0; // i.e. we lose a write
                     }
                     break;
+                case NODE_DISABLED:
                 default:
                     ;
                 }
