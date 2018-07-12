@@ -5320,25 +5320,37 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                 // searching for duplicates
                 if (request.Addr == theDevices[d].PLCwriteRequests[i].Addr
                  && request.Number == theDevices[d].PLCwriteRequests[i].Number) {
-                    register int n;
+                    register int n, all_equal = TRUE;
 
                     for (n = 0; n < request.Number; ++ n) {
-                        theDevices[d].PLCwriteRequests[i].Values[n] = request.Values[n];
+                        if (theDevices[d].PLCwriteRequests[i].Values[n] != request.Values[n]) {
+                            all_equal = FALSE;
+                            break;
+                        }
                     }
-                    duplicate = TRUE;
-                    break;
+                    if (all_equal) {
+                        duplicate = TRUE;
+                        break;
+                    }
                 }
             }
-            if (! duplicate) {
+            if (duplicate) {
+                // duplicate: ignore the write operation
+#ifdef VERBOSE_DEBUG
+                fprintf(stderr, "%s(): warning: duplicate, writing addr=%u, number=%u, queue=%u to device=%u\n",
+                     __func__, addr, request.Number, theDevices[d].PLCwriteRequestNumber, d);
+#endif
+            } else {
                 register int n;
 
                 if (theDevices[d].PLCwriteRequestNumber >= MaxLocalQueue) {
-                    // buffer full
-                    fprintf(stderr, "%s() buffer full error (%u), writing addr=%u to device=%u\n",
-                         __func__, theDevices[d].PLCwriteRequestNumber, addr, d);
-                    // losing the oldest
+                    // buffer full: losing the oldest
                     theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
                     theDevices[d].PLCwriteRequestNumber -= 1;
+#ifdef VERBOSE_DEBUG
+                    fprintf(stderr, "%s(): error: buffer full, writing addr=%u, number=%u, queue=%u to device=%u\n",
+                         __func__, addr, request.Number, theDevices[d].PLCwriteRequestNumber, d);
+#endif
                 }
                 // add new
                 i = theDevices[d].PLCwriteRequestPut;
@@ -5361,10 +5373,9 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                         fprintf(stderr, "\t%02d 0x%08x\n", z, theDevices[d].PLCwriteRequests[i].Values[z]);
                 }
 #endif
+                // awake the device thread
+                sem_post(&newOperations[d]);
             }
-
-            // awake the device thread
-            sem_post(&newOperations[d]);
         }
     }
 
