@@ -45,7 +45,7 @@
 #include <sys/ioctl.h>
 #endif
 #include <getopt.h>
-#include <sys/reboot.h>
+#include <sys/reboot.h> // and not <linux/reboot.h>
 
 #include "libMect.h"
 #include "dataMain.h" // dataEngineStop()
@@ -748,14 +748,22 @@ void dump_retentives()
 
 void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
 {
+    int n;
+
     // immediately block the engine
     dataEnginePwrFailStop();
+    // sync the retentive file
     dump_retentives();
 
     // in case of power hole we will have the chance of rebooting
-    sleep(1);
-    reboot(RB_AUTOBOOT);
+    for (n = 0; n < 500000000; ++n)
+        ;
+    reboot(RB_POWER_OFF); // actually a reset on i.MX28, maybe also RB_AUTOBOOT but not RB_HALT_SYSTEM
+
     // unreachable code
+    fputs("pwrfail_handler: ... reboot() returned ????\n", stderr);
+    while (1)
+        ;
 }
 
 /* kernel needs to know our pid to be able to send us a signal ->
