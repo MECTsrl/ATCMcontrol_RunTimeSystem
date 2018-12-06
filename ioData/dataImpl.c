@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  13
+#define REVISION_LO  14
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -490,6 +490,7 @@ static u_int16_t lastAlarmEvent = 0;
 
 #if defined(RTS_CFG_MECT_RETAIN)
 static u_int32_t *retentive = NULL;
+static int do_flush_retentives = FALSE;
 #endif
 
 static pthread_t theEngineThread_id = -1;
@@ -678,6 +679,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
     // if the variable is a retentive one then also update the copy
     if (retentive && addr > 0 && addr <= LAST_RETENTIVE && status != DATA_WARNING) {
         retentive[addr -1] = value;
+        do_flush_retentives = TRUE;
     }
 #endif
 }
@@ -2686,6 +2688,18 @@ static void *engineThread(void *statusAdr)
                 xx_pwm3_disable();
             }
         }
+
+        if (do_flush_retentives) {
+            do_flush_retentives = FALSE;
+            // the mutex was locked by pthread_cond_timedwait()
+            pthread_mutex_unlock(&theCrosstableClientMutex);
+            {
+                // syncing the retentive file but without holding the mutex
+                msync((void *)retentive, lenRetentive, MS_SYNC);
+            }
+            pthread_mutex_lock(&theCrosstableClientMutex);
+        }
+
     }
     pthread_mutex_unlock(&theCrosstableClientMutex);
 
