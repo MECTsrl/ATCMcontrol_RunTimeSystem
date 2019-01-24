@@ -232,7 +232,7 @@ IEC_UINT ioVerifyTermination(STaskInfoVMM *pVMM, IEC_UDINT ulClearTime)
 
 	if (bRetry == TRUE)
 	{
-		if (osGetTime32() - ulClearTime > VMM_TO_IOL_CLEAR)
+	if (osElapsedTime32(osGetTime32(), ulClearTime) > VMM_TO_IOL_CLEAR)
 		{
 			for (i = 0; i < pVMM->Project.uIOLayer; i++)
 			{
@@ -491,7 +491,7 @@ IEC_UINT ioConfigLayer(STaskInfoVMM *pVMM)
 
 	if (bRetry == TRUE)
 	{
-		if (osGetTime32() - ulConfigTime > VMM_TO_IOL_CONFIG)
+	if (osElapsedTime32(osGetTime32(), ulConfigTime) > VMM_TO_IOL_CONFIG)
 		{
 			for (i = 0; i < pVMM->Project.uIOLayer; i++)
 			{

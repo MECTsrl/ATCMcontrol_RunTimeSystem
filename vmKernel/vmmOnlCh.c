@@ -100,7 +100,7 @@ IEC_UINT ocMain(void *pPara)
 
 				/* Wait for tasks to stop
 				 */
-				for ( ; bStopped == FALSE && bBreak == FALSE && osGetTime32() - ulTime < VMM_TO_IPC_MSG_LONG; )
+				for ( ; bStopped == FALSE && bBreak == FALSE && osElapsedTime32(osGetTime32(), ulTime) < VMM_TO_IPC_MSG_LONG; )
 				{
 					bStopped = TRUE;
 

@@ -721,6 +721,7 @@ int osPthreadSetSched(int policy, int sched_priority);
 IEC_UINT osSleep(IEC_UDINT ulTime);
 IEC_UINT osSleepAbsolute(IEC_ULINT ulTime);
 
+IEC_UDINT osElapsedTime32(IEC_UDINT now, IEC_UDINT start);
 IEC_UDINT osGetTime32(void);
 IEC_ULINT osGetTime64(void);
 IEC_ULINT osGetTimeUS(void);

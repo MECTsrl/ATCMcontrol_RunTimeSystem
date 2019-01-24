@@ -52,7 +52,7 @@ IEC_UINT cmdGetState(STaskInfoVMM *pVMM, XBlock *pBlock)
 	IEC_UDINT	ulActStateReq = osGetTime32();
 	IEC_UINT	i;
 	
-	if (ulActStateReq - pVMM->ulLastStateReq > VMM_DEBUG_INTERVAL)
+ 	if (osElapsedTime32(ulActStateReq, pVMM->ulLastStateReq) > VMM_DEBUG_INTERVAL)
 	{
 		for (i = 0; i < pVMM->Project.uTasks; i++)
 		{

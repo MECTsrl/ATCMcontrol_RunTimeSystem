@@ -1346,7 +1346,7 @@ void tp(STDLIBFBCALL)
 		 */
 		IEC_UDINT ulNow = osGetTime32();
 
-		pPar->ET = ulNow - pPar->tStart;
+		pPar->ET = osElapsedTime32(ulNow, pPar->tStart);
 
 		if(pPar->ET >= pPar->PT)
 		{
@@ -1419,7 +1419,7 @@ void ton(STDLIBFBCALL)
 		 */
 		IEC_UDINT ulNow = osGetTime32();
 		
-		pPar->ET = ulNow - pPar->tStart;
+		pPar->ET = osElapsedTime32(ulNow, pPar->tStart);
 
 		if (pPar->ET >= pPar->PT)
 		{
@@ -1481,7 +1481,7 @@ void tof(STDLIBFBCALL)
 		 */
 		IEC_UDINT ulNow = osGetTime32();
 
-		pPar->ET = ulNow - pPar->tStart;
+		pPar->ET = osElapsedTime32(ulNow, pPar->tStart);
 
 		if(pPar->ET >= pPar->PT)
 		{

@@ -636,6 +636,18 @@ IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
 	RETURN(uRes);
 }
 
+IEC_UDINT osElapsedTime32(IEC_UDINT now, IEC_UDINT start)
+{
+    IEC_UDINT elapsed;
+
+    if (now >= start)
+        elapsed = now - start;
+    else
+        elapsed = (0xFFFFffff - start) + now + 1;
+
+    return elapsed;
+}
+
 /* ---------------------------------------------------------------------------- */
 /**
  * osGetTime32
