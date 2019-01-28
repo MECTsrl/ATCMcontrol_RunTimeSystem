@@ -49,7 +49,7 @@ static inline void do_sleep_ms(unsigned delay_ms)
     rqtp.tv_sec = q.quot;
     rqtp.tv_nsec = q.rem * 1E6; // ms -> ns
 
-    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
+    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &rqtp, &rmtp) == EINTR) {
         rqtp.tv_sec = rmtp.tv_sec;
         rqtp.tv_nsec = rmtp.tv_nsec;
     }

@@ -213,7 +213,7 @@ app_mect_msg_read(void)
 
 	assert(fdsio >= 0);
 
-	if (clock_gettime(CLOCK_REALTIME, &start) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &start) < 0)
 		return 1;
 
 	/*memcpy(&now, &start, sizeof(struct timespec));*/
@@ -227,7 +227,7 @@ app_mect_msg_read(void)
 		char ch = '\0';
 		ssize_t read_code = 0;
 
-		if (clock_gettime(CLOCK_REALTIME, &now) < 0)
+        if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
 			return 2;
 
 		if (now.tv_nsec < start.tv_nsec)                /* Timer wrapped */

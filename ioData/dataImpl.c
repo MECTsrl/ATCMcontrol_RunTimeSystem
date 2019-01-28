@@ -2558,7 +2558,7 @@ static void *engineThread(void *statusAdr)
     // run
     *threadStatusPtr = RUNNING;
     struct timespec abstime;
-    clock_gettime(CLOCK_REALTIME, &abstime);
+    clock_gettime(CLOCK_MONOTONIC, &abstime); // pthread_cond_timedwait + pthread_condattr_setclock
 
     // NO default Fast I/O config PLC_FastIO_Dir
 
@@ -5085,7 +5085,12 @@ void dataEngineStart(void)
 
     // initialize data array
     pthread_mutex_init(&theCrosstableClientMutex, NULL);
-    pthread_cond_init(&theAlarmsEventsCondvar, NULL);
+    {
+        pthread_condattr_t attr;
+        pthread_condattr_init(&attr);
+        pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+        pthread_cond_init(&theAlarmsEventsCondvar, &attr);
+    }
     for (s = 0; s < MAX_SERVERS; ++s) {
         theServers[s].thread_id = -1;
     }

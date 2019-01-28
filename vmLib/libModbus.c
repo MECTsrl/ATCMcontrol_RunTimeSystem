@@ -2820,7 +2820,7 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 		    rqtp.tv_sec = q.quot;
 		    rqtp.tv_nsec = q.rem * 1E3; // us =--> ns
 
-		    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
+            while (clock_nanosleep(CLOCK_MONOTONIC, 0, &rqtp, &rmtp) == EINTR) {
                 rqtp.tv_sec = rmtp.tv_sec;
                 rqtp.tv_nsec = rmtp.tv_nsec;
 		    }

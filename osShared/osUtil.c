@@ -565,7 +565,7 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 	int retval; 
 
 	// get time
-	clock_gettime(CLOCK_REALTIME, &timer_now);
+    clock_gettime(CLOCK_MONOTONIC, &timer_now);
 	// add delay
 	x = ldiv(ulTime, 1000L);
     timer_next.tv_sec = timer_now.tv_sec + x.quot;
@@ -581,7 +581,7 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 	timer_next.tv_nsec = x.quot * 1E6;
 	// do wait
 	do {
-        retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
+        retval = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &timer_next, NULL);
 	} while (retval == EINTR);
 #else
     struct timespec rqtp, rmtp;
@@ -591,7 +591,7 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
     rqtp.tv_sec = q.quot;
     rqtp.tv_nsec = q.rem * 1E6; // ms -> ns
 
-    while (clock_nanosleep(CLOCK_REALTIME, 0, &rqtp, &rmtp) == EINTR) {
+    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &rqtp, &rmtp) == EINTR) {
         rqtp.tv_sec = rmtp.tv_sec;
         rqtp.tv_nsec = rmtp.tv_nsec;
     }
@@ -623,7 +623,7 @@ IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
     timer_next.tv_nsec = x.rem * 1E6;
 	// do wait
 	do {
-       	retval = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timer_next, NULL);
+        retval = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &timer_next, NULL);
 	} while (retval == EINTR);
 #else
     IEC_ULINT now = osGetTime64();
@@ -736,7 +736,7 @@ IEC_UDINT osGetTime32Ex(void)
 #ifdef __XENO__
 	struct timespec tv;
 
-	clock_gettime(CLOCK_REALTIME, &tv);
+	clock_gettime(CLOCK_MONOTONIC, &tv);
 
 	return (IEC_UDINT)((IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6);
 #else
@@ -761,7 +761,7 @@ IEC_ULINT osGetTime64Ex(void)
 #ifdef __XENO__
         struct timespec tv;
 
-        clock_gettime(CLOCK_REALTIME, &tv);
+        clock_gettime(CLOCK_MONOTONIC, &tv);
 
 	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6;
 #else
@@ -786,7 +786,7 @@ IEC_ULINT osGetTimeUSEx(void)
 #ifdef __XENO__
     struct timespec tv;
 
-    clock_gettime(CLOCK_REALTIME, &tv);
+    clock_gettime(CLOCK_MONOTONIC, &tv);
 
 	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000000u + (tv.tv_nsec/1E3);
 #else

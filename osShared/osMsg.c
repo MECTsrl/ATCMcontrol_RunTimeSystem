@@ -208,7 +208,7 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 		retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
 	} else {
 		struct timespec abs_timeout;
-		clock_gettime(CLOCK_REALTIME, &abs_timeout);
+        clock_gettime(CLOCK_REALTIME, &abs_timeout); // mq_timedreceive
 		abs_timeout.tv_nsec += ulTimeOut * 1E6; // ms
 		while (abs_timeout.tv_nsec >= 1E9) {
 			abs_timeout.tv_sec += 1;
