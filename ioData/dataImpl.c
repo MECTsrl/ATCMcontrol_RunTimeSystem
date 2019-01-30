@@ -100,8 +100,8 @@ static int verbose_print_enabled = 0;
 #define PLC_Hours         5413 // [RO] 0..23
 #define PLC_Minutes       5414 // [RO] 0..59
 #define PLC_Seconds       5415 // [RO] 0..59
-#define PLC_UPTIME_s      5416 // [RO] time from boot (seconds)
-#define PLC_UPTIME_ns     5417 // [RO] time from boot (remainder of seconds in ns)
+#define PLC_UPTIME_s      5416 // UDINT;0;[RO] Uptime in seconds (wraps in 136 years)
+#define PLC_UPTIME_cs     5417 // UDINT;0;[RO] Uptime in centiseconds = 10 ms (wraps in 497 days)
 #define PLC_WATCHDOGEN    5418 // BIT;;[RW] Enable Watchdog
 #define PLC_WATCHDOG_ms   5419 // UDINT;0;[RW] Reset Watchdog Timer
 
@@ -2568,11 +2568,9 @@ static void *engineThread(void *statusAdr)
 
     // XX_GPIO_SET(1);
     int tic = 0;
-    RTIME tic_ns = 0ULL;
-    tic_ns = rt_timer_read();
-    lldiv_t x = lldiv(tic_ns, 1000000000ULL);
-    the_QdataRegisters[PLC_UPTIME_s] = x.quot;
-    the_QdataRegisters[PLC_UPTIME_ns] = x.rem;
+    RTIME tic_ns = rt_timer_read();
+    the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / 10000000ULL;
+    the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
 
     pthread_mutex_lock(&theCrosstableClientMutex);
     *threadStatusPtr = RUNNING;
@@ -2601,9 +2599,8 @@ static void *engineThread(void *statusAdr)
             e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
 
             tic_ns = rt_timer_read();
-            lldiv_t x = lldiv(tic_ns, 1000000000ULL);
-            the_QdataRegisters[PLC_UPTIME_s] = x.quot;
-            the_QdataRegisters[PLC_UPTIME_ns] = x.rem;
+            the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / 10000000ULL;
+            the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
 
             // XX_GPIO_SET(1);
             if (e == ETIMEDOUT) {
