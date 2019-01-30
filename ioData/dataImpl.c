@@ -72,85 +72,87 @@ static int verbose_print_enabled = 0;
 #define XX_GPIO_CLR_69(n)
 #endif
 
-#define PLC_time         5390
-#define PLC_timeMin      5391
-#define PLC_timeMax      5392
-#define PLC_timeWin      5393
-#define PLC_Version      5394
-#define PLC_EngineStatus 5395
-#define PLC_ResetValues  5396
-#define PLC_buzzerOn     5397
-#define PLC_PLC_Version  5398 // UINT;3;[RW] viewable in hmi menu > info
-#define PLC_HMI_Version  5399 // UINT;3;[RW] viewable in hmi menu > info
+#define PLC_time          5390
+#define PLC_timeMin       5391
+#define PLC_timeMax       5392
+#define PLC_timeWin       5393
+#define PLC_Version       5394
+#define PLC_EngineStatus  5395
+#define PLC_ResetValues   5396
+#define PLC_buzzerOn      5397
+#define PLC_PLC_Version   5398 // UINT;3;[RW] viewable in hmi menu > info
+#define PLC_HMI_Version   5399 // UINT;3;[RW] viewable in hmi menu > info
 
-#define PLC_5400         5400 // TPLC100_01_AA/AB CH0_NETRUN
-#define PLC_5401         5401 // TPLC100_01_AA/AB CH0_NETGOOD
-#define PLC_5402         5402 // TPLC100_01_AA/AB CH0_NETERR
-#define PLC_5403         5403 // TPLC100_01_AA/AB CH0_NETRST
-#define PLC_5404         5404 // TPLC100_01_AA/AB CH0_NETDIS
-#define PLC_5405         5405 // TPLC100_01_AA/AB CH0_01_NODERUN
-#define PLC_5406         5406 // TPLC100_01_AA/AB CH0_01_NODEGOOD
-#define PLC_5407         5407 // TPLC100_01_AA/AB CH0_01_NODEERR
-#define PLC_5408         5408 // TPLC100_01_AA/AB CH0_01_NODERST
-#define PLC_5409         5409 // TPLC100_01_AA/AB CH0_01_NODEDIS
+#define PLC_5400          5400 // TPLC100_01_AA/AB CH0_NETRUN
+#define PLC_5401          5401 // TPLC100_01_AA/AB CH0_NETGOOD
+#define PLC_5402          5402 // TPLC100_01_AA/AB CH0_NETERR
+#define PLC_5403          5403 // TPLC100_01_AA/AB CH0_NETRST
+#define PLC_5404          5404 // TPLC100_01_AA/AB CH0_NETDIS
+#define PLC_5405          5405 // TPLC100_01_AA/AB CH0_01_NODERUN
+#define PLC_5406          5406 // TPLC100_01_AA/AB CH0_01_NODEGOOD
+#define PLC_5407          5407 // TPLC100_01_AA/AB CH0_01_NODEERR
+#define PLC_5408          5408 // TPLC100_01_AA/AB CH0_01_NODERST
+#define PLC_5409          5409 // TPLC100_01_AA/AB CH0_01_NODEDIS
 
-#define PLC_Year         5410 // [RO] 2017
-#define PLC_Month        5411 // [RO] 1..12
-#define PLC_Day          5412 // [RO] 1..31
-#define PLC_Hours        5413 // [RO] 0..23
-#define PLC_Minutes      5414 // [RO] 0..59
-#define PLC_Seconds      5415 // [RO] 0..59
-#define PLC_SetDate      5416 // [RW] year*65536 + month*256 + day
-#define PLC_SetTime      5417 // [RW] hours*65536 + minutes*256 + seconds
-#define PLC_WATCHDOGEN   5418 // BIT;;[RW] Enable Watchdog
-#define PLC_WATCHDOG_ms  5419 // UDINT;0;[RW] Reset Watchdog Timer
+#define PLC_Year          5410 // [RO] 2017
+#define PLC_Month         5411 // [RO] 1..12
+#define PLC_Day           5412 // [RO] 1..31
+#define PLC_Hours         5413 // [RO] 0..23
+#define PLC_Minutes       5414 // [RO] 0..59
+#define PLC_Seconds       5415 // [RO] 0..59
+#define PLC_UPTIME_s      5416 // [RO] time from boot (seconds)
+#define PLC_UPTIME_ns     5417 // [RO] time from boot (remainder of seconds in ns)
+#define PLC_WATCHDOGEN    5418 // BIT;;[RW] Enable Watchdog
+#define PLC_WATCHDOG_ms   5419 // UDINT;0;[RW] Reset Watchdog Timer
 
-#define PLC_5420         5420
+#define PLC_PRODUCT_ID    5420 // UDINT;0;[RO] 0x100803AC <--> TPAC1008_03_AC
+#define PLC_SERIAL_NUMBER 5421 // UDINT;0;[RO] 2019014321 <--> 2019014321
+#define PLC_HMI_PAGE      5422 // DINT;0;[RW] 0x100 <--> page100; -1 <--> menu; ...
 
-#define PLC_5430         5430
+#define PLC_5430          5430
 
-#define PLC_BEEP_VOLUME  5435 // BYTE;0[RW] when buzzerOn
-#define PLC_TOUCH_VOLUME 5436 // BYTE;0[RW] when QEvent::MouseButtonPress
-#define PLC_ALARM_VOLUME 5437 // BYTE;0[RW] when alarm
-#define PLC_BUZZER       5438 // UDINT;0[RW] 0x44332211 up=0x11[%] on=0x22[cs] off=0x33[cs] rep=0x44[times]
-#define PLC_FastIO_Ena   5439 // UDINT;0[RW] TPAC1008_03_AX=0x000000FF TPAC1005=0x0003FF01
-#define PLC_FastIO_Dir   5440 // UDINT;0[RW] TPAC1008_03_AX=0x0000000F TPAC1005=0x00020000
+#define PLC_BEEP_VOLUME   5435 // BYTE;0[RW] when buzzerOn
+#define PLC_TOUCH_VOLUME  5436 // BYTE;0[RW] when QEvent::MouseButtonPress
+#define PLC_ALARM_VOLUME  5437 // BYTE;0[RW] when alarm
+#define PLC_BUZZER        5438 // UDINT;0[RW] 0x44332211 up=0x11[%] on=0x22[cs] off=0x33[cs] rep=0x44[times]
+#define PLC_FastIO_Ena    5439 // UDINT;0[RW] TPAC1008_03_AX=0x000000FF TPAC1005=0x0003FF01
+#define PLC_FastIO_Dir    5440 // UDINT;0[RW] TPAC1008_03_AX=0x0000000F TPAC1005=0x00020000
 
-#define PLC_FastIO_1     5441 // BIT;;[RW] GPIO 2,14 PIN  21 SSP1_DATA0  TPAC1005=T2 TPAC1008_03_AX=FastOUT_1
-#define PLC_FastIO_2     5442 // BIT;;[RW] GPIO 0,17 PIN 131 GPMI_CE1N               TPAC1008_03_AX=FastOUT_2
-#define PLC_FastIO_3     5443 // BIT;;[RW] GPIO 2,12 PIN  11 SSP1_SCK                TPAC1008_03_AX=FastOUT_3
-#define PLC_FastIO_4     5444 // BIT;;[RW] GPIO 3,06 PIN  78 AUART1_CTS              TPAC1008_03_AX=FastOUT_4
-#define PLC_FastIO_5     5445 // BIT;;[RW] GPIO 2,20 PIN   7 SSP2_SS1                TPAC1008_03_AX=FastIN_1
-#define PLC_FastIO_6     5446 // BIT;;[RW] GPIO 3,02 PIN  70 AUART0_CTS              TPAC1008_03_AX=FastIN_2
-#define PLC_FastIO_7     5447 // BIT;;[RW] GPIO 3,04 PIN  81 AUART1_RX               TPAC1008_03_AX=FastIN_3
-#define PLC_FastIO_8     5448 // BIT;;[RW] GPIO 3,05 PIN  65 AUART1_TX               TPAC1008_03_AX=FastIN_4
+#define PLC_FastIO_1      5441 // BIT;;[RW] GPIO 2,14 PIN  21 SSP1_DATA0  TPAC1005=T2 TPAC1008_03_AX=FastOUT_1
+#define PLC_FastIO_2      5442 // BIT;;[RW] GPIO 0,17 PIN 131 GPMI_CE1N               TPAC1008_03_AX=FastOUT_2
+#define PLC_FastIO_3      5443 // BIT;;[RW] GPIO 2,12 PIN  11 SSP1_SCK                TPAC1008_03_AX=FastOUT_3
+#define PLC_FastIO_4      5444 // BIT;;[RW] GPIO 3,06 PIN  78 AUART1_CTS              TPAC1008_03_AX=FastOUT_4
+#define PLC_FastIO_5      5445 // BIT;;[RW] GPIO 2,20 PIN   7 SSP2_SS1                TPAC1008_03_AX=FastIN_1
+#define PLC_FastIO_6      5446 // BIT;;[RW] GPIO 3,02 PIN  70 AUART0_CTS              TPAC1008_03_AX=FastIN_2
+#define PLC_FastIO_7      5447 // BIT;;[RW] GPIO 3,04 PIN  81 AUART1_RX               TPAC1008_03_AX=FastIN_3
+#define PLC_FastIO_8      5448 // BIT;;[RW] GPIO 3,05 PIN  65 AUART1_TX               TPAC1008_03_AX=FastIN_4
 
-#define PLC_FastIO_9     5449 // BIT;;[RW] GPIO 2,24 PIN 286 SSP3_SCK    TPAC1005=T1 TP*=PFO
-#define PLC_FastIO_10    5450 // BIT;;[RW] GPIO 2,27 PIN  15 SSP3_SS0    TPAC1005=T3
-#define PLC_FastIO_11    5451 // BIT;;[RW] GPIO 2,17 PIN   1 SSP2_MOSI   TPAC1005=T4 TP*=RTC:SSP2_MOSI
-#define PLC_FastIO_12    5452 // BIT;;[RW] GPIO 2,18 PIN 288 SSP2_MISO   TPAC1005=T5 TP*=RTC:SSP2_MISO
-#define PLC_FastIO_13    5453 // BIT;;[RW] GPIO 2,16 PIN 280 SSP2_SCK    TPAC1005=T6 TP*=RTC:SSP2_SCK
-#define PLC_FastIO_14    5454 // BIT;;[RW] GPIO 2,19 PIN   4 SSP2_SS0    TPAC1005=T7 TP*=RTC:SSP2_S0
-#define PLC_FastIO_15    5455 // BIT;;[RW] GPIO 2,21 PIN  18 SSP2_SS2    TPAC1005=T8 TP*=CS
-#define PLC_FastIO_16    5456 // BIT;;[RW] GPIO 2,25 PIN   9 SSP3_MOSI   TPAC1005=T9 TPAC1008*=RESET_WIFI
+#define PLC_FastIO_9      5449 // BIT;;[RW] GPIO 2,24 PIN 286 SSP3_SCK    TPAC1005=T1 TP*=PFO
+#define PLC_FastIO_10     5450 // BIT;;[RW] GPIO 2,27 PIN  15 SSP3_SS0    TPAC1005=T3
+#define PLC_FastIO_11     5451 // BIT;;[RW] GPIO 2,17 PIN   1 SSP2_MOSI   TPAC1005=T4 TP*=RTC:SSP2_MOSI
+#define PLC_FastIO_12     5452 // BIT;;[RW] GPIO 2,18 PIN 288 SSP2_MISO   TPAC1005=T5 TP*=RTC:SSP2_MISO
+#define PLC_FastIO_13     5453 // BIT;;[RW] GPIO 2,16 PIN 280 SSP2_SCK    TPAC1005=T6 TP*=RTC:SSP2_SCK
+#define PLC_FastIO_14     5454 // BIT;;[RW] GPIO 2,19 PIN   4 SSP2_SS0    TPAC1005=T7 TP*=RTC:SSP2_S0
+#define PLC_FastIO_15     5455 // BIT;;[RW] GPIO 2,21 PIN  18 SSP2_SS2    TPAC1005=T8 TP*=CS
+#define PLC_FastIO_16     5456 // BIT;;[RW] GPIO 2,25 PIN   9 SSP3_MOSI   TPAC1005=T9 TPAC1008*=RESET_WIFI
 
-#define PLC_FastIO_17    5457 // BIT;;[RW] GPIO 2,26 PIN   3 SSP3_MISO   TPAC1005=T10
-#define PLC_FastIO_18    5458 // BIT;;[RW] GPIO 2, 9 PIN 275 SSP0_DETECT TPAC1005=GPIO_A
-#define PLC_FastIO_19    5459 // BIT;;[RW] GPIO 4,20 PIN 230 JTAG_RTCK   TPAC1005=GPIO_B
-#define PLC_FastIO_20    5460
-#define PLC_FastIO_21    5461
-#define PLC_FastIO_22    5462
-#define PLC_FastIO_23    5463
-#define PLC_FastIO_24    5464
+#define PLC_FastIO_17     5457 // BIT;;[RW] GPIO 2,26 PIN   3 SSP3_MISO   TPAC1005=T10
+#define PLC_FastIO_18     5458 // BIT;;[RW] GPIO 2, 9 PIN 275 SSP0_DETECT TPAC1005=GPIO_A
+#define PLC_FastIO_19     5459 // BIT;;[RW] GPIO 4,20 PIN 230 JTAG_RTCK   TPAC1005=GPIO_B
+#define PLC_FastIO_20     5460
+#define PLC_FastIO_21     5461
+#define PLC_FastIO_22     5462
+#define PLC_FastIO_23     5463
+#define PLC_FastIO_24     5464
 
-#define PLC_FastIO_25    5465
-#define PLC_FastIO_26    5466
-#define PLC_FastIO_27    5467
-#define PLC_FastIO_28    5468
-#define PLC_FastIO_29    5469
-#define PLC_FastIO_30    5470
-#define PLC_FastIO_31    5471
-#define PLC_FastIO_32    5472
+#define PLC_FastIO_25     5465
+#define PLC_FastIO_26     5466
+#define PLC_FastIO_27     5467
+#define PLC_FastIO_28     5468
+#define PLC_FastIO_29     5469
+#define PLC_FastIO_30     5470
+#define PLC_FastIO_31     5471
+#define PLC_FastIO_32     5472
 
 // -------------------------------------------------------------------------------------------
 #define DIAGNOSTIC_TYPE_PORT    0
@@ -533,6 +535,9 @@ static int mect_write_ascii(int fd, unsigned node, unsigned command, float value
 static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *value);
 static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned value);
 static void mect_close(int fd);
+
+static unsigned plc_product_id();
+static unsigned plc_serial_number();
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -2556,15 +2561,21 @@ static void *engineThread(void *statusAdr)
         setEngineStatus(enError);;
     }
     // run
-    *threadStatusPtr = RUNNING;
     struct timespec abstime;
     clock_gettime(CLOCK_MONOTONIC, &abstime); // pthread_cond_timedwait + pthread_condattr_setclock
 
     // NO default Fast I/O config PLC_FastIO_Dir
 
-    pthread_mutex_lock(&theCrosstableClientMutex);
     // XX_GPIO_SET(1);
     int tic = 0;
+    RTIME tic_ns = 0ULL;
+    tic_ns = rt_timer_read();
+    lldiv_t x = lldiv(tic_ns, 1000000000ULL);
+    the_QdataRegisters[PLC_UPTIME_s] = x.quot;
+    the_QdataRegisters[PLC_UPTIME_ns] = x.rem;
+
+    pthread_mutex_lock(&theCrosstableClientMutex);
+    *threadStatusPtr = RUNNING;
     while (engineStatus != enExiting) {
 
         // trivial scenario
@@ -2588,6 +2599,12 @@ static void *engineThread(void *statusAdr)
             int e;
             // XX_GPIO_CLR(1);
             e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
+
+            tic_ns = rt_timer_read();
+            lldiv_t x = lldiv(tic_ns, 1000000000ULL);
+            the_QdataRegisters[PLC_UPTIME_s] = x.quot;
+            the_QdataRegisters[PLC_UPTIME_ns] = x.rem;
+
             // XX_GPIO_SET(1);
             if (e == ETIMEDOUT) {
                 break;
@@ -2616,8 +2633,8 @@ static void *engineThread(void *statusAdr)
         if (tic == 1 || tic == 6) {
             // TICtimer  NB no writeQdataRegisters();
 
-            float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;
-            RTIME tic_ms = rt_timer_read() / 1000000u;
+            float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;        
+            RTIME tic_ms = tic_ns / 1000000u;
 
             tic_ms = tic_ms % (86400 * 1000); // 1 day overflow
             plc_time = tic_ms / 1000.0;
@@ -5068,6 +5085,10 @@ void dataEngineStart(void)
     the_QdataRegisters[PLC_TOUCH_VOLUME] = 0x00000064; // duty=100%
     the_QdataRegisters[PLC_ALARM_VOLUME] = 0x00000064; // duty=100%
 
+    // P/N and S/N
+    the_QdataRegisters[PLC_PRODUCT_ID] = plc_product_id();
+    the_QdataRegisters[PLC_SERIAL_NUMBER] = plc_serial_number();
+
     // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
     if (ptRetentive == MAP_FAILED) {
@@ -5672,6 +5693,81 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
     }
 	RETURN(uRes);
 }
+
+/* ---------------------------------------------------------------------------- */
+
+static unsigned plc_product_id()
+{
+    unsigned retval = 0xFFFFffff;
+    FILE *f;
+
+    f = fopen("/rootfs_version", "r");
+    if (f) {
+        char buf[42];
+        char str[42];
+        unsigned x = 0, y = 0, z = 0;
+
+        if (fgets(buf, 42, f) == NULL)
+            goto close_file;
+        if (sscanf(buf, "Release: %5s", str) != 1)
+            goto close_file;
+        if (fgets(buf, 42, f) == NULL)
+            goto close_file;
+
+        // TP1043_01_A TP1043_01_B TP1043_02_A TP1043_02_B
+        // TP1057_01_A TP1057_01_B
+        // TP1070_01_A TP1070_01_B TP1070_01_C
+        // TP1070_02_E
+        if (sscanf(buf, "Target: TP%x_%x_%x", &x, &y, &z) == 3)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
+
+        // TPAC1005 TPAC1006
+        else if (sscanf(buf, "Target: TPAC%x", &x) == 1)
+            retval = ((x & 0xFFFF) << 16);
+
+        // TPAC1007_03 TPAC1008_01
+        else if (sscanf(buf, "Target: TPAC%x_%x", &x, &y) == 2)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8);
+
+        // TPAC1007_LV
+        else if (strcmp(buf, "Target: TPAC1007_LV") == 0)
+            retval = 0x10075500;
+
+        // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
+        // TPAC1008_03_AC TPAC1008_03_AD
+        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
+
+        // TPLC050_01_AA TPLC100_01_AA TPLC100_01_AB
+        else if (sscanf(buf, "Target: TPLC%x_%x_%x", &x, &y, &z) == 3)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
+
+    close_file:
+        fclose(f);
+    }
+
+    return retval;
+}
+
+static unsigned plc_serial_number()
+{
+    unsigned retval = 0xFFFFffff;
+    FILE *f;
+
+    f = fopen("/etc/serial.conf", "r");
+    if (f) {
+        char buf[80]; // YYYYMM1234
+
+        if (fgets(buf, (4+2+4+1), f)) {
+            retval = strtoul(buf, NULL, 10);
+        }
+        fclose(f);
+    }
+
+    return retval;
+}
+
+/* ---------------------------------------------------------------------------- */
 
 #include <rtdm/rtserial.h>
 
