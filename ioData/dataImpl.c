@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  15
+#define REVISION_LO  16
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -5711,6 +5711,8 @@ static unsigned plc_product_id()
         if (fgets(buf, 42, f) == NULL)
             goto close_file;
 
+        // the order of following tests is important
+
         // TP1043_01_A TP1043_01_B TP1043_02_A TP1043_02_B
         // TP1057_01_A TP1057_01_B
         // TP1070_01_A TP1070_01_B TP1070_01_C
@@ -5718,9 +5720,10 @@ static unsigned plc_product_id()
         if (sscanf(buf, "Target: TP%x_%x_%x", &x, &y, &z) == 3)
             retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
 
-        // TPAC1005 TPAC1006
-        else if (sscanf(buf, "Target: TPAC%x", &x) == 1)
-            retval = ((x & 0xFFFF) << 16);
+        // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
+        // TPAC1008_03_AC TPAC1008_03_AD
+        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
 
         // TPAC1007_03 TPAC1008_01
         else if (sscanf(buf, "Target: TPAC%x_%x", &x, &y) == 2)
@@ -5730,10 +5733,9 @@ static unsigned plc_product_id()
         else if (strcmp(buf, "Target: TPAC1007_LV") == 0)
             retval = 0x10075500;
 
-        // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
-        // TPAC1008_03_AC TPAC1008_03_AD
-        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
+        // TPAC1005 TPAC1006
+        else if (sscanf(buf, "Target: TPAC%x", &x) == 1)
+            retval = ((x & 0xFFFF) << 16);
 
         // TPLC050_01_AA TPLC100_01_AA TPLC100_01_AB
         else if (sscanf(buf, "Target: TPLC%x_%x_%x", &x, &y, &z) == 3)
