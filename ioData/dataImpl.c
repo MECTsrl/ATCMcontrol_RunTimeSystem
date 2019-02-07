@@ -2586,12 +2586,13 @@ static void *engineThread(void *statusAdr)
             continue;
         }
 
-        // abstime.tv_sec += THE_ENGINE_DELAY_ms / 1000;
-        abstime.tv_nsec = abstime.tv_nsec + (THE_ENGINE_DELAY_ms * 1E6); // (THE_ENGINE_DELAY_ms % 1000) * 1E6;
+        // ldiv_t x = ldiv(THE_ENGINE_DELAY_ms, 1000);
+        // abstime.tv_sec += x.quot;
+        // abstime.tv_sec += x.rem * 1E6;
+        abstime.tv_nsec = abstime.tv_nsec + (THE_ENGINE_DELAY_ms * 1E6);
         if (abstime.tv_nsec >= 1E9) {
-            ldiv_t x = ldiv(abstime.tv_nsec, 1E9);
-            abstime.tv_sec += x.quot;
-            abstime.tv_nsec = x.rem;
+            abstime.tv_sec += 1;
+            abstime.tv_nsec -= 1E9;
         }
         while (TRUE) {
             int e;

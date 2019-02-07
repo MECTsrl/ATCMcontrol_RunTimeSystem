@@ -558,32 +558,6 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 {
 	IEC_UINT uRes = OK;
 
-#if 0
-    struct timespec timer_next;
-    struct timespec timer_now;
-	ldiv_t x;
-	int retval; 
-
-	// get time
-    clock_gettime(CLOCK_MONOTONIC, &timer_now);
-	// add delay
-	x = ldiv(ulTime, 1000L);
-    timer_next.tv_sec = timer_now.tv_sec + x.quot;
-    timer_next.tv_nsec = timer_now.tv_nsec + (x.rem * 1E6);
-	// check tv_nsec overflow
-    if (timer_next.tv_nsec >= 1E9) {
-        x = ldiv(timer_next.tv_nsec, 1E9);
-        timer_next.tv_sec += x.quot;
-        timer_next.tv_nsec = x.rem;
-    }
-	// normalize to timer milliseconds base
-	x = ldiv(timer_next.tv_nsec, 1E6);
-	timer_next.tv_nsec = x.quot * 1E6;
-	// do wait
-	do {
-        retval = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &timer_next, NULL);
-	} while (retval == EINTR);
-#else
     struct timespec rqtp, rmtp;
     ldiv_t q;
 
@@ -595,7 +569,7 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
         rqtp.tv_sec = rmtp.tv_sec;
         rqtp.tv_nsec = rmtp.tv_nsec;
     }
-#endif
+
 	RETURN(uRes);
 }
 
