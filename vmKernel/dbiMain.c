@@ -1231,7 +1231,7 @@ static IEC_UINT dbiCopyMemberXDBI(SDBIInstance *pInst, SDBIType *pType, IEC_UINT
 
 	pxSrc = &pVar->xVar;
 
-	if (pBlock->uLen + sizeof(XDBIVar) + pxSrc->usNameSize + 1 > MAX_DATA)
+    if (pBlock->uLen + sizeof(XDBIVar) + pxSrc->usNameSize + 1 > (MAX_DATA - HD_BLOCK))
 	{
 		pBlock->byLast = FALSE;
 		RETURN(OK);
