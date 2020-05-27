@@ -567,7 +567,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
             xx_watchdog_disable();
         }
 
-    } if (addr == PLC_WATCHDOG_ms) {
+    } else if (addr == PLC_WATCHDOG_ms) {
         xx_watchdog_reset(value);
 
     } else if (addr == PLC_FastIO_Ena) {
