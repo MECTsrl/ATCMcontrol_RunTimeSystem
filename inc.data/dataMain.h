@@ -42,6 +42,7 @@ void dataEngineStart(void);
 void dataEngineStop(void);
 void dataEnginePwrFailStop(void);
 void dataEnableVerbosePrint(void);
+void dataEnableTimerOverflow(void);
 IEC_UINT dataInitialize(IEC_UINT uIOLayer);
 IEC_UINT dataFinalize(IEC_UINT uIOLayer, SIOConfig *pIO);
 IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO);

@@ -303,7 +303,7 @@ IEC_UINT timMain(void *pPara)
 
 			tDiff	= pAction->tNextExec - tCurrent;
 
-			if (tDiff > 3ul * pAction->tCycle + (bDelay == TRUE ? VM_FIRST_EXEC_DELAY : 0))
+			if (tDiff > 3ull * pAction->tCycle + (bDelay == TRUE ? VM_FIRST_EXEC_DELAY : 0))
 			{
 				pAction->tNextExec = tCurrent + pAction->tCycle;
 				tDiff = pAction->tCycle;

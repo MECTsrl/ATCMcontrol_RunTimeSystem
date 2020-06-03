@@ -718,6 +718,16 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 			void *(*start_routine) (void *), void *arg,
 			const char *name, size_t stacksize);
 int osPthreadSetSched(int policy, int sched_priority);
+
+//                       x...xxx...
+#define UN_MILIARDO_ULL  1000000000ull
+#define DIECI_MILIONI_UL   10000000ul
+#define UN_MILIONE_UL       1000000ul
+#define UN_MILIONE_ULL      1000000ull
+
+void clock_gettime_overflow_enable();
+int clock_gettime_overflow(clockid_t clk_id, struct timespec *tp);
+
 IEC_UINT osSleep(IEC_UDINT ulTime);
 IEC_UINT osSleepAbsolute(IEC_ULINT ulTime);
 

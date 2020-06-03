@@ -301,7 +301,7 @@ typedef struct _modbus_backend {
 	int (*check_integrity) (modbus_t *ctx, uint8_t *msg,
 			const int msg_length);
 	int (*pre_check_confirmation) (modbus_t *ctx, const uint8_t *req,
-			const uint8_t *rsp, int rsp_length);
+	uint8_t *rsp, int rsp_length);
 	int (*connect) (modbus_t *ctx);
 	void (*close) (modbus_t *ctx);
 	int (*flush) (modbus_t *ctx);
@@ -2893,7 +2893,7 @@ static ssize_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 static int _modbus_rtu_flush(modbus_t *);
 
 static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
-		const uint8_t *rsp, __attribute__((unused)) int rsp_length)
+        uint8_t *rsp, __attribute__((unused)) int rsp_length)
 {
 	/* Check responding slave is the slave we requested (except for broacast
 	 * request) */
@@ -4003,7 +4003,7 @@ static int _modbus_tcprtu_check_integrity(modbus_t *ctx, uint8_t *msg,
 }
 
 static int _modbus_tcprtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
-		const uint8_t *rsp, __attribute__((unused)) int rsp_length)
+        uint8_t *rsp, __attribute__((unused)) int rsp_length)
 {
 	/* Check responding slave is the slave we requested (except for broacast
 	 * request) */
@@ -4474,7 +4474,7 @@ static int _modbus_tcp_check_integrity(__attribute__((unused)) modbus_t *ctx, __
 }
 
 static int _modbus_tcp_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
-		const uint8_t *rsp, __attribute__((unused)) int rsp_length)
+        uint8_t *rsp, __attribute__((unused)) int rsp_length)
 {
 	int rc;
 	/* Check TID */

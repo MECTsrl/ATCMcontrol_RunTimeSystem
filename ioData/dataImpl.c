@@ -52,16 +52,17 @@
 #include "CANopen.h"
 
 #include <native/timer.h>
-#define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / 1000000000ULL; ts.tv_nsec = rt % 1000000000ULL; }
+#define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  17
+#define REVISION_LO  18
 
 #if DEBUG
 #undef VERBOSE_DEBUG
 #endif
 
 static int verbose_print_enabled = 0;
+static int timer_overflow_enabled = 0;
 
 #if 0
 // enabling FGPIO output (for clients 0,1,2,3)
@@ -551,6 +552,12 @@ void dataGetVersionInfo(char *szVersion)
 void dataEnableVerbosePrint(void)
 {
    verbose_print_enabled = 1;
+}
+
+void dataEnableTimerOverflow(void)
+{
+   timer_overflow_enabled = 1;
+   clock_gettime_overflow_enable();
 }
 
 static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t status)
@@ -2558,7 +2565,7 @@ static void *engineThread(void *statusAdr)
         fprintf(stderr, "**********************************************************\n");
         fprintf(stderr, "* PLC engine is in error status: application won't work! *\n");
         fprintf(stderr, "**********************************************************\n");
-        setEngineStatus(enError);;
+        setEngineStatus(enError);
     }
     // run
     struct timespec abstime;
@@ -2568,8 +2575,16 @@ static void *engineThread(void *statusAdr)
 
     // XX_GPIO_SET(1);
     int tic = 0;
-    RTIME tic_ns = rt_timer_read();
-    the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / 10000000ULL;
+    RTIME tic_ns;
+    struct timespec tic_ts;
+
+    if (timer_overflow_enabled) {
+        clock_gettime_overflow(CLOCK_MONOTONIC, &tic_ts);
+        tic_ns = tic_ts.tv_sec * UN_MILIARDO_ULL + tic_ts.tv_nsec;
+    } else {
+        tic_ns = rt_timer_read();
+    }
+    the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / DIECI_MILIONI_UL;
     the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
 
     pthread_mutex_lock(&theCrosstableClientMutex);
@@ -2599,8 +2614,13 @@ static void *engineThread(void *statusAdr)
             // XX_GPIO_CLR(1);
             e = pthread_cond_timedwait(&theAlarmsEventsCondvar, &theCrosstableClientMutex, &abstime);
 
-            tic_ns = rt_timer_read();
-            the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / 10000000ULL;
+            if (timer_overflow_enabled) {
+                clock_gettime_overflow(CLOCK_MONOTONIC, &tic_ts);
+                tic_ns = tic_ts.tv_sec * UN_MILIARDO_ULL + tic_ts.tv_nsec;
+            } else {
+                tic_ns = rt_timer_read();
+            }
+            the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / DIECI_MILIONI_UL;
             the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
 
             // XX_GPIO_SET(1);
@@ -2616,7 +2636,7 @@ static void *engineThread(void *statusAdr)
             struct timespec tv;
             struct tm datetime;
 
-            clock_gettime(CLOCK_HOST_REALTIME, &tv);
+            clock_gettime_overflow(CLOCK_HOST_REALTIME, &tv);
             if (localtime_r(&tv.tv_sec, &datetime)) {
 
                 the_QdataRegisters[PLC_Seconds] = datetime.tm_sec;
@@ -2632,7 +2652,7 @@ static void *engineThread(void *statusAdr)
             // TICtimer  NB no writeQdataRegisters();
 
             float plc_time, plc_timeMin, plc_timeMax, plc_timeWin;        
-            RTIME tic_ms = tic_ns / 1000000u;
+            RTIME tic_ms = tic_ns / UN_MILIONE_UL;
 
             tic_ms = tic_ms % (86400 * 1000); // 1 day overflow
             plc_time = tic_ms / 1000.0;

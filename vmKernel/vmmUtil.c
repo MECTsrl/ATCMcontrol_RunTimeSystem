@@ -1039,7 +1039,7 @@ IEC_UINT utilPow2(IEC_UINT n)
  */
 IEC_UDINT utilGetTimeDiffMS(IEC_ULINT ullStart)
 {
-	return (IEC_UDINT)(((osGetTimeUS() - ullStart) + 500) / 1000);
+	return utilGetTimeDiffMSEx(ullStart);
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -1049,7 +1049,8 @@ IEC_UDINT utilGetTimeDiffMS(IEC_ULINT ullStart)
  */
 IEC_ULINT utilGetTimeDiffUS(IEC_ULINT ullStart)
 {
-	return osGetTimeUS() - ullStart;
+	IEC_ULINT delta_us = osGetTimeUS() - ullStart;
+	return delta_us;
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -1059,7 +1060,9 @@ IEC_ULINT utilGetTimeDiffUS(IEC_ULINT ullStart)
  */
 IEC_UDINT utilGetTimeDiffMSEx(IEC_ULINT ullStart)
 {
-	return (IEC_UDINT)(((osGetTimeUSEx() - ullStart) + 500) / 1000);
+	IEC_ULINT delta_us = osGetTimeUSEx() - ullStart;
+	IEC_ULINT delta_ms = delta_us / 1000ull;
+	return (IEC_UDINT)delta_ms;
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -1069,7 +1072,8 @@ IEC_UDINT utilGetTimeDiffMSEx(IEC_ULINT ullStart)
  */
 IEC_ULINT utilGetTimeDiffUSEx(IEC_ULINT ullStart)
 {
-	return osGetTimeUSEx() - ullStart;
+	IEC_ULINT delta_us = osGetTimeUSEx() - ullStart;
+	return delta_us;
 }
 
 /* ---------------------------------------------------------------------------- */

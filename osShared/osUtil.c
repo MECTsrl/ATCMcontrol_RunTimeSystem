@@ -574,6 +574,32 @@ IEC_UINT osSleep(IEC_UDINT ulTime)
 }
 
 /* ---------------------------------------------------------------------------- */
+
+// 4294967ul // ~ 0xFFFFffff ms = 49 giorni 17 ore 02 minuti 47 secondi
+// 4294920ul //                   49 giorni 17 ore 02 minuti 00 secondi
+// 2147483ul // ~ 0x7FFFffff ms = 24 giorni 20 ore 31 minuti 23 secondi
+// 2147460ul //                   24 giorni 20 ore 31 minuti 00 secondi
+#define XX_CLOCK_OFFSET_s 4294920ul
+
+static unsigned xx_clock_offset_s = 0ul;
+
+void clock_gettime_overflow_enable()
+{
+    xx_clock_offset_s = XX_CLOCK_OFFSET_s;
+}
+
+int clock_gettime_overflow(clockid_t clk_id, struct timespec *tp)
+{
+    int retval;
+
+    retval = clock_gettime(clk_id, tp);
+    if (tp && (retval == 0)) {
+        tp->tv_sec += xx_clock_offset_s;
+    }
+    return retval;
+}
+
+/* ---------------------------------------------------------------------------- */
 /**
  * osSleepAbsolute			
  *
@@ -593,7 +619,7 @@ IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
 
 	// compute time
     x = lldiv(ullTime, 1000ULL);
-    timer_next.tv_sec = x.quot;
+    timer_next.tv_sec = x.quot - xx_clock_offset_s;
     timer_next.tv_nsec = x.rem * 1E6;
 	// do wait
 	do {
@@ -617,7 +643,7 @@ IEC_UDINT osElapsedTime32(IEC_UDINT now, IEC_UDINT start)
     if (now >= start)
         elapsed = now - start;
     else
-        elapsed = (0xFFFFffff - start) + now + 1;
+        elapsed = (0xFFFFfffful - start) + now + 1;
 
     return elapsed;
 }
@@ -667,14 +693,10 @@ IEC_UDINT osGetTime32(void)
  */
 IEC_ULINT osGetTime64(void)
 {
-  #if defined(_SOF_4CFC_SRC_)
-	
-	return (IEC_ULINT)*g_jiffies_ptr * (IEC_ULINT)10ull;
-	
+#if defined(_SOF_4CFC_SRC_)
+	return (IEC_ULINT)*g_jiffies_ptr * (IEC_ULINT)10ull;	
 #else
-
-	return osGetTime32Ex();
-
+	return osGetTime64Ex();
 #endif
 }
 
@@ -686,16 +708,10 @@ IEC_ULINT osGetTime64(void)
  */
 IEC_ULINT osGetTimeUS(void)
 {
-  #if defined(_SOF_4CFC_SRC_)
-	
-	return (IEC_ULINT)*g_jiffies_ptr * (IEC_ULINT)10000ull;
-	
-#else
-#if 0
-	return osGetTime32Ex();
+#if defined(_SOF_4CFC_SRC_)	
+	return (IEC_ULINT)*g_jiffies_ptr * (IEC_ULINT)10000ull;	
 #else
 	return osGetTimeUSEx();
-#endif
 #endif
 }
 
@@ -709,10 +725,11 @@ IEC_UDINT osGetTime32Ex(void)
 {
 #ifdef __XENO__
 	struct timespec tv;
+	IEC_ULINT time_ms;
 
-	clock_gettime(CLOCK_MONOTONIC, &tv);
-
-	return (IEC_UDINT)((IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6);
+	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
+	time_ms = (IEC_ULINT)tv.tv_sec * 1000ull + (IEC_ULINT)tv.tv_nsec / UN_MILIONE_ULL;
+	return (IEC_UDINT)time_ms;
 #else
 	static struct timeval tv;
 
@@ -733,11 +750,12 @@ IEC_UDINT osGetTime32Ex(void)
 IEC_ULINT osGetTime64Ex(void)
 {
 #ifdef __XENO__
-        struct timespec tv;
+	struct timespec tv;
+	IEC_ULINT time_ms;
 
-        clock_gettime(CLOCK_MONOTONIC, &tv);
-
-	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_nsec) / 1E6;
+	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
+	time_ms = (IEC_ULINT)tv.tv_sec * 1000ull + (IEC_ULINT)tv.tv_nsec / UN_MILIONE_ULL;
+	return time_ms;
 #else
 	static struct timeval tv;
 
@@ -758,11 +776,12 @@ IEC_ULINT osGetTime64Ex(void)
 IEC_ULINT osGetTimeUSEx(void)
 {
 #ifdef __XENO__
-    struct timespec tv;
+	struct timespec tv;
+	IEC_ULINT time_us;
 
-    clock_gettime(CLOCK_MONOTONIC, &tv);
-
-	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000000u + (tv.tv_nsec/1E3);
+	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
+	time_us = (IEC_ULINT)tv.tv_sec * UN_MILIONE_ULL + (IEC_ULINT)tv.tv_nsec / 1000ull;
+	return time_us;
 #else
 	static struct timeval tv;
 
@@ -770,7 +789,7 @@ IEC_ULINT osGetTimeUSEx(void)
 	{
 		return 0;
 	}
-	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000000u + tv.tv_usec;
+    return (IEC_ULINT)tv.tv_sec * UN_MILIONE_UL + tv.tv_usec;
 #endif
 }
 
