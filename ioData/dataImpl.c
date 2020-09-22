@@ -5346,12 +5346,13 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
 
             // (2 of 3) extract the requests for the other variables
             if (values) {
-                register int base, size, type, node, offset, n;
+                register int base, size, type, protocol, node, offset, n;
 
                 // are there any other consecutive writes to the same block?
                 base = CrossTable[addr].BlockBase;
                 size = CrossTable[addr].BlockSize;
                 type = CrossTable[addr].Types;
+                protocol = CrossTable[addr].Protocol;
                 offset = CrossTable[addr].Offset;
                 node = CrossTable[addr].node;
 
@@ -5365,7 +5366,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                         break;
                     }
                     // in Modbus clients we cannot mix BIT and non BIT variables
-                    if ((type == RTU || type == TCP || type == TCPRTU || type == RTU_SRV || type == TCP_SRV || type == TCPRTU_SRV)
+                    if ((protocol == RTU || protocol == TCP || protocol == TCPRTU || protocol == RTU_SRV || protocol == TCP_SRV || protocol == TCPRTU_SRV)
                         && ((type == BIT && CrossTable[addr + n].Types != BIT)
                            || (type != BIT && CrossTable[addr + n].Types == BIT))) {
                         break;
