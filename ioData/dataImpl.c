@@ -5742,6 +5742,11 @@ static unsigned plc_product_id()
         if (sscanf(buf, "Target: TP%x_%x_%x", &x, &y, &z) == 3)
             retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
 
+        // TPX1070_03_D TPX1070_03_E
+        else if (sscanf(buf, "Target: TPX%x_%x_%x", &x, &y, &z) == 3)
+            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
+
+        // TPAC1007_04_AA TPAC1007_04_AB TPAC1007_04_AC TPAC1007_04_AD TPAC1007_04_AE
         // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
         // TPAC1008_03_AC TPAC1008_03_AD
         else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
