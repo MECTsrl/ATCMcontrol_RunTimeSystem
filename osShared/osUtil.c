@@ -139,15 +139,23 @@ static struct {
 	{ 0x0164, 0x00000300 },		//MUXSEL6 SET(GPIO), page 710
 	{ 0x03c4, 0x00040000 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x00030000 },		//DRIVE12 CLR(4mA), page 764
+#if 0
 	{ 0x0638, 0x00000010 },		//PULL3 CLR(no), page 791
+#else
+    { 0x0634, 0x00000010 },		//PULL3 SET, page 791
+#endif
 	{ 0x0738, 0x00000010 },		//DOUT3 CLR, page 802
 
     // XX_GPIO( 7) FastIO_8 bank 3, pin 5 (pin 65, AUART1_TX)
 	{ 0x0164, 0x00000c00 },		//MUXSEL6 SET(GPIO), page 710
 	{ 0x03c4, 0x00400000 },		//DRIVE12 SET(3.3V), page 764
 	{ 0x03c8, 0x00300000 },		//DRIVE12 CLR(4mA), page 764
-	{ 0x0638, 0x00000020 },		//PULL3 CLR(no), page 791
-	{ 0x0738, 0x00000020 },		//DOUT3 CLR, page 802
+#if 0
+    { 0x0638, 0x00000020 },		//PULL3 CLR(no), page 791
+#else
+    { 0x0634, 0x00000020 },		//PULL3 SET, page 791
+#endif
+    { 0x0738, 0x00000020 },		//DOUT3 CLR, page 802
 
     // XX_GPIO( 8) FastIO_9 bank 2, pin 24 (pin 286, SSP3_SCK)
     { 0x0154, 0x00030000 },		//MUXSEL5 SET(GPIO), page 708
