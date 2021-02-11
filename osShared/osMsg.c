@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2011 Mect s.r.l
  *
  * This file is part of FarosPLC.
@@ -66,6 +66,7 @@ static OS_HANDLE g_hQueue[MAX_IPC_QUEUE];
 /* ----  Local Functions:	--------------------------------------------------- */
 #ifdef USE_POSIX_MQUEUE
 #define USE_TIMEDRECEIVE
+#define MQ_RECEIVE_WAIT 100 // VMM_TO_EXT_MSG, VMM_TO_IPC_MSG, VMM_TO_IPC_MSG_LONG
 #else
 #error devi definire USE_POSIX_MQUEUE
 typedef struct mymsgbuf {
@@ -193,21 +194,26 @@ IEC_UINT osDestroyIPCQueue(IEC_UINT uQueue)
 
 IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 {
-#ifdef USE_TIMEDRECEIVE
+#ifdef USE_POSIX_MQUEUE
 	int retval;
 	if (ulTimeOut == VMM_WAIT_FOREVER) {
+        	// wait forever
 		retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
 	} else if (ulTimeOut == VMM_NO_WAIT) {
 		struct mq_attr mattr;
-		if (mq_getattr(g_hQueue[uQueue], &mattr) == -1) {
+
+	        // check if there are queued messages
+        	if (mq_getattr(g_hQueue[uQueue], &mattr) == -1) {
 			RETURN_e(ERR_IPC_RECV_FAILED);
 		}
 		if (mattr.mq_curmsgs == 0) {
 			RETURN_e(WRN_TIME_OUT);
 		}
+	        // receive will succeed immediately
 		retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
 	} else {
-		struct timespec abs_timeout;
+#ifdef USE_TIMEDRECEIVE
+        struct timespec abs_timeout;
         ldiv_t q = ldiv(ulTimeOut, 1000); // ms =--> (s,ms)
 
         clock_gettime(CLOCK_REALTIME, &abs_timeout); // mq_timedreceive
@@ -217,7 +223,26 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 			abs_timeout.tv_sec += 1;
 			abs_timeout.tv_nsec -= 1E9;
 		}
+        // wait at most ulTimeout
 		retval = mq_timedreceive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL, &abs_timeout);
+#else
+        IEC_ULINT ullTimeLimit = osGetTime64Ex() + ulTimeOut;
+        struct mq_attr mattr;
+
+        // waiting for queued messages
+        do {
+            osSleep(MQ_RECEIVE_WAIT);
+            if (mq_getattr(g_hQueue[uQueue], &mattr) == -1) {
+                RETURN_e(ERR_IPC_RECV_FAILED);
+            }
+        } while (mattr.mq_curmsgs == 0 && osGetTime64Ex() < ullTimeLimit);
+        // check if there are queued messages
+        if (mattr.mq_curmsgs == 0) {
+            RETURN_e(WRN_TIME_OUT);
+        }
+        // receive will succeed immediately
+        retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
+#endif
 	}
 	if (retval != -1) {
 		if (pMessage->uLen > FC_MAX_MSG_LEN) {
@@ -234,13 +259,10 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 #else
 	IEC_UINT	uRes	= OK;
 	IEC_UDINT	ulTime	= 0;
-#ifdef USE_POSIX_MQUEUE
-	ssize_t mq_receive_res;
-#else
 	IEC_BOOL	bOnce	= TRUE;
 	int result;
 	mymsgbuf_s buffer;
-#endif
+
 
 	if (uQueue > MAX_IPC_QUEUE)
 	{
@@ -254,37 +276,6 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 	
 	for ( ; ; )
 	{
-#ifdef USE_POSIX_MQUEUE
-		mq_receive_res = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
-	        if (mq_receive_res != -1) {
-			if (pMessage->uLen > FC_MAX_MSG_LEN) {
-				IEC_DATA *pData = (IEC_DATA *)*(IEC_UDINT *)pMessage->pData;
-				OS_MEMCPY(pMessage->pData, pData, pMessage->uLen);
-				osFree(&pData);
-			}
-			RETURN(OK);
-	        }
-		if (errno != EAGAIN) {
-			RETURN_e(ERR_IPC_RECV_FAILED);
-		}
-		// errno == EAGAIN
-		if (ulTimeOut == VMM_NO_WAIT) {
-			return WRN_TIME_OUT;
-		}
-		if ((ulTimeOut != VMM_WAIT_FOREVER) && (osGetTime32() - ulTime >= ulTimeOut)) {
-			return WRN_TIME_OUT;
-		}
-		// ulTimeOut == VMM_WAIT_FOREVER
-#ifdef __XENO__
-#ifdef USE_TIMEDRECEIVE
-		; // retry
-#else
-	        osSleep(1); // 1ms
-#endif
-#else
-		osSleep(11); // 11ms
-#endif
-#else
 		/* this while is a work-around that force the msgrcv again in case that a signal interrupt it */
 		do
 		{
@@ -333,7 +324,7 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 		}
 
 		osSleep(11);
-#endif
+
 	} /* for ( ; ; ) */
 	
 	uRes = ERR_ERROR;
