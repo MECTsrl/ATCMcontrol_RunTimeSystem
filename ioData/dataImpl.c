@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  20
+#define REVISION_LO  21
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -4002,7 +4002,7 @@ static inline void changeDeviceStatus(u_int32_t d, enum DeviceStatus status)
     case NO_HOPE:
         break;
     case NOT_CONNECTED:
-        if (previous_status == CONNECTED_WITH_ERRORS) {
+        if (previous_status == CONNECTED_WITH_ERRORS || previous_status == CONNECTED) {
             // set to 0 the input variables for all device nodes
             for (n = 0; n < theDevices[d].var_num; ++n) {
                 addr = theDevices[d].device_vars[n].addr;
