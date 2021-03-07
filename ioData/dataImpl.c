@@ -55,7 +55,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  21
+#define REVISION_LO  22
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -2795,10 +2795,24 @@ static void fieldbusReset(u_int16_t d)
         // FIXME: assert
         break;
     case RTU:
-    case TCP:
-    case TCPRTU:
         modbus_close(theDevices[d].modbus_ctx);
         break;
+    case TCP:
+    {
+        char buffer[MAX_IPADDR_LEN];
+
+        modbus_close(theDevices[d].modbus_ctx);
+        modbus_free(theDevices[d].modbus_ctx);
+        theDevices[d].modbus_ctx = modbus_new_tcp(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+    } break;
+    case TCPRTU:
+    {
+        char buffer[MAX_IPADDR_LEN];
+
+        modbus_close(theDevices[d].modbus_ctx);
+        modbus_free(theDevices[d].modbus_ctx);
+        theDevices[d].modbus_ctx = modbus_new_tcprtu(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+    } break;
     case CANOPEN:
         // CANopenResetChannel(theDevices[d].u.can.bus);
         break;
