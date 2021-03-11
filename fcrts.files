@@ -48,6 +48,8 @@ inc.vis/visMain.h
 inc.vis/visShared.h
 ioData/dataImpl.c
 ioData/dataMain.c
+ioData/hmi_plc.c
+ioData/hmi_plc.h
 ioData/ioData.mak
 ioData/objects.mk
 ioTest/ioTest.dsp

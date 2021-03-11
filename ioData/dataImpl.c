@@ -48,6 +48,8 @@
 #include "mectRetentive.h"
 #endif
 
+#include "hmi_plc.h"
+
 #include "libModbus.h"
 #include "CANopen.h"
 
@@ -222,11 +224,6 @@ static int timer_overflow_enabled = 0;
 
 #define THE_MAX_CLIENT_SLEEP_ns 1E9
 
-// -------- MANAGE THREADS: DATA & SYNCRO
-#define THE_UDP_PERIOD_ms	100
-#define THE_UDP_TIMEOUT_ms	500
-#define THE_UDP_SEND_ADDR   "127.0.0.1"
-
 // --------
 #define DimCrossTable   5472
 #define DimAlarmsCT     1152
@@ -234,6 +231,29 @@ static int timer_overflow_enabled = 0;
 
 static struct system_ini system_ini;
 static int system_ini_ok;
+
+#define THE_UDP_TIMEOUT_ms	500
+
+#ifdef USE_HMI_PLC
+
+static HmiPlcBlock plcBlock;
+static HmiPlcBlock hmiBlock;
+#define THE_DATA_SIZE sizeof(HmiPlcBlock)
+
+#define VAR_VALUE(n)  plcBlock.values[n].u32
+#define VAR_STATE(n)  plcBlock.states[n]
+
+#define DATA_OK      varStatus_DATA_OK
+#define DATA_WARNING varStatus_DATA_WARNING
+#define DATA_ERROR   varStatus_DATA_ERROR
+
+#else
+
+#define VAR_VALUE(n)  the_QdataRegisters[n]
+#define VAR_STATE(n)  the_QdataStates[n]
+
+// -------- MANAGE THREADS: DATA & SYNCRO
+#define THE_UDP_SEND_ADDR   "127.0.0.1"
 
 // -------- DATA MANAGE FROM HMI ---------------------------------------------
 #define REG_DATA_NUMBER     7680 // 1 + 5472 + (5500-5473) + 5472 / 4 + ...
@@ -247,6 +267,7 @@ static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
 static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
 
 static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[5500])) + 1;
+
 // Qdata states
 #define DATA_OK            0    // reading/writing success
 #define DATA_ERROR         1    // reading/writing failure
@@ -277,6 +298,8 @@ static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in 
 #define QUEUE_EMPTY         0
 #define QUEUE_BUSY_WRITE    1
 #define QUEUE_BUSY_READ     2
+
+#endif
 
 // -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCPRTU_SRV) ------------
 #define REG_SRV_NUMBER      4096
@@ -522,8 +545,17 @@ static void *clientThread(void *statusAdr);
 
 static int LoadXTable(void);
 static void AlarmMngr(void);
-static void PLCsync(void);
 
+static void PLCsync_clearHvars(void);
+#ifdef USE_HMI_PLC
+static void PLCsync_do_read(u_int16_t addr);
+static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr);
+static void PLCsync(PlcServer *plcServer);
+#else
+static void PLCsync_do_read(u_int16_t addr, u_int16_t indx);
+static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx);
+static void PLCsync(void);
+#endif
 static void doWriteDeviceRetentives(u_int32_t d);
 static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
@@ -661,26 +693,26 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
         // if the variable is used in alarms/events conditions
         // ... and the value changed or the state became OK (at boot-time, ...)
         if (CrossTable[addr].usedInAlarmsEvents
-          && (value != the_QdataRegisters[addr] || the_QdataStates[addr] != DATA_OK)) {
+          && (value != VAR_VALUE(addr)|| VAR_STATE(addr) != DATA_OK)) {
             // change value and/or status ... and then re-check the alarms/events conditions
-            the_QdataRegisters[addr] = value;
-            the_QdataStates[addr] = status;
+            VAR_VALUE(addr) = value;
+            VAR_STATE(addr) = DATA_OK;
             pthread_cond_signal(&theAlarmsEventsCondvar);
         } else {
             // simply change value and status
-            the_QdataRegisters[addr] = value;
-            the_QdataStates[addr] = status;
+            VAR_VALUE(addr) = value;
+            VAR_STATE(addr) = DATA_OK;
         }
         break;
 
     case DATA_WARNING:
         // only status change, no value change yet
-        the_QdataStates[addr] = status;
+        VAR_STATE(addr) = DATA_WARNING;
         break;
 
     case DATA_ERROR:
-        the_QdataRegisters[addr] = value;
-        the_QdataStates[addr] = status;
+        VAR_VALUE(addr) = value;
+        VAR_STATE(addr) = DATA_ERROR;
         break;
 
     default:
@@ -833,7 +865,7 @@ static inline void incDiagnostic(u_int16_t addr, u_int16_t offset)
         return;
     }
     addr += offset;
-    writeQdataRegisters(addr, the_QdataRegisters[addr] + 1, DATA_OK);
+    writeQdataRegisters(addr, VAR_VALUE(addr) + 1, DATA_OK);
 }
 
 static inline unsigned get_byte_bit(u_int8_t data, unsigned n)
@@ -1067,10 +1099,15 @@ static int LoadXTable(void)
         CrossTable[addr].BlockSize = 0;
         CrossTable[addr].Output = FALSE;
         CrossTable[addr].OldVal = 0;
-        the_QdataStates[addr] = DATA_ERROR; // in error until we actually read it
         CrossTable[addr].device = 0xffff;
         CrossTable[addr].node = 0xffff;
+
+#ifdef USE_HMI_PLC
+        VAR_STATE(addr) = DATA_ERROR; // in error until we actually read it
+#else
+        VAR_STATE(addr) = DATA_ERROR; // in error until we actually read it
         the_QsyncRegisters[addr] = QUEUE_EMPTY;
+#endif
     }
     lastAlarmEvent = 0;
     for (addr = 0; addr <= DimAlarmsCT; ++addr) {
@@ -1246,7 +1283,7 @@ static int LoadXTable(void)
         }
         if (strcmp(p, "PLC") == 0) {
             CrossTable[addr].Protocol = PLC;
-            the_QdataStates[addr] = DATA_OK; // PLC variables are already ok at startup
+            VAR_STATE(addr) = DATA_OK; // PLC variables are already ok at startup
         } else if (strcmp(p, "RTU") == 0) {
             CrossTable[addr].Protocol = RTU;
         } else if (strcmp(p, "TCP") == 0) {
@@ -1723,7 +1760,7 @@ static inline void setAlarmEvent(int i)
 {
     u_int16_t addr = ALCrossTable[i].TagAddr;
 
-    if (the_QdataRegisters[addr] == 0) {
+    if (VAR_VALUE(addr) == 0) {
         // set alarm and call tasks only if currently clear
         writeQdataRegisters(addr, 1, DATA_OK);
         if (ALCrossTable[i].ALType == Alarm) {
@@ -1766,14 +1803,14 @@ static void AlarmMngr(void)
         register u_int16_t SourceAddr = ALCrossTable[i].SourceAddr;
         register u_int16_t Operator = ALCrossTable[i].ALOperator;
 
-        if (the_QdataStates[SourceAddr] != DATA_OK) {
+        if (VAR_STATE(SourceAddr) != DATA_OK) {
             // unreliable values
             continue;
         }
 
         if (Operator == OPER_RISING || Operator == OPER_FALLING) {
             // checking against old value
-            register int32_t SourceValue = the_QdataRegisters[SourceAddr];
+            register int32_t SourceValue = VAR_VALUE(SourceAddr);
             register int32_t CompareVal = CrossTable[i].OldVal;
 
             if (Operator == OPER_RISING) {
@@ -1805,17 +1842,17 @@ static void AlarmMngr(void)
                 float fvalue;
             } SourceValue, CompareVal;
 
-            SourceValue.uvalue = the_QdataRegisters[SourceAddr];
+            SourceValue.uvalue = VAR_VALUE(SourceAddr);
 
             // checking either against fixed value or against variable value
             if (CompareAddr == 0) {
                 // fixed value
                 CompareVal.uvalue = ALCrossTable[i].ALCompareVal;
-            } else if (the_QdataStates[CompareAddr] != DATA_OK) {
+            } else if (VAR_STATE(CompareAddr) != DATA_OK) {
                 // unreliable values
                 continue;
             } else {
-                CompareVal.uvalue = the_QdataRegisters[CompareAddr];
+                CompareVal.uvalue = VAR_VALUE(CompareAddr);
                 // FIXME: align decimals and types
 
             }
@@ -1873,10 +1910,8 @@ static void AlarmMngr(void)
     }
 }
 
-static void PLCsync(void)
+static void PLCsync_clearHvars(void)
 {
-    u_int16_t indx;
-    u_int16_t oper;
     u_int16_t addr;
     int d, n;
 
@@ -1889,8 +1924,194 @@ static void PLCsync(void)
             }
         }
     }
+}
+
+#ifdef USE_HMI_PLC
+static void PLCsync_do_read(u_int16_t addr)
+#else
+static void PLCsync_do_read(u_int16_t addr, u_int16_t indx)
+#endif
+{
+    int d, n;
+
+    // set H variables status
+    if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
+        d = CrossTable[addr].device;
+        for (n = 0; n < theDevices[d].var_num; ++n) {
+            if (theDevices[d].device_vars[n].addr == addr) {
+                theDevices[d].device_vars[n].active = 1;
+                break;
+            }
+        }
+    }
+    switch (CrossTable[addr].Protocol) {
+    case PLC:
+        // immediate read: no fieldbus
+#ifdef USE_HMI_PLC
+#else
+        // ready "by design" VAR_VALUE(addr) = VAR_VALUE(addr);
+        // VAR_STATE(addr) = DATA_OK;
+#endif
+        break;
+    case RTU:
+    case TCP:
+    case TCPRTU:
+    case CANOPEN:
+    case MECT:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
+        // consider only "H" variables, because the "P,S,F" are already managed by clientThread
+        if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
+            // activate semaphore only the first time
+            sem_post(&newOperations[CrossTable[addr].device]);
+        } else {
+#ifdef USE_HMI_PLC
+            // already done in PLC_sync(): plcBlock.states[addr] = varStatus_DO_READ;
+#else
+            the_QsyncRegisters[indx] = QUEUE_EMPTY;
+#endif
+        }
+        break;
+    default:
+        ;
+    }
+}
+
+#ifdef USE_HMI_PLC
+static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr)
+#else
+static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx)
+#endif
+{
+    unsigned written = 0;
+
+    switch (CrossTable[addr].Protocol) {
+    case PLC: {
+        // immediate write: no fieldbus
+#ifdef USE_HMI_PLC
+        uint32_t value = hmiBlock.values[addr].u32;
+#else
+        u_int32_t value = the_IdataRegisters[addr];
+        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
+#endif
+        writeQdataRegisters(addr, value, DATA_OK);
+        written = 1;
+    }   break;
+    case RTU:
+    case TCP:
+    case TCPRTU:
+    case CANOPEN:
+    case MECT:
+    case RTU_SRV:
+    case TCP_SRV:
+    case TCPRTU_SRV:
+        if (CrossTable[addr].device != 0xffff) {
+            // search for consecutive writes
+            register int i;
+
+#ifdef USE_HMI_PLC
+            for (i = 1; i < MAX_VALUES && (addr + i) <= DimCrossTable; ++i) {
+                register u_int16_t addr_i = addr + i;
+                register enum varStatus requestedStatus_i = hmiBlock.states[addr_i];
+
+                if (requestedStatus_i == varStatus_DO_WRITE
+                    && CrossTable[addr].device == CrossTable[addr_i].device)
+                    continue;
+                else
+                    break;
+            }
+#else
+            for (i = 1; i < MAX_VALUES && (indx + i) <= DimCrossTable; ++i) {
+                register u_int16_t oper_i = the_IsyncRegisters[indx + i] & QueueOperMask;
+                register u_int16_t addr_i = the_IsyncRegisters[indx + i] & QueueAddrMask;
+
+                if (the_QsyncRegisters[indx + i] != QUEUE_BUSY_WRITE
+                 && oper_i == oper && addr_i == (addr + i)
+                 && CrossTable[addr].device == CrossTable[addr_i].device)
+                    continue;
+                else
+                    break;
+            }
+#endif
+
+            // trying multiple writes
+            i = i - 1; // may be 0
+#ifdef USE_HMI_PLC
+            written = doWriteVariable(addr, hmiBlock.values[addr].u32, (uint32_t *)hmiBlock.values, NULL, addr + i);
+#else
+            written = doWriteVariable(addr, the_IdataRegisters[addr], the_IdataRegisters, NULL, addr + i);
+#endif
+
+#ifdef USE_HMI_PLC
+            // nothing to do
+#else
+            // acknowledge the written items
+            for (i = 0; i < written; ++i) {
+
+                the_QsyncRegisters[indx + i] = QUEUE_BUSY_WRITE;
+            }
+#endif
+        }
+        break;
+    default:
+        ;
+    }
+    return written;
+}
+
+#ifdef USE_HMI_PLC
+static void PLCsync(PlcServer *plcServer)
+#else
+static void PLCsync(void)
+#endif
+{
+    u_int16_t addr;
+    unsigned written = 0;
+#ifdef USE_HMI_PLC
+#else
+    u_int16_t indx;
+    u_int16_t oper;
+    int d, n;
+#endif
+
+    PLCsync_clearHvars();
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
+#ifdef USE_HMI_PLC
+    for (addr = 1; addr <= DimCrossTable; ++addr) {
+        register enum varStatus requestedStatus = hmiBlock.states[addr];
+
+        switch (requestedStatus) {
+
+        case varStatus_NOP:
+            break;
+
+        case varStatus_DO_READ:
+            PLCsync_do_read(addr);
+            break;
+
+        case varStatus_PREPARING:
+            break;
+
+        case varStatus_DO_WRITE:
+            written = PLCsync_do_write(plcServer, addr);
+            // check for multiple writes
+            if (written > 1) {
+                addr += (written - 1);
+            }
+            break;
+
+        case varStatus_DATA_OK:
+        case varStatus_DATA_WARNING:
+        case varStatus_DATA_ERROR:
+            // mhhh, it should not happen
+            break;
+        default:
+            ;
+        }
+    }
+#else
     for (indx = 1; indx <= DimCrossTable; ++indx) {
         oper = the_IsyncRegisters[indx] & QueueOperMask;
         addr = the_IsyncRegisters[indx] & QueueAddrMask;
@@ -1905,42 +2126,9 @@ static void PLCsync(void)
                 // }
                 break;
             case READ:
-                // set H variables status for each device
-                if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
-                    d = CrossTable[addr].device;
-                    for (n = 0; n < theDevices[d].var_num; ++n) {
-                        if (theDevices[d].device_vars[n].addr == addr) {
-                            theDevices[d].device_vars[n].active = 1;
-                        }
-                    }
-                }
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_READ) {
                     the_QsyncRegisters[indx] = QUEUE_BUSY_READ;
-                    switch (CrossTable[addr].Protocol) {
-                    case PLC:
-                        // immediate read: no fieldbus
-                        // ready "by design" the_QdataRegisters[addr] = the_QdataRegisters[addr];
-                        // the_QdataStates[addr] = DATA_OK;
-                        break;
-                    case RTU:
-                    case TCP:
-                    case TCPRTU:
-                    case CANOPEN:
-                    case MECT:
-                    case RTU_SRV:
-                    case TCP_SRV:
-                    case TCPRTU_SRV:
-                        // consider only "H" variables, because the "P,S,F" are already managed by clientThread
-                        if (CrossTable[addr].Plc == Htype && CrossTable[addr].device != 0xffff) {
-                            // activate semaphore only the first time
-                            sem_post(&newOperations[CrossTable[addr].device]);
-                        } else {
-                            the_QsyncRegisters[indx] = QUEUE_EMPTY;
-                        }
-                        break;
-                    default:
-                        ;
-                    }
+                    PLCsync_do_read(addr, indx);
                 }
                 break;
             case WRITE_SINGLE:
@@ -1948,69 +2136,10 @@ static void PLCsync(void)
             case WRITE_RIC_SINGLE:
             case WRITE_RIC_MULTIPLE:
                 if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
-                    switch (CrossTable[addr].Protocol) {
-                    case PLC:
-                        // immediate write: no fieldbus
-                        writeQdataRegisters(addr, the_IdataRegisters[addr], DATA_OK);
-                        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
-                        break;
-                    case RTU:
-                    case TCP:
-                    case TCPRTU:
-                    case CANOPEN:
-                    case MECT:
-                    case RTU_SRV:
-                    case TCP_SRV:
-                    case TCPRTU_SRV:
-                        if (CrossTable[addr].device != 0xffff) {
-#ifdef VERBOSE_DEBUG
-                            fprintf(stderr, "_________: write(0x%04x) [%u]@%u value=%u %s\n", oper, addr, indx, the_IdataRegisters[addr], CrossTable[addr].Tag);
-#endif
-                            // search for consecutive writes
-                            register int i;
-                            register u_int16_t oper_i;
-                            register u_int16_t addr_i;
-                            register unsigned written;
-
-                            for (i = 1; i < MAX_VALUES && (indx + i) <= DimCrossTable; ++i) {
-                                oper_i = the_IsyncRegisters[indx + i] & QueueOperMask;
-                                addr_i = the_IsyncRegisters[indx + i] & QueueAddrMask;
-
-                                if (the_QsyncRegisters[indx + i] != QUEUE_BUSY_WRITE
-                                 && oper_i == oper && addr_i == (addr + i)
-                                 && CrossTable[addr].device == CrossTable[addr + i].device)
-                                    continue;
-                                else
-                                    break;
-                            }
-
-                            // trying multiple writes
-                            i = i - 1; // may be 0
-#ifdef VERBOSE_DEBUG
-                            {
-                                int z;
-                                fprintf(stderr, "PLCsync() --> doWriteVariable(%u, 0x%08x, , , %d) [%d]\n",
-                                        addr, the_IdataRegisters[addr], addr + i, i + 1);
-                                for (z = 0; z < i + 1; ++z)
-                                    fprintf(stderr, "\t%02d: 0x%08x\n", z, the_IdataRegisters[addr + z]);
-                            }
-#endif
-                            written = doWriteVariable(addr, the_IdataRegisters[addr], the_IdataRegisters, NULL, addr + i);
-#ifdef VERBOSE_DEBUG
-                            fprintf(stderr, "PLCsync() <-- written = %u\n", written);
-#endif
-                            // acknowledge the written items
-                            for (i = 0; i < written; ++i) {
-                                the_QsyncRegisters[indx + i] = QUEUE_BUSY_WRITE;
-                            }
-                            // adjust the loop index
-                            if (written > 1) {
-                                indx += written - 1;
-                            }
-                        }
-                        break;
-                    default:
-                        ;
+                    written = PLCsync_do_write(addr, indx);
+                    // check for multiple writes
+                    if (written > 1) {
+                        indx += (written - 1);
                     }
                 }
                 break;
@@ -2022,6 +2151,8 @@ static void PLCsync(void)
             }
         }
     }
+#endif
+
 #ifdef VERBOSE_DEBUG
     static int counter = 0;
 
@@ -2584,8 +2715,8 @@ static void *engineThread(void *statusAdr)
     } else {
         tic_ns = rt_timer_read();
     }
-    the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / DIECI_MILIONI_UL;
-    the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
+    VAR_VALUE(PLC_UPTIME_cs) = tic_ns / DIECI_MILIONI_UL;
+    VAR_VALUE(PLC_UPTIME_s) = VAR_VALUE(PLC_UPTIME_cs) / 100UL;
 
     pthread_mutex_lock(&theCrosstableClientMutex);
     *threadStatusPtr = RUNNING;
@@ -2620,8 +2751,8 @@ static void *engineThread(void *statusAdr)
             } else {
                 tic_ns = rt_timer_read();
             }
-            the_QdataRegisters[PLC_UPTIME_cs] = tic_ns / DIECI_MILIONI_UL;
-            the_QdataRegisters[PLC_UPTIME_s] = the_QdataRegisters[PLC_UPTIME_cs] / 100UL;
+            VAR_VALUE(PLC_UPTIME_cs) = tic_ns / DIECI_MILIONI_UL;
+            VAR_VALUE(PLC_UPTIME_s) = VAR_VALUE(PLC_UPTIME_cs) / 100UL;
 
             // XX_GPIO_SET(1);
             if (e == ETIMEDOUT) {
@@ -2638,13 +2769,12 @@ static void *engineThread(void *statusAdr)
 
             clock_gettime_overflow(CLOCK_HOST_REALTIME, &tv);
             if (localtime_r(&tv.tv_sec, &datetime)) {
-
-                the_QdataRegisters[PLC_Seconds] = datetime.tm_sec;
-                the_QdataRegisters[PLC_Minutes] = datetime.tm_min;
-                the_QdataRegisters[PLC_Hours] = datetime.tm_hour;
-                the_QdataRegisters[PLC_Day] = datetime.tm_mday;
-                the_QdataRegisters[PLC_Month] = datetime.tm_mon + 1;
-                the_QdataRegisters[PLC_Year] = 1900 + datetime.tm_year;
+                VAR_VALUE(PLC_Seconds) = datetime.tm_sec;
+                VAR_VALUE(PLC_Minutes) = datetime.tm_min;
+                VAR_VALUE(PLC_Hours) = datetime.tm_hour;
+                VAR_VALUE(PLC_Day) = datetime.tm_mday;
+                VAR_VALUE(PLC_Month) = datetime.tm_mon + 1;
+                VAR_VALUE(PLC_Year) = 1900 + datetime.tm_year;
             }
         }
 
@@ -2656,7 +2786,8 @@ static void *engineThread(void *statusAdr)
 
             tic_ms = tic_ms % (86400 * 1000); // 1 day overflow
             plc_time = tic_ms / 1000.0;
-            memcpy(&plc_timeWin, &the_QdataRegisters[PLC_timeWin], sizeof(u_int32_t));
+            memcpy(&plc_timeWin, &VAR_VALUE(PLC_timeWin), sizeof(u_int32_t));
+
             if (plc_timeWin < 5.0) {
                 plc_timeWin = 5.0;
             }
@@ -2667,22 +2798,22 @@ static void *engineThread(void *statusAdr)
                 plc_timeMin = plc_time - plc_timeWin;
                 plc_timeMax = plc_time;
             }
-            memcpy(&the_QdataRegisters[PLC_time], &plc_time, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[PLC_timeMin], &plc_timeMin, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[PLC_timeMax], &plc_timeMax, sizeof(u_int32_t));
-            memcpy(&the_QdataRegisters[PLC_timeWin], &plc_timeWin, sizeof(u_int32_t));
+            memcpy(&VAR_VALUE(PLC_time), &plc_time, sizeof(u_int32_t));
+            memcpy(&VAR_VALUE(PLC_timeMin), &plc_timeMin, sizeof(u_int32_t));
+            memcpy(&VAR_VALUE(PLC_timeMax), &plc_timeMax, sizeof(u_int32_t));
+            memcpy(&VAR_VALUE(PLC_timeWin), &plc_timeWin, sizeof(u_int32_t));
         }
 
-        if (the_QdataRegisters[PLC_ResetValues]) {
+        if (VAR_VALUE(PLC_ResetValues)) {
             u_int16_t addr;
             for (addr = 5000; addr < 5160; addr += 10) {
-                the_QdataRegisters[addr + 3] = 0; // READS
-                the_QdataRegisters[addr + 4] = 0; // WRITES
-                the_QdataRegisters[addr + 5] = 0; // TIMEOUTS
-                the_QdataRegisters[addr + 6] = 0; // COMM_ERRORS
-                the_QdataRegisters[addr + 7] = 0; // LAST_ERROR
+                VAR_VALUE(addr + 3) = 0; // READS
+                VAR_VALUE(addr + 4) = 0; // WRITES
+                VAR_VALUE(addr + 5) = 0; // TIMEOUTS
+                VAR_VALUE(addr + 6) = 0; // COMM_ERRORS
+                VAR_VALUE(addr + 7) = 0; // LAST_ERROR
             }
-            the_QdataRegisters[PLC_ResetValues] = 0;
+            VAR_VALUE(PLC_ResetValues) = 0;
         }
 
         // PLC_FastIO, both In and Out
@@ -2692,16 +2823,15 @@ static void *engineThread(void *statusAdr)
         for (addr = PLC_FastIO_1; addr < (PLC_FastIO_1 + XX_GPIO_MAX); ++addr) {
             value = xx_gpio_get(addr - PLC_FastIO_1);
 
-            if (value != the_QdataRegisters[addr]) {
+            if (value != VAR_VALUE(addr)) {
                 writeQdataRegisters(addr, value, DATA_OK);
             }
         }
 
         addr = PLC_WATCHDOG_ms;
         value = xx_watchdog_get();
-        if (value != the_QdataRegisters[addr]) {
-            // NB no writeQdataRegisters();
-            the_QdataRegisters[addr] = value;
+        if (value != VAR_VALUE(addr)) {
+            VAR_VALUE(addr) = value; // NB no writeQdataRegisters();
         }
 
         // BUZZER
@@ -2910,7 +3040,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 #define DO_READ_OUTPUTS
 #ifndef DO_READ_OUTPUTS
                 if (CrossTable[DataAddr + i].Output) {
-                    DataValue[i] = the_QdataRegisters[DataAddr + i];
+                    DataValue[i] = VAR_VALUE(DataAddr + i);
                     switch (CrossTable[DataAddr + i].Types) {
                     case BIT:
                          r += 1;
@@ -2920,7 +3050,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
                     case DWORD_BIT:
                         // manage this and the other *_BIT variables of the same offset
                         do {
-                            DataValue[i] = the_QdataRegisters[DataAddr + i];
+                            DataValue[i] = VAR_VALUE(DataAddr + i);
                         } while ((i + 1) < DataNumber
                             && CrossTable[DataAddr + (i + 1)].Types == CrossTable[DataAddr + i].Types
                             && CrossTable[DataAddr + (i + 1)].Offset == CrossTable[DataAddr + i].Offset
@@ -3057,7 +3187,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
 
                 // cannot read outputs, anyway
                 if (CrossTable[DataAddr + i].Output) {
-                    DataValue[i] = the_QdataRegisters[DataAddr + i];                    
+                    DataValue[i] = VAR_VALUE(DataAddr + i);
                 } else {
                     switch (CrossTable[DataAddr + i].Types) {
                     case BIT: {
@@ -3236,16 +3366,16 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register u_int32_t offset = CrossTable[DataAddr + i].Offset;
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
 
-                    // init the buffer bits with ALL the other actual bit values from the_QdataRegisters
+                    // init the buffer bits with ALL the other actual bit values
                     for (addr = base; addr < (base + size); ++addr) {
                         if (CrossTable[addr].Types == vartype
                          && CrossTable[addr].Offset == offset
                          && !(DataAddr <= addr && addr < (DataAddr + DataNumber))) {
                             x = CrossTable[addr].Decimal; // 1..32
                             if (x <= 16) { // BYTE_BIT, WORD_BIT, DWORD_BIT
-                                set_word_bit(&uintRegs[r], x, the_QdataRegisters[addr]);
+                                set_word_bit(&uintRegs[r], x, VAR_VALUE(addr));
                             } else if (x <= 32 && (r + 1) < regs) { // DWORD_BIT
-                                set_word_bit(&uintRegs[r + 1], x - 16, the_QdataRegisters[addr]);
+                                set_word_bit(&uintRegs[r + 1], x - 16, VAR_VALUE(addr));
                             } else {
                                  // FIXME: assert
                             }
@@ -3459,7 +3589,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                     register enum varTypes vartype = CrossTable[DataAddr + i].Types;
                     u_int32_t buffer = 0x00000000; // BYTE_BIT, WORD_BIT, DWORD_BIT
 
-                    // init the buffer bits with ALL the actual bit values from the_QdataRegisters
+                    // init the buffer bits with ALL the actual bit values
                     for (addr = base; addr < (base + size); ++addr) {
                         if (CrossTable[addr].Types == vartype
                          && CrossTable[addr].Offset == offset) {
@@ -3467,7 +3597,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
                             if (DataAddr <= addr && addr < (DataAddr + DataNumber)) {
                                 set_dword_bit(&buffer, x, DataValue[addr - DataAddr]);
                             } else {
-                                set_dword_bit(&buffer, x, the_QdataRegisters[addr]);
+                                set_dword_bit(&buffer, x, VAR_VALUE(addr));
                             }
                         }
                     }
@@ -4891,6 +5021,9 @@ static void *clientThread(void *arg)
 
 static void *datasyncThread(void *statusAdr)
 {
+#ifdef USE_HMI_PLC
+    PlcServer *plcServer = NULL;
+#else
     // data
     int dataRecvSock = -1;
     int dataSendSock = -1;
@@ -4901,6 +5034,7 @@ static void *datasyncThread(void *statusAdr)
     int syncSendSock = -1;
     struct  sockaddr_in syncSendAddr;
     struct  sockaddr_in syncRecvAddr;
+#endif
     // datasync
     int threadInitOK = FALSE;
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
@@ -4913,6 +5047,10 @@ static void *datasyncThread(void *statusAdr)
     //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
     pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
 
+#ifdef USE_HMI_PLC
+    plcServer = newPlcServer();
+    threadInitOK = (plcServer != NULL);
+#else
     // thread init (data)
     dataRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
     if (dataRecvSock != -1) {
@@ -4958,6 +5096,7 @@ static void *datasyncThread(void *statusAdr)
             }
         }
     }
+#endif
 
     // run (datasync)
     *threadStatusPtr = RUNNING;
@@ -4971,6 +5110,11 @@ static void *datasyncThread(void *statusAdr)
             continue;
         }
 
+#ifdef USE_HMI_PLC
+        if (plcServerWait(plcServer, &hmiBlock, THE_UDP_TIMEOUT_ms) <= 0) {
+            continue;
+        }
+#else
         fd_set recv_set;
         struct timeval tv;
         int rc;
@@ -5008,12 +5152,16 @@ static void *datasyncThread(void *statusAdr)
             // error recovery
             continue;
         }
+#endif
 
         // (3) compute data sync
         // XX_GPIO_CLR(2);
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             if (engineStatus != enExiting) {
+#ifdef USE_HMI_PLC
+                PLCsync(plcServer);
+#else
                 // XX_GPIO_SET(2);
                 memcpy(the_IdataRegisters, the_UdataBuffer, sizeof(the_IdataRegisters));
                 memcpy(the_IsyncRegisters, the_UsyncBuffer, sizeof(the_IsyncRegisters));
@@ -5021,10 +5169,14 @@ static void *datasyncThread(void *statusAdr)
                 memcpy(the_UdataBuffer, the_QdataRegisters, sizeof(the_UdataBuffer));
                 memcpy(the_UsyncBuffer, the_QsyncRegisters, sizeof(the_UsyncBuffer));
                 // XX_GPIO_CLR(2);
+#endif
             }
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
 
+#ifdef USE_HMI_PLC
+        plcServerReply(plcServer, &plcBlock);
+#else
         // (4) data send
         // XX_GPIO_SET(2);
         rc = sendto(dataSendSock, the_UdataBuffer, THE_DATA_UDP_SIZE, 0, (struct sockaddr *)&dataSendAddr, sizeof(struct sockaddr_in));
@@ -5040,9 +5192,13 @@ static void *datasyncThread(void *statusAdr)
             fprintf(stderr,"sync sendto rc=%d vs %d\n", rc, THE_SYNC_UDP_SIZE);
         }
         // XX_GPIO_CLR(2);
+#endif
     }
 
     // thread clean (data)
+#ifdef USE_HMI_PLC
+    deletePlcServer(plcServer);
+#else
     if (dataRecvSock != -1) {
         shutdown(dataRecvSock, SHUT_RDWR);
         close(dataRecvSock);
@@ -5065,6 +5221,7 @@ static void *datasyncThread(void *statusAdr)
         close(syncSendSock);
         syncSendSock = -1;
     }
+#endif
 
     // exit
     // XX_GPIO_CLR(2);
@@ -5106,20 +5263,24 @@ void dataEngineStart(void)
     }
 
     // cleanup variables
+#ifdef USE_HMI_PLC
+    resetHmiPlcBlocks(&hmiBlock, &plcBlock);
+#else
     bzero(the_QdataRegisters, sizeof(the_QdataRegisters));
     bzero(the_IdataRegisters, sizeof(the_IdataRegisters));
     bzero(the_QsyncRegisters, sizeof(the_QsyncRegisters));
     bzero(the_IsyncRegisters, sizeof(the_IsyncRegisters));
+#endif
 
     // default values
-    the_QdataRegisters[PLC_Version] = REVISION_HI * 1000 + REVISION_LO;
-    the_QdataRegisters[PLC_BEEP_VOLUME] = 0x00000064; // duty=100%
-    the_QdataRegisters[PLC_TOUCH_VOLUME] = 0x00000064; // duty=100%
-    the_QdataRegisters[PLC_ALARM_VOLUME] = 0x00000064; // duty=100%
+    VAR_VALUE(PLC_Version) = REVISION_HI * 1000 + REVISION_LO;
+    VAR_VALUE(PLC_BEEP_VOLUME) = 0x00000064; // duty=100%
+    VAR_VALUE(PLC_TOUCH_VOLUME) = 0x00000064; // duty=100%
+    VAR_VALUE(PLC_ALARM_VOLUME) = 0x00000064; // duty=100%
 
     // P/N and S/N
-    the_QdataRegisters[PLC_PRODUCT_ID] = plc_product_id();
-    the_QdataRegisters[PLC_SERIAL_NUMBER] = plc_serial_number();
+    VAR_VALUE(PLC_PRODUCT_ID) = plc_product_id();
+    VAR_VALUE(PLC_SERIAL_NUMBER) = plc_serial_number();
 
     // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
@@ -5129,7 +5290,7 @@ void dataEngineStart(void)
     } else {
         retentive = (u_int32_t *)ptRetentive;
         if (lenRetentive == LAST_RETENTIVE * 4) {
-            OS_MEMCPY(&the_QdataRegisters[1], retentive, LAST_RETENTIVE * 4);
+            OS_MEMCPY(&VAR_VALUE(1), retentive, LAST_RETENTIVE * 4);
         } else {
             fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
         }
@@ -5255,7 +5416,11 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyConfig() ...\n");
 #endif
+#ifdef USE_HMI_PLC
     if (pIO->I.ulSize < THE_DATA_SIZE || pIO->Q.ulSize < THE_DATA_SIZE) {
+#else
+    if (pIO->I.ulSize < THE_DATA_SIZE || pIO->Q.ulSize < THE_DATA_SIZE) {
+#endif
         uRes = ERR_INVALID_PARAM;
     }
 	RETURN(uRes);
@@ -5278,8 +5443,13 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
+#ifdef USE_HMI_PLC
+    OS_MEMCPY(pvIsegment, plcBlock.values, sizeof(plcBlock.values)); // always Qdata
+    OS_MEMCPY(pvQsegment, plcBlock.values, sizeof(plcBlock.values));
+#else
     OS_MEMCPY(pvIsegment, the_QdataRegisters, sizeof(the_QdataRegisters)); // always Qdata
     OS_MEMCPY(pvQsegment, the_QdataRegisters, sizeof(the_QdataRegisters));
+#endif
 
 	RETURN(uRes);
 }
@@ -5398,7 +5568,7 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
                     request.Number = 1 + n;
                     if (flags && flags[addr + n] == 0) {
                         // in the exception of *_BIT, we get the actual value
-                        request.Values[n] = the_QdataRegisters[addr + n];
+                        request.Values[n] = VAR_VALUE(addr + n);
                     } else {
                         // normal case
                         if (CrossTable[addr + n].Types == BIT || CrossTable[addr + n].Types == BYTE_BIT
@@ -5497,7 +5667,11 @@ static void doWriteDeviceRetentives(u_int32_t d)
         if (CrossTable[addr].device == d && CrossTable[addr].Output) {
 
             //                        addr  value                     values              flags addrMax
-            written = doWriteVariable(addr, the_QdataRegisters[addr], the_QdataRegisters, NULL, LAST_RETENTIVE);
+#ifdef USE_HMI_PLC
+            written = doWriteVariable(addr, VAR_VALUE(addr), (uint32_t *)plcBlock.values, NULL, LAST_RETENTIVE);
+#else
+            written = doWriteVariable(addr, VAR_VALUE(addr), the_QdataRegisters, NULL, LAST_RETENTIVE);
+#endif
             if (written > 1)
                 addr += written - 1;
         }
@@ -5547,9 +5721,9 @@ static inline void doWriteBit(unsigned ulOffs, unsigned usBit, int bit)
     mask = mask << shift;    // 0x00000001 ... 0x80000000
 
     if (bit)
-        value = the_QdataRegisters[addr] |= mask;
+        value = VAR_VALUE(addr) |= mask;
     else
-        value = the_QdataRegisters[addr] &= ~mask;
+        value = VAR_VALUE(addr) &= ~mask;
 
     written = doWriteVariable(addr, value, NULL, NULL, addr);
 
@@ -5584,7 +5758,7 @@ IEC_UINT dataNotifySet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                     u_int32_t *values = (u_int32_t *)pvQsegment;
                     u_int32_t *flags = (u_int32_t *)pvWsegment;
 
-                    doWriteBytes(values, flags, 0, (1 + DimCrossTable)*sizeof(u_int32_t)); // < sizeof(the_QdataRegisters)
+                    doWriteBytes(values, flags, 0, (1 + DimCrossTable)*sizeof(u_int32_t));
                 }
             } else if (pNotify->usSegment != SEG_OUTPUT) {
                 uRes = ERR_WRITE_TO_INPUT;
@@ -5669,16 +5843,19 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                         void * source;
                         void * dest;
 
-                        if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
+#ifdef USE_HMI_PLC
+                            source = plcBlock.values;
+#else
+                            source = the_QdataRegisters; // never from the_IdataRegisters
+#endif
+                            if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->Q.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->Q.ulOffs + pIO->Q.ulSize);
-                            source = the_QdataRegisters;
                             source += ulStart - pIO->Q.ulOffs;
                             dest = pIO->Q.pAdr + ulStart;
                         } else { // pIR->pRegionRd[r].usSegment == SEG_INPUT
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->I.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->I.ulOffs + pIO->I.ulSize);
-                            source = the_QdataRegisters; // never from the_IdataRegisters
                             source += ulStart - pIO->I.ulOffs;
                             dest = pIO->I.pAdr + ulStart;
                         }
@@ -5696,16 +5873,19 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                 void * source;
                 void * dest;
 
+#ifdef USE_HMI_PLC
+                source = plcBlock.values;
+#else
+                source = the_QdataRegisters; // never from the_IdataRegisters
+#endif
                 if (pNotify->usSegment == SEG_INPUT) {
                     ulStart	= vmm_max(pNotify->ulOffset, pIO->I.ulOffs);
                     ulStop	= vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->I.ulOffs + pIO->I.ulSize);
-                    source = the_QdataRegisters; // never from the_IdataRegisters
                     source += ulStart - pIO->I.ulOffs;
                     dest = pIO->I.pAdr + ulStart;
                 } else { // pNotify->usSegment == SEG_OUTPUT
                     ulStart	= vmm_max(pNotify->ulOffset, pIO->Q.ulOffs);
                     ulStop	= vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->Q.ulOffs + pIO->Q.ulSize);
-                    source = the_QdataRegisters;
                     source += ulStart - pIO->Q.ulOffs;
                     dest = pIO->Q.pAdr + ulStart;
                 }

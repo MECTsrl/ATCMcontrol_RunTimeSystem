@@ -21,7 +21,8 @@
 
 
 OBJS = \
+  $(OBJ_PATH)/hmi_plc.o     \
   $(OBJ_PATH)/dataImpl.o     \
-  $(OBJ_PATH)/dataMain.o     
+  $(OBJ_PATH)/dataMain.o
     
 # -------------------------------------------------------------------------------
