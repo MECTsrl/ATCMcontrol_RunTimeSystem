@@ -44,11 +44,40 @@ void resetHmiPlcBlocks(HmiPlcBlock *hmiBlock, HmiPlcBlock *plcBlock)
         bzero(hmiBlock, sizeof(HmiPlcBlock));
         hmiBlock->bytes = sizeof(HmiPlcBlock);
         memset(&hmiBlock->states, varStatus_NOP, sizeof(hmiBlock->states));
+        // NB: default is (value=0, first=0, last=0)
     }
     if (plcBlock) {
         bzero(plcBlock, sizeof(HmiPlcBlock));
         plcBlock->bytes = sizeof(HmiPlcBlock);
         // NB: default is (value=0, status=varStatus_DATA_OK)
+    }
+}
+
+void clearHmiBlock(HmiPlcBlock *hmiBlock)
+{
+    if (hmiBlock) {
+        // reset optimization after successfull hmiClientPoll()
+        hmiBlock->first = 0;
+        hmiBlock->last = 0;
+    }
+}
+
+void changeStatusHmiBlock(HmiPlcBlock *hmiBlock, unsigned addr, enum varStatus status)
+{
+    if (hmiBlock && addr >= 1 && addr <= DimCrossTable) {
+
+        // change status
+        hmiBlock->states[addr] = status;
+
+        // update optimization limits
+        if (status != varStatus_NOP && status != varStatus_PREPARING) {
+            if (hmiBlock->first == 0 || addr < hmiBlock->first) {
+                hmiBlock->first = addr;
+            }
+            if (hmiBlock->last == 0 || addr > hmiBlock->last) {
+                hmiBlock->last = addr;
+            }
+        }
     }
 }
 
@@ -68,7 +97,7 @@ HmiClient *newHmiClient(const char *hostname)
         }
         if (! hostname ) {
             hostname = DEFAULT_HOSTNAME;
-            fprintf(stderr, "%s() using default plc hostname '%s'\n", __func__, hostname);
+            // fprintf(stderr, "%s() using default plc hostname '%s'\n", __func__, hostname);
         }
         client->hostname = strdup(hostname);
         if (! client->hostname ) {

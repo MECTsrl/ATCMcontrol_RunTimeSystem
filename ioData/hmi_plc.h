@@ -67,6 +67,8 @@ typedef union varUnion {
 
 typedef struct {
     ssize_t bytes;
+    uint16_t first;
+    uint16_t last;
     varUnion values[1 + DimCrossTable];
     uint8_t states[1 + DimCrossTable]; // varStatus in 8 bits
 } HmiPlcBlock;
@@ -74,10 +76,12 @@ typedef struct {
 #pragma pack(pop)
 
 void resetHmiPlcBlocks(HmiPlcBlock *hmiBlock, HmiPlcBlock *plcBlock);
+void clearHmiBlock(HmiPlcBlock *hmiBlock);
+void changeStatusHmiBlock(HmiPlcBlock *hmiBlock, unsigned addr, enum varStatus status);
 
 /* --------------------------------------------------------------------------*/
 
-typedef struct {
+typedef struct HmiClient {
     int udpSocket;
     char *hostname;
     struct sockaddr_in plcAddress;

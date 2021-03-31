@@ -57,7 +57,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  22
+#define REVISION_LO  23
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -234,72 +234,16 @@ static int system_ini_ok;
 
 #define THE_UDP_TIMEOUT_ms	500
 
-#ifdef USE_HMI_PLC
-
 static HmiPlcBlock plcBlock;
 static HmiPlcBlock hmiBlock;
 #define THE_DATA_SIZE sizeof(HmiPlcBlock)
 
-#define VAR_VALUE(n)  plcBlock.values[n].u32
-#define VAR_STATE(n)  plcBlock.states[n]
+#define VAR_VALUE(n) plcBlock.values[n].u32
+#define VAR_STATE(n) plcBlock.states[n]
 
 #define DATA_OK      varStatus_DATA_OK
 #define DATA_WARNING varStatus_DATA_WARNING
 #define DATA_ERROR   varStatus_DATA_ERROR
-
-#else
-
-#define VAR_VALUE(n)  the_QdataRegisters[n]
-#define VAR_STATE(n)  the_QdataStates[n]
-
-// -------- MANAGE THREADS: DATA & SYNCRO
-#define THE_UDP_SEND_ADDR   "127.0.0.1"
-
-// -------- DATA MANAGE FROM HMI ---------------------------------------------
-#define REG_DATA_NUMBER     7680 // 1 + 5472 + (5500-5473) + 5472 / 4 + ...
-#define THE_DATA_SIZE       (REG_DATA_NUMBER * sizeof(u_int32_t)) // 30720 = 0x00007800 30 kiB
-#define THE_DATA_UDP_SIZE   THE_DATA_SIZE
-#define	THE_DATA_RECV_PORT	34903
-#define	THE_DATA_SEND_PORT	34902
-
-static u_int32_t the_UdataBuffer[REG_DATA_NUMBER]; // udp recv buffer
-static u_int32_t the_IdataRegisters[REG_DATA_NUMBER]; // %I
-static u_int32_t the_QdataRegisters[REG_DATA_NUMBER]; // %Q
-
-static u_int8_t *the_QdataStates = (u_int8_t *)(&(the_QdataRegisters[5500])) + 1;
-
-// Qdata states
-#define DATA_OK            0    // reading/writing success
-#define DATA_ERROR         1    // reading/writing failure
-#define DATA_WARNING       2    // reading/writing temporary failure
-
-// -------- SYNC MANAGE FROM HMI ---------------------------------------------
-#define REG_SYNC_NUMBER 	6144 // 1+5472+...
-#define THE_SYNC_SIZE       (REG_SYNC_NUMBER * sizeof(u_int16_t)) // 12288 = 0x00003000 12 kiB
-#define THE_SYNC_UDP_SIZE   11462 // SYNCRO_SIZE_BYTE in qt_library/ATCMutility/common.h
-#define	THE_SYNC_RECV_PORT	34905
-#define	THE_SYNC_SEND_PORT	34904
-
-static u_int16_t the_UsyncBuffer[REG_SYNC_NUMBER]; // udp recv buffer
-static u_int16_t the_IsyncRegisters[REG_SYNC_NUMBER]; // %I Array delle CODE in lettura
-static u_int16_t the_QsyncRegisters[REG_SYNC_NUMBER]; // %Q Array delle CODE in scrittura
-
-#define QueueOperMask       0xE000  // BIT 15 WR EN, BIT 14 RD EN, BIT 13 ??
-#define QueueAddrMask       0x1FFF  // BIT 12..0 CROSSTABLE ADDRESS
-// Isync Operations
-#define NOP                 0x0000
-#define READ                0x4000
-#define WRITE_SINGLE        0x8000
-#define WRITE_MULTIPLE      0xA000
-#define WRITE_RIC_MULTIPLE  0xE000
-#define WRITE_RIC_SINGLE    0xC000
-#define WRITE_PREPARE       0x2000
-// Qsync States
-#define QUEUE_EMPTY         0
-#define QUEUE_BUSY_WRITE    1
-#define QUEUE_BUSY_READ     2
-
-#endif
 
 // -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCPRTU_SRV) ------------
 #define REG_SRV_NUMBER      4096
@@ -547,15 +491,9 @@ static int LoadXTable(void);
 static void AlarmMngr(void);
 
 static void PLCsync_clearHvars(void);
-#ifdef USE_HMI_PLC
 static void PLCsync_do_read(u_int16_t addr);
 static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr);
 static void PLCsync(PlcServer *plcServer);
-#else
-static void PLCsync_do_read(u_int16_t addr, u_int16_t indx);
-static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx);
-static void PLCsync(void);
-#endif
 static void doWriteDeviceRetentives(u_int32_t d);
 static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
@@ -1101,13 +1039,7 @@ static int LoadXTable(void)
         CrossTable[addr].OldVal = 0;
         CrossTable[addr].device = 0xffff;
         CrossTable[addr].node = 0xffff;
-
-#ifdef USE_HMI_PLC
         VAR_STATE(addr) = DATA_ERROR; // in error until we actually read it
-#else
-        VAR_STATE(addr) = DATA_ERROR; // in error until we actually read it
-        the_QsyncRegisters[addr] = QUEUE_EMPTY;
-#endif
     }
     lastAlarmEvent = 0;
     for (addr = 0; addr <= DimAlarmsCT; ++addr) {
@@ -1926,11 +1858,7 @@ static void PLCsync_clearHvars(void)
     }
 }
 
-#ifdef USE_HMI_PLC
 static void PLCsync_do_read(u_int16_t addr)
-#else
-static void PLCsync_do_read(u_int16_t addr, u_int16_t indx)
-#endif
 {
     int d, n;
 
@@ -1947,11 +1875,6 @@ static void PLCsync_do_read(u_int16_t addr, u_int16_t indx)
     switch (CrossTable[addr].Protocol) {
     case PLC:
         // immediate read: no fieldbus
-#ifdef USE_HMI_PLC
-#else
-        // ready "by design" VAR_VALUE(addr) = VAR_VALUE(addr);
-        // VAR_STATE(addr) = DATA_OK;
-#endif
         break;
     case RTU:
     case TCP:
@@ -1966,11 +1889,7 @@ static void PLCsync_do_read(u_int16_t addr, u_int16_t indx)
             // activate semaphore only the first time
             sem_post(&newOperations[CrossTable[addr].device]);
         } else {
-#ifdef USE_HMI_PLC
             // already done in PLC_sync(): plcBlock.states[addr] = varStatus_DO_READ;
-#else
-            the_QsyncRegisters[indx] = QUEUE_EMPTY;
-#endif
         }
         break;
     default:
@@ -1978,23 +1897,14 @@ static void PLCsync_do_read(u_int16_t addr, u_int16_t indx)
     }
 }
 
-#ifdef USE_HMI_PLC
 static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr)
-#else
-static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx)
-#endif
 {
     unsigned written = 0;
 
     switch (CrossTable[addr].Protocol) {
     case PLC: {
         // immediate write: no fieldbus
-#ifdef USE_HMI_PLC
         uint32_t value = hmiBlock.values[addr].u32;
-#else
-        u_int32_t value = the_IdataRegisters[addr];
-        the_QsyncRegisters[indx] = QUEUE_BUSY_WRITE;
-#endif
         writeQdataRegisters(addr, value, DATA_OK);
         written = 1;
     }   break;
@@ -2010,7 +1920,6 @@ static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx)
             // search for consecutive writes
             register int i;
 
-#ifdef USE_HMI_PLC
             for (i = 1; i < MAX_VALUES && (addr + i) <= DimCrossTable; ++i) {
                 register u_int16_t addr_i = addr + i;
                 register enum varStatus requestedStatus_i = hmiBlock.states[addr_i];
@@ -2021,37 +1930,10 @@ static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx)
                 else
                     break;
             }
-#else
-            for (i = 1; i < MAX_VALUES && (indx + i) <= DimCrossTable; ++i) {
-                register u_int16_t oper_i = the_IsyncRegisters[indx + i] & QueueOperMask;
-                register u_int16_t addr_i = the_IsyncRegisters[indx + i] & QueueAddrMask;
-
-                if (the_QsyncRegisters[indx + i] != QUEUE_BUSY_WRITE
-                 && oper_i == oper && addr_i == (addr + i)
-                 && CrossTable[addr].device == CrossTable[addr_i].device)
-                    continue;
-                else
-                    break;
-            }
-#endif
 
             // trying multiple writes
             i = i - 1; // may be 0
-#ifdef USE_HMI_PLC
             written = doWriteVariable(addr, hmiBlock.values[addr].u32, (uint32_t *)hmiBlock.values, NULL, addr + i);
-#else
-            written = doWriteVariable(addr, the_IdataRegisters[addr], the_IdataRegisters, NULL, addr + i);
-#endif
-
-#ifdef USE_HMI_PLC
-            // nothing to do
-#else
-            // acknowledge the written items
-            for (i = 0; i < written; ++i) {
-
-                the_QsyncRegisters[indx + i] = QUEUE_BUSY_WRITE;
-            }
-#endif
         }
         break;
     default:
@@ -2060,26 +1942,29 @@ static unsigned PLCsync_do_write(u_int16_t addr, u_int16_t indx)
     return written;
 }
 
-#ifdef USE_HMI_PLC
 static void PLCsync(PlcServer *plcServer)
-#else
-static void PLCsync(void)
-#endif
 {
-    u_int16_t addr;
+    uint16_t addr;
+    uint16_t first = 1;
+    uint16_t last = DimCrossTable;
     unsigned written = 0;
-#ifdef USE_HMI_PLC
-#else
-    u_int16_t indx;
-    u_int16_t oper;
-    int d, n;
-#endif
 
-    PLCsync_clearHvars();
+    // protocol check and optimization
+    if (hmiBlock.first >= 1 && hmiBlock.first <= DimCrossTable) {
+        first = hmiBlock.first;
+    }
+    if (hmiBlock.last >= 1 && hmiBlock.last <= DimCrossTable) {
+        last = hmiBlock.last;
+    }
+    if (first > last) {
+        // should not happen
+        first = 1;
+        last = DimCrossTable;
+    }
 
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
-#ifdef USE_HMI_PLC
-    for (addr = 1; addr <= DimCrossTable; ++addr) {
+    PLCsync_clearHvars();
+    for (addr = first; addr <= last; ++addr) {
         register enum varStatus requestedStatus = hmiBlock.states[addr];
 
         switch (requestedStatus) {
@@ -2111,76 +1996,6 @@ static void PLCsync(void)
             ;
         }
     }
-#else
-    for (indx = 1; indx <= DimCrossTable; ++indx) {
-        oper = the_IsyncRegisters[indx] & QueueOperMask;
-        addr = the_IsyncRegisters[indx] & QueueAddrMask;
-        if (1 <= addr && addr <= DimCrossTable) {
-            switch (oper) {
-            case NOP:
-                the_QsyncRegisters[indx] = QUEUE_EMPTY;
-                // span the whole queue each time a new udp packet arrives
-                // if (addr == 0) {
-                //     indx = DimCrossTable; // queue tail
-                //     break;
-                // }
-                break;
-            case READ:
-                if (the_QsyncRegisters[indx] != QUEUE_BUSY_READ) {
-                    the_QsyncRegisters[indx] = QUEUE_BUSY_READ;
-                    PLCsync_do_read(addr, indx);
-                }
-                break;
-            case WRITE_SINGLE:
-            case WRITE_MULTIPLE:
-            case WRITE_RIC_SINGLE:
-            case WRITE_RIC_MULTIPLE:
-                if (the_QsyncRegisters[indx] != QUEUE_BUSY_WRITE) {
-                    written = PLCsync_do_write(addr, indx);
-                    // check for multiple writes
-                    if (written > 1) {
-                        indx += (written - 1);
-                    }
-                }
-                break;
-            case WRITE_PREPARE:
-                the_QsyncRegisters[indx] = QUEUE_EMPTY;
-                break; // nop
-            default:
-                ;
-            }
-        }
-    }
-#endif
-
-#ifdef VERBOSE_DEBUG
-    static int counter = 0;
-
-    if (counter++ >= 10) {
-        // circa ogni secondo
-        counter = 0;
-        fprintf(stderr, "_________\n");
-        u_int16_t n;
-        for (n = 1; n <= DimCrossTable; ++n) {
-            u_int16_t Oper = the_IsyncRegisters[n] & QueueOperMask;
-            u_int16_t Addr = the_IsyncRegisters[n] & QueueAddrMask;
-
-            if (1 <= Addr && Addr <= DimCrossTable && CrossTable[Addr].Plc == Htype) {
-                fprintf(stderr, "\t[%u] 0x%04x %s", n, Oper, CrossTable[Addr].Tag);
-                for (d = 0; d < theDevicesNumber; ++d) {
-                    int i;
-                    for (i = 0; i < theDevices[d].var_num; ++i) {
-                        addr = theDevices[d].device_vars[i].addr;
-                        if (addr == Addr && theDevices[d].device_vars[i].active) {
-                            fprintf(stderr, " (%s)", theDevices[d].name);
-                        }
-                    }
-                }
-                fprintf(stderr, "\n");
-            }
-        }
-    }
-#endif
 }
 
 static int checkServersDevicesAndNodes()
@@ -5021,20 +4836,8 @@ static void *clientThread(void *arg)
 
 static void *datasyncThread(void *statusAdr)
 {
-#ifdef USE_HMI_PLC
     PlcServer *plcServer = NULL;
-#else
-    // data
-    int dataRecvSock = -1;
-    int dataSendSock = -1;
-    struct  sockaddr_in dataSendAddr;
-    struct  sockaddr_in dataRecvAddr;
-    // sync
-    int syncRecvSock = -1;
-    int syncSendSock = -1;
-    struct  sockaddr_in syncSendAddr;
-    struct  sockaddr_in syncRecvAddr;
-#endif
+
     // datasync
     int threadInitOK = FALSE;
     enum threadStatus *threadStatusPtr = (enum threadStatus *)statusAdr;
@@ -5047,56 +4850,8 @@ static void *datasyncThread(void *statusAdr)
     //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
     pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
 
-#ifdef USE_HMI_PLC
     plcServer = newPlcServer();
     threadInitOK = (plcServer != NULL);
-#else
-    // thread init (data)
-    dataRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (dataRecvSock != -1) {
-        memset((char *)&dataRecvAddr,0,sizeof(dataRecvAddr));
-        dataRecvAddr.sin_family = AF_INET;
-        dataRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        dataRecvAddr.sin_port = htons((u_short)THE_DATA_RECV_PORT);
-        if (bind(dataRecvSock, (struct sockaddr *)&dataRecvAddr, sizeof(dataRecvAddr)) >= 0) {
-            dataSendSock = socket(AF_INET, SOCK_DGRAM, 0);
-            if (dataSendSock >= 0) {
-                struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
-                if (h != NULL) {
-                    memset(&dataSendAddr, 0, sizeof(dataSendAddr));
-                    dataSendAddr.sin_family = h->h_addrtype;
-                    memcpy((char *) &dataSendAddr.sin_addr.s_addr,
-                            h->h_addr_list[0], h->h_length);
-                    dataSendAddr.sin_port = htons(THE_DATA_SEND_PORT);
-                    threadInitOK = TRUE;
-                }
-            }
-        }
-    }
-
-    // thread init (sync)
-    syncRecvSock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (syncRecvSock != -1) {
-        memset((char *)&syncRecvAddr,0,sizeof(syncRecvAddr));
-        syncRecvAddr.sin_family = AF_INET;
-        syncRecvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        syncRecvAddr.sin_port = htons((u_short)THE_SYNC_RECV_PORT);
-        if (bind(syncRecvSock, (struct sockaddr *)&syncRecvAddr, sizeof(syncRecvAddr)) >= 0) {
-            syncSendSock = socket(AF_INET, SOCK_DGRAM, 0);
-            if (syncSendSock >= 0) {
-                struct hostent *h = gethostbyname(THE_UDP_SEND_ADDR);
-                if (h != NULL) {
-                    memset(&syncSendAddr, 0, sizeof(syncSendAddr));
-                    syncSendAddr.sin_family = h->h_addrtype;
-                    memcpy((char *) &syncSendAddr.sin_addr.s_addr,
-                            h->h_addr_list[0], h->h_length);
-                    syncSendAddr.sin_port = htons(THE_SYNC_SEND_PORT);
-                    threadInitOK = TRUE;
-                }
-            }
-        }
-    }
-#endif
 
     // run (datasync)
     *threadStatusPtr = RUNNING;
@@ -5110,118 +4865,25 @@ static void *datasyncThread(void *statusAdr)
             continue;
         }
 
-#ifdef USE_HMI_PLC
         if (plcServerWait(plcServer, &hmiBlock, THE_UDP_TIMEOUT_ms) <= 0) {
             continue;
         }
-#else
-        fd_set recv_set;
-        struct timeval tv;
-        int rc;
-
-        // (1) data recv, only until timeout
-        FD_ZERO(&recv_set);
-        FD_SET(dataRecvSock, &recv_set);
-        tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
-        tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
-        // XX_GPIO_CLR(2);
-        if (select(dataRecvSock + 1, &recv_set, NULL, NULL, &tv) <= 0) {
-            // timeout or error
-            continue;
-        }
-        // XX_GPIO_SET(2);
-        rc = recv(dataRecvSock, the_UdataBuffer, THE_DATA_UDP_SIZE, 0);
-        if (rc != THE_DATA_UDP_SIZE) {
-            // error recovery
-            continue;
-        }
-
-        // (2) sync recv, only until timeout
-        FD_ZERO(&recv_set);
-        FD_SET(syncRecvSock, &recv_set);
-        tv.tv_sec = THE_UDP_TIMEOUT_ms / 1000;
-        tv.tv_usec = (THE_UDP_TIMEOUT_ms % 1000) * 1000;
-        // XX_GPIO_CLR(2);
-        if (select(syncRecvSock + 1, &recv_set, NULL, NULL, &tv) <= 0) {
-            // timeout or error
-            continue;
-        }
-        // XX_GPIO_SET(2);
-        rc = recv(syncRecvSock, the_UsyncBuffer, THE_SYNC_UDP_SIZE, 0);
-        if (rc != THE_SYNC_UDP_SIZE) {
-            // error recovery
-            continue;
-        }
-#endif
 
         // (3) compute data sync
         // XX_GPIO_CLR(2);
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             if (engineStatus != enExiting) {
-#ifdef USE_HMI_PLC
                 PLCsync(plcServer);
-#else
-                // XX_GPIO_SET(2);
-                memcpy(the_IdataRegisters, the_UdataBuffer, sizeof(the_IdataRegisters));
-                memcpy(the_IsyncRegisters, the_UsyncBuffer, sizeof(the_IsyncRegisters));
-                PLCsync();
-                memcpy(the_UdataBuffer, the_QdataRegisters, sizeof(the_UdataBuffer));
-                memcpy(the_UsyncBuffer, the_QsyncRegisters, sizeof(the_UsyncBuffer));
-                // XX_GPIO_CLR(2);
-#endif
             }
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
 
-#ifdef USE_HMI_PLC
         plcServerReply(plcServer, &plcBlock);
-#else
-        // (4) data send
-        // XX_GPIO_SET(2);
-        rc = sendto(dataSendSock, the_UdataBuffer, THE_DATA_UDP_SIZE, 0, (struct sockaddr *)&dataSendAddr, sizeof(struct sockaddr_in));
-        if (rc != THE_DATA_UDP_SIZE) {
-            // FIXME: error recovery
-            fprintf(stderr,"data sendto rc=%d vs %d\n", rc, THE_DATA_UDP_SIZE);
-        }
-
-        // (5) sync send
-        rc = sendto(syncSendSock, the_UsyncBuffer, THE_SYNC_UDP_SIZE, 0, (struct sockaddr *)&syncSendAddr, sizeof(struct sockaddr_in));
-        if (rc != THE_SYNC_UDP_SIZE) {
-            // FIXME: error recovery
-            fprintf(stderr,"sync sendto rc=%d vs %d\n", rc, THE_SYNC_UDP_SIZE);
-        }
-        // XX_GPIO_CLR(2);
-#endif
     }
 
     // thread clean (data)
-#ifdef USE_HMI_PLC
     deletePlcServer(plcServer);
-#else
-    if (dataRecvSock != -1) {
-        shutdown(dataRecvSock, SHUT_RDWR);
-        close(dataRecvSock);
-        dataRecvSock = -1;
-    }
-    if (dataSendSock != -1) {
-        shutdown(dataSendSock, SHUT_RDWR);
-        close(dataSendSock);
-        dataSendSock = -1;
-    }
-
-    // thread clean (sync)
-    if (syncRecvSock != -1) {
-        shutdown(syncRecvSock, SHUT_RDWR);
-        close(syncRecvSock);
-        syncRecvSock = -1;
-    }
-    if (syncSendSock != -1) {
-        shutdown(syncSendSock, SHUT_RDWR);
-        close(syncSendSock);
-        syncSendSock = -1;
-    }
-#endif
 
     // exit
     // XX_GPIO_CLR(2);
@@ -5263,14 +4925,7 @@ void dataEngineStart(void)
     }
 
     // cleanup variables
-#ifdef USE_HMI_PLC
     resetHmiPlcBlocks(&hmiBlock, &plcBlock);
-#else
-    bzero(the_QdataRegisters, sizeof(the_QdataRegisters));
-    bzero(the_IdataRegisters, sizeof(the_IdataRegisters));
-    bzero(the_QsyncRegisters, sizeof(the_QsyncRegisters));
-    bzero(the_IsyncRegisters, sizeof(the_IsyncRegisters));
-#endif
 
     // default values
     VAR_VALUE(PLC_Version) = REVISION_HI * 1000 + REVISION_LO;
@@ -5416,11 +5071,7 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyConfig() ...\n");
 #endif
-#ifdef USE_HMI_PLC
     if (pIO->I.ulSize < THE_DATA_SIZE || pIO->Q.ulSize < THE_DATA_SIZE) {
-#else
-    if (pIO->I.ulSize < THE_DATA_SIZE || pIO->Q.ulSize < THE_DATA_SIZE) {
-#endif
         uRes = ERR_INVALID_PARAM;
     }
 	RETURN(uRes);
@@ -5443,13 +5094,8 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
-#ifdef USE_HMI_PLC
     OS_MEMCPY(pvIsegment, plcBlock.values, sizeof(plcBlock.values)); // always Qdata
     OS_MEMCPY(pvQsegment, plcBlock.values, sizeof(plcBlock.values));
-#else
-    OS_MEMCPY(pvIsegment, the_QdataRegisters, sizeof(the_QdataRegisters)); // always Qdata
-    OS_MEMCPY(pvQsegment, the_QdataRegisters, sizeof(the_QdataRegisters));
-#endif
 
 	RETURN(uRes);
 }
@@ -5667,11 +5313,7 @@ static void doWriteDeviceRetentives(u_int32_t d)
         if (CrossTable[addr].device == d && CrossTable[addr].Output) {
 
             //                        addr  value                     values              flags addrMax
-#ifdef USE_HMI_PLC
             written = doWriteVariable(addr, VAR_VALUE(addr), (uint32_t *)plcBlock.values, NULL, LAST_RETENTIVE);
-#else
-            written = doWriteVariable(addr, VAR_VALUE(addr), the_QdataRegisters, NULL, LAST_RETENTIVE);
-#endif
             if (written > 1)
                 addr += written - 1;
         }
@@ -5843,12 +5485,8 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                         void * source;
                         void * dest;
 
-#ifdef USE_HMI_PLC
-                            source = plcBlock.values;
-#else
-                            source = the_QdataRegisters; // never from the_IdataRegisters
-#endif
-                            if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
+                        source = plcBlock.values;
+                        if (pIR->pRegionRd[r].usSegment == SEG_OUTPUT) {
                             ulStart = vmm_max(pIR->pRegionRd[r].ulOffset, pIO->Q.ulOffs);
                             ulStop	= vmm_min(pIR->pRegionRd[r].ulOffset + pIR->pRegionRd[r].uSize, pIO->Q.ulOffs + pIO->Q.ulSize);
                             source += ulStart - pIO->Q.ulOffs;
@@ -5873,11 +5511,7 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
                 void * source;
                 void * dest;
 
-#ifdef USE_HMI_PLC
                 source = plcBlock.values;
-#else
-                source = the_QdataRegisters; // never from the_IdataRegisters
-#endif
                 if (pNotify->usSegment == SEG_INPUT) {
                     ulStart	= vmm_max(pNotify->ulOffset, pIO->I.ulOffs);
                     ulStop	= vmm_min(pNotify->ulOffset + pNotify->uLen, pIO->I.ulOffs + pIO->I.ulSize);
