@@ -57,7 +57,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  23
+#define REVISION_LO  24
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -4865,12 +4865,12 @@ static void *datasyncThread(void *statusAdr)
             continue;
         }
 
+        // (1) recv
         if (plcServerWait(plcServer, &hmiBlock, THE_UDP_TIMEOUT_ms) <= 0) {
             continue;
         }
 
-        // (3) compute data sync
-        // XX_GPIO_CLR(2);
+        // (2) compute
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             if (engineStatus != enExiting) {
@@ -4879,6 +4879,10 @@ static void *datasyncThread(void *statusAdr)
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
 
+        // (3) copy the received seqnum
+        plcBlock.seqnum = hmiBlock.seqnum;
+
+        // (4) reply
         plcServerReply(plcServer, &plcBlock);
     }
 

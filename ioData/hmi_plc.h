@@ -67,6 +67,7 @@ typedef union varUnion {
 
 typedef struct {
     ssize_t bytes;
+    uint32_t seqnum;
     uint16_t first;
     uint16_t last;
     varUnion values[1 + DimCrossTable];
@@ -88,7 +89,7 @@ typedef struct HmiClient {
 } HmiClient;
 
 HmiClient *newHmiClient(const char *hostname);
-int hmiClientPoll(HmiClient *client, const HmiPlcBlock *hmiBlock, HmiPlcBlock *plcBlock, unsigned timeout_ms);
+int hmiClientPoll(const HmiClient *client, const HmiPlcBlock *hmiBlock, HmiPlcBlock *plcBlock, unsigned timeout_ms);
 void deleteHmiClient(HmiClient *client);
 
 /* --------------------------------------------------------------------------*/
@@ -101,7 +102,7 @@ typedef struct {
 
 PlcServer *newPlcServer();
 int plcServerWait(PlcServer *server, HmiPlcBlock *hmiBlock, unsigned timeout_ms);
-int plcServerReply(PlcServer *server, const HmiPlcBlock *plcBlock);
+int plcServerReply(const PlcServer *server, const HmiPlcBlock *plcBlock);
 void deletePlcServer(PlcServer *server);
 
 /* --------------------------------------------------------------------------*/
