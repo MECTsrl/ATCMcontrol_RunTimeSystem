@@ -57,7 +57,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  24
+#define REVISION_LO  25
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -206,6 +206,9 @@ static int timer_overflow_enabled = 0;
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 #define CROSSTABLE_CSV "/local/etc/sysconfig/Crosstable.csv"
+#define HMI_INI        "/local/root/hmi.ini"
+#define ROOTFS_VERSION "/rootfs_version"
+#define SERIAL_CONF    "/etc/serial.conf"
 
 #define MAX_SERVERS  5 // 3 RTU_SRV + 1 TCP_SRV + 1 TCPRTU_SRV (PLC in dataMain->dataNotifySet/Get)
 #define MAX_DEVICES 16 // 3 RTU + n TCP + m TCPRTU + 2 CANOPEN + 1 RTUSRV + 1 TCPSRV + 1 TCPRTUSRV
@@ -784,8 +787,15 @@ static void initNodeDiagnostic(u_int16_t n)
     addr = 5172 + 2 * n;
     theNodes[n].diagnosticAddr = addr;
     value = (theNodes[n].device << 16) + theNodes[n].NodeID;
+#if 0
     writeQdataRegisters(addr + DIAGNOSTIC_DEV_NODE, value, DATA_OK);
     writeQdataRegisters(addr + DIAGNOSTIC_NODE_STATUS, theNodes[n].status, DATA_OK);
+#else
+    VAR_VALUE(addr + DIAGNOSTIC_DEV_NODE) = value;
+    VAR_STATE(addr + DIAGNOSTIC_DEV_NODE) = DATA_OK;
+    VAR_VALUE(addr + DIAGNOSTIC_NODE_STATUS) = theNodes[n].status;
+    VAR_STATE(addr + DIAGNOSTIC_NODE_STATUS) = DATA_OK;
+#endif
 }
 
 static inline void setDiagnostic(u_int16_t addr, u_int16_t offset, u_int32_t value)
@@ -2001,12 +2011,43 @@ static void PLCsync(PlcServer *plcServer)
 static int checkServersDevicesAndNodes()
 {
     int retval = 0;
+    int disable_all_nodes = FALSE;
+    FILE *hmi_ini;
 
     // init tables
     theDevicesNumber = 0;
     theNodesNumber = 0;
     bzero(&theDevices[0], sizeof(theDevices));
     bzero(&theNodes[0], sizeof(theNodes));
+
+    // check hmi.ini: search for "disable_all_nodes=true"
+    hmi_ini = fopen(HMI_INI, "r");
+    if (hmi_ini) {
+        char *disable_all_nodes_true = "disable_all_nodes=true";
+        char row[1024];
+
+        while (fgets(row, 1024, hmi_ini)) {
+            char *p = &row[0];
+            int i;
+
+            // trim
+            for (i = 0; i < strlen(row); ++i) {
+                if (isblank(row[i])) {
+                    continue;
+                } else {
+                    p = &row[i];
+                    break;
+                }
+            }
+            // check
+            if (strncmp(p, disable_all_nodes_true, strlen(disable_all_nodes_true)) == 0) {
+                disable_all_nodes = TRUE;
+                fprintf(stderr, "%s() disabling all nodes as requested\n", __func__);
+                break;
+            }
+        }
+        fclose(hmi_ini);
+    }
 
     // for each enabled variable
     u_int16_t i, base, block;
@@ -2354,7 +2395,11 @@ static int checkServersDevicesAndNodes()
                     ++theNodesNumber;
                     theNodes[n].device = CrossTable[i].device;
                     theNodes[n].NodeID = CrossTable[i].NodeId;
-                    theNodes[n].status = NODE_OK;
+                    if (disable_all_nodes) {
+                        theNodes[n].status = NODE_DISABLED;
+                    } else {
+                        theNodes[n].status = NODE_OK;
+                    }
                     // theNodes[n].RetryCounter .JumpRead
                     initNodeDiagnostic(n);
                 }
@@ -5552,7 +5597,7 @@ static unsigned plc_product_id()
     unsigned retval = 0xFFFFffff;
     FILE *f;
 
-    f = fopen("/rootfs_version", "r");
+    f = fopen(ROOTFS_VERSION, "r");
     if (f) {
         char buf[42];
         char str[42];
@@ -5612,7 +5657,7 @@ static unsigned plc_serial_number()
     unsigned retval = 0xFFFFffff;
     FILE *f;
 
-    f = fopen("/etc/serial.conf", "r");
+    f = fopen(SERIAL_CONF, "r");
     if (f) {
         char buf[80]; // YYYYMM1234
 
