@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: vmShared.h
+ * Filename: inc/vmShared.h
  */
 
 
@@ -66,7 +65,7 @@
   /* Structures in this file MUST be compiled with one byte alignment!
    */
   #define RTS_PRAGMA_PACK_1
-  #include "osAlign.h"
+  #include "inc/osAlign.h"
   #undef  RTS_PRAGMA_PACK_1
 
 #endif
@@ -1228,7 +1227,7 @@ typedef struct		/* ---> aligned (2) */
 #else
 
   #define RTS_PRAGMA_PACK_DEF
-  #include "osAlign.h"
+  #include "inc/osAlign.h"
   #undef  RTS_PRAGMA_PACK_DEF
 
 #endif

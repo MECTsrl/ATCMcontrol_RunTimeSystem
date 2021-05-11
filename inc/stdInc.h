@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: stdInc.h
+ * Filename: inc/stdInc.h
  */
 
 
@@ -64,7 +63,7 @@
 #endif
 
 #ifndef _LIBDEF_H_
-#include "libDef.h"
+#include "inc/libDef.h"
 #endif
 
 #ifndef _VMMMAIN_H_

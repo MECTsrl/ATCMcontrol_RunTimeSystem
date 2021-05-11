@@ -28,10 +28,10 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #define OPC_INTERPRETER    1
-  #include "intOpcds.h"
+  #include "inc/intOpcds.h"
 #undef	OPC_INTERPRETER
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */

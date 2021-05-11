@@ -23,8 +23,8 @@
 #ifndef DATALOG_H__
 #define DATALOG_H__
 
-#include "stdInc.h"
-#include "libDef.h"
+#include "inc/stdInc.h"
+#include "inc/libDef.h"
 #include <time.h>
 
 

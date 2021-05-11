@@ -25,11 +25,11 @@
 #define APP_MECT_H__
 
 #define RTS_PRAGMA_PACK_1
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef RTS_PRAGMA_PACK_1
 
-#include "stdInc.h"
-#include "libDef.h"
+#include "inc/stdInc.h"
+#include "inc/libDef.h"
 
 
 

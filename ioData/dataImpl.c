@@ -35,25 +35,29 @@
 #include <semaphore.h>
 #include <ctype.h>
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_IODAT)
 
-#include "mectCfgUtil.h"
-#include "dataMain.h"
-#include "iolDef.h"
-#include "fcDef.h"
+#include "inc.mect/mectCfgUtil.h"
+#include "inc.data/dataMain.h"
+#include "inc/iolDef.h"
+#include "inc.fc/fcDef.h"
 #if defined(RTS_CFG_MECT_RETAIN)
 #include <sys/mman.h>
-#include "mectRetentive.h"
+#include "inc.mect/mectRetentive.h"
 #endif
 
 #include "hmi_plc.h"
 
-#include "libModbus.h"
-#include "CANopen.h"
+#include "vmLib/libModbus.h"
+#include "inc.data/CANopen.h"
 
+#if XENO_RTDM
 #include <native/timer.h>
+#else
+#define RTIME uint64_t
+#endif
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
@@ -2626,8 +2630,11 @@ static void *engineThread(void *statusAdr)
             // datetime   NB no writeQdataRegisters();
             struct timespec tv;
             struct tm datetime;
-
+#if XENO_RTDM
             clock_gettime_overflow(CLOCK_HOST_REALTIME, &tv);
+#else
+            clock_gettime_overflow(CLOCK_REALTIME, &tv);
+#endif
             if (localtime_r(&tv.tv_sec, &datetime)) {
                 VAR_VALUE(PLC_Seconds) = datetime.tm_sec;
                 VAR_VALUE(PLC_Minutes) = datetime.tm_min;
@@ -4893,8 +4900,10 @@ static void *datasyncThread(void *statusAdr)
     //osPthreadSetSched(SCHED_FIFO, 0); // datasyncThread
     //osPthreadSetSched(SCHED_OTHER, FC_PRIO_UDP_DAT); // datasyncThread
     //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
+#if XENO_RTDM
     pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
-
+#else
+#endif
     plcServer = newPlcServer();
     threadInitOK = (plcServer != NULL);
 
@@ -5672,12 +5681,15 @@ static unsigned plc_serial_number()
 
 /* ---------------------------------------------------------------------------- */
 
+#if XENO_RTDM
 #include <rtdm/rtserial.h>
+#endif
 
 static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms)
 {
     int fd;
     char devname[VMM_MAX_PATH];
+#if XENO_RTDM
     struct rtser_config rt_serial_config;
 
     snprintf(devname, VMM_MAX_PATH, "rtser%u", devnum);
@@ -5733,7 +5745,8 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
         return -1;
     }
     fprintf(stderr, "%s(%d=uart%u) ok\n", __func__, fd, devnum);
-
+#else
+#endif
     return fd;
 }
 

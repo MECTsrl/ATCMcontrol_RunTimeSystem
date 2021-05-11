@@ -28,14 +28,14 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_IO_LAYER)
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "fcDef.h"
-#include "mectMain.h"
+#include "inc.fc/fcDef.h"
+#include "inc.mect/mectMain.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

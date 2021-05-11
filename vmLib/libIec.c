@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #include "libIec.h"
 

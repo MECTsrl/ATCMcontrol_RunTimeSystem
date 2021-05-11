@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_SYSLOAD)
 
@@ -499,7 +499,7 @@ IEC_UINT osGetTaskStatM(IEC_UDINT ulID, IEC_UDINT *ulpSize, IEC_UDINT *ulpRes)
 
 	/* Overall Size | Resident | Shared | Text (TRS) | Library (LRS)
 	 * Data (DRS) | Dirty
-	 * (in pages à 4096kb)
+	 * (in pages Ã  4096kb)
 	 */
 
 	uRes = (IEC_UINT)OS_SSCANF(szBuff, "%u %u %u %u %u %u %u",

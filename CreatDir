@@ -1,2 +1,0 @@
-test ! -e $1 && mkdir $1
-exit 0

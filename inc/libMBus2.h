@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: libMBus2.h
+ * Filename: inc/libMBus2.h
  */
 
 
@@ -562,7 +561,7 @@ void lib_mbus2_read_external_temperature(IEC_BYTE *bypData1, IEC_BYTE *bypData2,
 							IEC_INT iStorageNo, IEC_INT iTariffNo, IEC_DINT *piMeasurementUnit, IEC_REAL *pfValue, IEC_INT *piErrorCode);
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 /**single char telegram, used for ack*/
@@ -814,7 +813,7 @@ typedef struct FUN_METER_STRING_TAG
 } FUN_METER_STRING;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 #endif /* RTS_CFG_MBUS2_LIB */

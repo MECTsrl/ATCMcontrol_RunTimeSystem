@@ -19,8 +19,8 @@
 #ifndef _MODBUS_H_
 #define _MODBUS_H_
 
-#include "stdInc.h"
-#include "libDef.h"
+#include "inc/stdInc.h"
+#include "inc/libDef.h"
 #if defined(RTS_CFG_MODBUS_LIB)
 
 /* Add this for macros that defined unix flavor */
@@ -442,7 +442,7 @@ void mb_set_float_cdab(STDLIBFUNCALL);
 void mb_set_error_recovery(STDLIBFUNCALL);
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 typedef struct
@@ -808,7 +808,7 @@ typedef struct
 }MB_SET_ERROR_RECOVERY_PARAM;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 #endif	/* RTS_CFG_MODBUS_LIB */

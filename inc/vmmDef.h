@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: vmmDef.h
+ * Filename: inc/vmmDef.h
  */
 
 
@@ -1291,7 +1290,7 @@ typedef struct
  * FIO_MODE_RDWR:	Opens for reading and appending; the appending operation 
  *					includes the removal of the EOF marker before new data is 
  *					written to the file and the EOF marker is restored after 
- *					writing is complete; creates the file first if it doesn’t 
+ *					writing is complete; creates the file first if it doesnÂ’t 
  *					exist.
  */
 

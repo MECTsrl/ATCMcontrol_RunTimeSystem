@@ -1,6 +1,0 @@
-make -f _fcrts.mak TARGET=4CPC DEBUG=0  SOURCERY_GCC=1 all
-
-SOURCERY_GCC=1 to build with codesourcery gcc
-FREESCALE_GCC=1 to build with freescale gcc
-
-You can build the runtime only for one kind of hardware so the two define cannot be active at the same time

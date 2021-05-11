@@ -96,7 +96,7 @@ void TSK_GetStatistic(STDLIBFUNCALL);
 void TSK_ClearStatistic(STDLIBFUNCALL);
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 /* --- 135 -------------------------------------------------------------------- */
@@ -421,7 +421,7 @@ typedef struct
 } S_TSK_ClearStatistic;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 #endif	/* RTS_CFG_SYSTEM_LIB_NT */

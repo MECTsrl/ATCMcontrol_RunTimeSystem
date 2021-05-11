@@ -26,11 +26,11 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
-#include "fcDef.h"
-#include "dataMain.h"
-#include "mectMain.h"
+#include "inc.fc/fcDef.h"
+#include "inc.data/dataMain.h"
+#include "inc.mect/mectMain.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -38,7 +38,7 @@
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 /* step in ms of the canopen stack manager */

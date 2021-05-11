@@ -23,7 +23,7 @@
 #ifndef H_MECTCFGUTIL
 #define H_MECTCFGUTIL
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #define APP_CONFIG_DIR                  "/local/etc/sysconfig/"
 #define APP_CONFIG_FILE                 APP_CONFIG_DIR "system.ini"

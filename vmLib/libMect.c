@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <time.h> 
 #include "privUtyMect.h"
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 #include "libMect.h"           /* Declare exported stuff */
 /*
  * Global variables

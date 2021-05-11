@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_SFC)
 
@@ -217,7 +217,7 @@ typedef struct _SFC_Header
  * ----------------------------------------------------------------------------
  */
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
  typedef struct
@@ -240,7 +240,7 @@ typedef struct
 } SFC_FINALISE;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 /* ----  Global Variables:	 -------------------------------------------------- */
@@ -492,7 +492,7 @@ static void doEnabledTransitionsPass1(SFC_Header OS_DPTR * pSFCPOU, SFC_BOOL man
 				pSFCPOU->doTransAct[index_doTransAct]	= -1; /* temporary end */
 			}
 
-			/* Alle alternativen Transitionen müssen mitberechnet werden 
+			/* Alle alternativen Transitionen mÃ¼ssen mitberechnet werden 
 			 */
 			transNr = pSFCPOU->AltTrans[transNr];
 		}
@@ -552,7 +552,7 @@ static void doEnabledTransitionsPass2(SFC_Header OS_DPTR * pSFCPOU, SFC_BOOL man
 			{
 				transVal = FALSE;
 			} else {
-				/* Ergebnis zurücklesen */
+				/* Ergebnis zurÃ¼cklesen */
 				transVal = pSFCPOU->doTransAct[index_doTransAct++];
 			}
 			
@@ -586,7 +586,7 @@ static void doEnabledTransitionsPass2(SFC_Header OS_DPTR * pSFCPOU, SFC_BOOL man
 					i++;
 				}
 
-				/* aber jetzt noch die unbenutzten alternativen Transitionen überlesen 
+				/* aber jetzt noch die unbenutzten alternativen Transitionen Ã¼berlesen 
 				 */
 				transNr = pSFCPOU->AltTrans[transNr];
 			}

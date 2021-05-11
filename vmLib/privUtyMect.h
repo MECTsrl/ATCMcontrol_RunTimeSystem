@@ -23,7 +23,7 @@
 #ifndef _PRIV_UTY_MECT_H_
 #define _PRIV_UTY_MECT_H_
 
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 
 // This is for the EVA BOARD
 //#define SERIALPORT      "/dev/ttySP0"   /* Serial port to use */

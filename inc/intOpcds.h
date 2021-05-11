@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: intOpcds.h
+ * Filename: inc/intOpcds.h
  */
 
 
@@ -59,7 +58,7 @@
 #define type_op2		2	/* vorher = 2, nachher = 1	; z.B. ADD										*/
 #define type_pop		3	/* vorher = 1, nachher = 0													*/
 #define type_statm		4	/* vorher = 0, nachher = 0													*/
-#define type_cc 		5	/* vorher = 1, nachher = 0	; bedingte Sprünge ...							*/
+#define type_cc 		5	/* vorher = 1, nachher = 0	; bedingte SprÃ¼nge ...							*/
 #define type_par		6	/* vorher = 0, nachher = 1	; formaler Parameter							*/
 #define type_op3		7	/* vorher = 3, nachher = 1	; z.B. SEL, MUX -> stets IP 					*/
 #define type_popv		8	/* vorher = 2, nachher = 0	; POP Vektor Befehle							*/

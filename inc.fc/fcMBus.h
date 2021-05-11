@@ -81,7 +81,7 @@ void fb_mbus_electricity_read(STDLIBFBCALL);
 void fb_mbus_water_read(STDLIBFBCALL);
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 typedef struct HEAT_METER_TAG
@@ -257,7 +257,7 @@ typedef struct FB_WATER_READ_PAR_TAG
 } FB_WATER_READ_PAR;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "osAlign.h"
+#include "inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 

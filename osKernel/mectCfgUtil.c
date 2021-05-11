@@ -24,7 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 
 //#define DBG_MECT_UTIL
 

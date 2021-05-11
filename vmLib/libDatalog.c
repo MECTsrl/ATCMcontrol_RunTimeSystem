@@ -35,7 +35,7 @@
 #include <signal.h>
  
 #include "libDatalog.h"
-#include "libUSB.h"
+#include "vmLib/libUSB.h"
 #define DLDEBUG 0
 
 
@@ -60,7 +60,7 @@ app_datalog_t datalog_data = {
 	.dl_index = 0,
 	.lenght = 0,
 	.usbkey_index = 0,
-	.dir[0]="\0",
+    .dir[0]='\0',
 	.list = NULL,
 };
 

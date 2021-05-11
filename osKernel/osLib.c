@@ -28,20 +28,20 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_CUSTOMER_LIB)
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "../vmLib/libFile.h"
+#include "vmLib/libFile.h"
 
-#include "fcComm.h"
-#include "fcTime.h"
-#include "fcSerCom.h"
-#include "fcProfi.h"
-#include "fcModbus.h"
-#include "fcMBus.h"
+#include "inc.fc/fcComm.h"
+#include "inc.fc/fcTime.h"
+#include "inc.fc/fcSerCom.h"
+#include "inc.fc/fcProfi.h"
+#include "inc.fc/fcModbus.h"
+#include "inc.fc/fcMBus.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: osLast.h
+ * Filename: inc/osLast.h
  */
 
 
@@ -42,7 +41,7 @@
 
 /* Adaptation specific code ... 
  */
-#include "fcMain.h"
+#include "inc.fc/fcMain.h"
 								
  
 #endif /* _OSLAST_H_ */

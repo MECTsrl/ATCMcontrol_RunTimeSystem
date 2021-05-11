@@ -26,12 +26,12 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_IO_LAYER)
 
-#include "iolDef.h"
-#include "vmmMain.h"
+#include "inc/iolDef.h"
+#include "inc/vmmMain.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 

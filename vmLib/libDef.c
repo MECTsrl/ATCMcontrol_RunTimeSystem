@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 /* Declarations IEC Library
  */
@@ -56,11 +56,11 @@
 
 /* Declarations MBus2 Library
  */
-#include "libMBus2.h"
+#include "inc/libMBus2.h"
 
 /* Declarations BACnet Library
  */
-#include "bacFun.h"
+#include "inc.bac/bacFun.h"
 
 /* Declarations Mect Library
  */
@@ -68,7 +68,7 @@
 
 /* Declarations USB Library
  */
-#include "libUSB.h"
+#include "vmLib/libUSB.h"
 
 /* Declarations Datalogger Library
  */

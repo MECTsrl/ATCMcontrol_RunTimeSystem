@@ -84,13 +84,13 @@ fflush(stderr);
 /* ----  Includes:	 ---------------------------------------------------------- */
 #include <ctype.h>
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #include "libHW119.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "uthash.h"
+#include "inc/uthash.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

@@ -28,11 +28,11 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "fcDef.h"
+#include "inc.fc/fcDef.h"
 
 #include <sys/mman.h>
 #include <sys/vfs.h>
@@ -40,7 +40,7 @@
 #include <sys/timeb.h>
 #include <sys/reboot.h>
 #if defined(RTS_CFG_USB_LIB)
-#include <libUSB.h>
+#include "vmLib/libUSB.h"
 #endif
 #if defined(RTS_CFG_DATALOG_LIB)
 #include <libDatalog.h>

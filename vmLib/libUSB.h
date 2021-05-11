@@ -24,8 +24,8 @@
 #ifndef __LIB_USB_H_
 #define __LIB_USB_H_
 
-#include "stdInc.h"
-#include "libDef.h"
+#include "inc/stdInc.h"
+#include "inc/libDef.h"
 
 #define APP_USB_MAX 5
 

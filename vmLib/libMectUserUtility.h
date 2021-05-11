@@ -23,8 +23,8 @@
 #ifndef _MECT_USER_UTILITY_H_
 #define _MECT_USER_UTILITY_H_
 
-#include "stdInc.h"
-#include "libDef.h"
+#include "inc/stdInc.h"
+#include "inc/libDef.h"
 
 /* --- 260 -------------------------------------------------------------------- */
 void Buzzer(STDLIBFUNCALL);

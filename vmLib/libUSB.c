@@ -34,9 +34,9 @@
 #include <unistd.h>
 #include <dirent.h>
 
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 
-#include "libUSB.h"
+#include "vmLib/libUSB.h"
 
 #define SCSI_DRIVER_PATH  "/proc/scsi/usb-storage-"
 #define USBDEV_COMMON "/dev/sd"

@@ -1,2 +1,0 @@
-make -f _fcrts.mak    DEBUG=$1 TARGET=4CFC $2 $3 $4
-make -f _vistest.mak  DEBUG=$1 TARGET=4CFC $2 $3 $4

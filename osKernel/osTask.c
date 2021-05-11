@@ -26,25 +26,25 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_TCP_NATIVE)
-  #include "osSocket.h"
+  #include "inc/osSocket.h"
 #endif
 
 #if defined(RTS_CFG_IOCANOPEN)
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 #endif
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "fcMain.h"
-#include "fcDef.h"
-#include "libMBus2.h"
+#include "inc.fc/fcMain.h"
+#include "inc.fc/fcDef.h"
+#include "inc/libMBus2.h"
 
 #include <sys/mman.h>
-#include "mectMain.h"
-#include "dataMain.h" // dataEngineStart()
+#include "inc.mect/mectMain.h"
+#include "inc.data/dataMain.h" // dataEngineStart()
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

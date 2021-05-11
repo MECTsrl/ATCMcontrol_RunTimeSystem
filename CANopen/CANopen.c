@@ -8,10 +8,10 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
-#include "fcDef.h"
-#include "mectMain.h"
+#include "inc.fc/fcDef.h"
+#include "inc.mect/mectMain.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -19,11 +19,11 @@
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
-#include "mectCfgUtil.h"
+#include "inc.mect/mectCfgUtil.h"
 
 
 #include <pthread.h>
-#include "CANopen.h"
+#include "inc.data/CANopen.h"
 
 #define NO_THREAD 0xFFFFFFFFL
 #define STACK_RATE_MS   10

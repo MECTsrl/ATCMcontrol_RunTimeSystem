@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "stdInc.h"
+#include "inc/stdInc.h"
 
 #if defined(RTS_CFG_TASK_IMAGE) | defined(RTS_CFG_WRITE_FLAGS) | defined(RTS_CFG_IO_LAYER)
 

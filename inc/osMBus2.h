@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Mect s.r.l
  *
@@ -18,7 +17,7 @@
 */
 
 /*
- * Filename: osMBus2.h
+ * Filename: inc/osMBus2.h
  */
 
 
