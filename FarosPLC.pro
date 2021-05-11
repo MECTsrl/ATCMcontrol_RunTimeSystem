@@ -5,7 +5,7 @@ CONFIG -= qt
 
 DEFINES += _SOF_4CPC_SRC_
 
-LIBS += -Lpthread
+LIBS += -pthread -lrt
 
 SOURCES += \
         CANopen/CANopen.c \

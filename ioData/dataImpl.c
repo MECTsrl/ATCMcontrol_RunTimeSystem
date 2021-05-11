@@ -57,6 +57,18 @@
 #include <native/timer.h>
 #else
 #define RTIME uint64_t
+static uint64_t rt_timer_read()
+{
+    uint64_t retval;
+    struct timespec t;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &t) == 0) {
+        retval = t.tv_sec * UN_MILIARDO_ULL + t.tv_nsec;
+    } else {
+        retval = 0ull;
+    }
+    return retval;
+}
 #endif
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
@@ -5683,12 +5695,32 @@ static unsigned plc_serial_number()
 
 #if XENO_RTDM
 #include <rtdm/rtserial.h>
+#else
+
+static int rt_dev_open(const char *path, int oflag) {
+    return open(path, oflag);
+}
+
+static ssize_t rt_dev_read(int fd, void *buf, size_t nbyte) {
+    return read(fd, buf, nbyte);
+}
+
+static ssize_t rt_dev_write(int fd, const void *buf, size_t nbyte) {
+    return write(fd, buf, nbyte);
+}
+
+int rt_dev_close(int fd)
+{
+    return close(fd);
+}
+
 #endif
 
 static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms)
 {
     int fd;
     char devname[VMM_MAX_PATH];
+
 #if XENO_RTDM
     struct rtser_config rt_serial_config;
 
