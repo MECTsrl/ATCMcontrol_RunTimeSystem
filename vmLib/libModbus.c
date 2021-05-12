@@ -45,7 +45,7 @@ typedef int ssize_t;
 #endif
 #include <sys/types.h>
 
-#if defined(XENO_RTDM) && (XENO_RTDM != 0)
+#ifdef __XENO__
 #include <rtdm/rtserial.h>
 #endif
 
@@ -54,11 +54,7 @@ typedef int ssize_t;
 #define TIMEOUT_ERROR	-2
 #define OTHER_ERROR	-1
 
-#if defined(XENO_RTDM) && (XENO_RTDM >= 3)
-#define MODBUS_DEBUG
-#else
 #undef MODBUS_DEBUG
-#endif
 
 #ifdef MODBUS_DEBUG
 #define DBG_PRINT(format, args...)  \
@@ -344,7 +340,8 @@ MODBUS_END_DECLS
 /* #include modbus-rtu-private.h */
 #if defined(_WIN32)
 #include <windows.h>
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
+#elif defined(__XENO__)
+#else
 #include <termios.h>
 #endif
 
@@ -389,8 +386,9 @@ typedef struct _modbus_rtu {
 #if defined(_WIN32)
 	struct win32_ser w_ser;
 	DCB old_dcb;
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
-	/* Save old termios settings */
+#elif defined(__XENO__)
+#else
+    /* Save old termios settings */
 	struct termios old_tios;
 #endif
 #if HAVE_DECL_TIOCSRS485
@@ -813,7 +811,7 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 	}
 
     while (length_to_read != 0) {
-#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+#ifdef __XENO__
       if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
 #endif
         rc = ctx->backend->select(ctx, &rset, p_tv, length_to_read);
@@ -845,12 +843,12 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
             }
             return ret_val;
         }
-#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+#ifdef __XENO__
       }
 #endif
         if ((msg_length + length_to_read) < MAX_MESSAGE_LENGTH) {
             rc = ctx->backend->recv(ctx, msg + msg_length, length_to_read);
-#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+#ifdef __XENO__
             if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
                 if (rc < 0) {
                     errno = -rc;	/* Set errno to error code. */
@@ -868,57 +866,57 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 
         if (rc == -1) {
             _error_print(ctx, "read", __LINE__);
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
-            if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
-                    (errno == ECONNRESET || errno == ECONNREFUSED ||
-                     errno == EBADF)) {
-                int saved_errno = errno;
-                modbus_close(ctx);
-                modbus_connect(ctx);
-                /* Could be removed by previous calls */
-                errno = saved_errno;
-            }
-            ret_val = OTHER_ERROR;
-#else
-          if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
-            if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
-                    (errno == ECONNRESET || errno == ECONNREFUSED ||
-                     errno == EBADF)) {
-                int saved_errno = errno;
-                modbus_close(ctx);
-                _sleep_response_timeout(ctx);
-                modbus_connect(ctx);
-                modbus_set_response_timeout(ctx, &ctx->response_timeout);
-                /* Could be removed by previous calls */
-                errno = saved_errno;
-            }
-            ret_val = OTHER_ERROR;
-          } else {
-            if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
-                int saved_errno = errno;
+#ifdef __XENO__
+            if (ctx->backend->backend_type != _MODBUS_BACKEND_TYPE_RTU) {
+              if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
+                      (errno == ECONNRESET || errno == ECONNREFUSED ||
+                       errno == EBADF)) {
+                  int saved_errno = errno;
+                  modbus_close(ctx);
+                  _sleep_response_timeout(ctx);
+                  modbus_connect(ctx);
+                  modbus_set_response_timeout(ctx, &ctx->response_timeout);
+                  /* Could be removed by previous calls */
+                  errno = saved_errno;
+              }
+              ret_val = OTHER_ERROR;
+            } else {
+              if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) {
+                  int saved_errno = errno;
 
-                if (errno == ETIMEDOUT) {
-                    _sleep_response_timeout(ctx);
-                    DBG_PRINT("Going to flush driver buffers...\n");
-                    modbus_flush(ctx);
-                    ret_val = TIMEOUT_ERROR;
-                }
-                else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
-                    modbus_close(ctx);
-                    _sleep_response_timeout(ctx);
-                    modbus_connect(ctx);
-                    modbus_set_response_timeout(ctx, &ctx->response_timeout);
-                    ret_val = OTHER_ERROR;
-                }
-                else
-                    ret_val = OTHER_ERROR;
-                errno = saved_errno;	/* May have been changed by previous calls. */
+                  if (errno == ETIMEDOUT) {
+                      _sleep_response_timeout(ctx);
+                      DBG_PRINT("Going to flush driver buffers...\n");
+                      modbus_flush(ctx);
+                      ret_val = TIMEOUT_ERROR;
+                  }
+                  else if ((errno == ECONNRESET) || (errno == ECONNREFUSED) || (errno == EBADF)) {
+                      modbus_close(ctx);
+                      _sleep_response_timeout(ctx);
+                      modbus_connect(ctx);
+                      modbus_set_response_timeout(ctx, &ctx->response_timeout);
+                      ret_val = OTHER_ERROR;
+                  }
+                  else
+                      ret_val = OTHER_ERROR;
+                  errno = saved_errno;	/* May have been changed by previous calls. */
+              }
+              else if (errno == ETIMEDOUT)
+                  ret_val = TIMEOUT_ERROR;
+              else
+                  ret_val = OTHER_ERROR;
             }
-            else if (errno == ETIMEDOUT)
-                ret_val = TIMEOUT_ERROR;
-            else
-                ret_val = OTHER_ERROR;
-          }
+#else
+            if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
+                    (errno == ECONNRESET || errno == ECONNREFUSED ||
+                     errno == EBADF)) {
+                int saved_errno = errno;
+                modbus_close(ctx);
+                modbus_connect(ctx);
+                /* Could be removed by previous calls */
+                errno = saved_errno;
+            }
+            ret_val = OTHER_ERROR;
 #endif
             return ret_val;
         }
@@ -2142,7 +2140,7 @@ void modbus_set_response_timeout(modbus_t *ctx, const struct timeval *timeout)
     if (timeout != &ctx->response_timeout) {
         ctx->response_timeout = *timeout;
     }
-#if defined(XENO_RTDM) && (XENO_RTDM > 0)
+#ifdef __XENO__
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
         /* Response timeout in ns */
         struct rtser_config rt_serial_config;
@@ -2756,7 +2754,7 @@ static int win32_ser_read(struct win32_ser *ws, uint8_t *p_msg,
 static void _modbus_rtu_ioctl_rts(int fd, int on)
 {
 #if HAVE_DECL_TIOCM_RTS
-#if defined(XENO_RTDM) && (XENO_RTDM != 0)
+#ifdef __XENO__
 	struct rtser_config config;
 
     config.config_mask = RTSER_SET_MECT_RTS_MASK;
@@ -2807,7 +2805,7 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
         _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
         // usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 #endif
-#if defined(XENO_RTDM) && (XENO_RTDM != 0)
+#ifdef __XENO__
         size = rt_dev_write(ctx->s, req, req_length);
 #ifdef RTS_IS_MANAGED_HERE
         {
@@ -2837,10 +2835,10 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 	} else {
 #endif
 
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
-		return write(ctx->s, req, req_length);
+#ifdef __XENO__
+        return rt_dev_write(ctx->s, req, req_length);
 #else
-		return rt_dev_write(ctx->s, req, req_length);
+		return write(ctx->s, req, req_length);
 #endif
 
 #if HAVE_DECL_TIOCM_RTS
@@ -2876,16 +2874,13 @@ static int _modbus_rtu_receive(modbus_t *ctx, uint8_t *req)
 static ssize_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 {
 #if defined(_WIN32)
-
 	return win32_ser_read(&((modbus_rtu_t *)ctx->backend_data)->w_ser, rsp, rsp_length);
 
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
+#elif defined(__XENO__)
+    return rt_dev_read(ctx->s, rsp, rsp_length);
 
+#else
 	return read(ctx->s, rsp, rsp_length);
-
-#elif defined(XENO_RTDM)
-
-	return rt_dev_read(ctx->s, rsp, rsp_length);
 
 #endif
 }
@@ -2955,8 +2950,9 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 {
 #if defined(_WIN32)
 	DCB dcb;
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
-	struct termios tios;
+#elif defined(__XENO__)
+#else
+    struct termios tios;
 	speed_t speed;
 	int flags;
 #endif
@@ -3128,9 +3124,66 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		return -1;
 	}
 
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
+#elif defined(__XENO__)
+    /* RTDM serial port configuration */
+    struct rtser_config rt_serial_config;
 
-	/* The O_NOCTTY flag tells UNIX that this program doesn't want
+    ctx->s = rt_dev_open(ctx_rtu->device, 0);
+    if (ctx->s < 0) {
+        fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
+                ctx_rtu->device, strerror(errno));
+        return -1;
+    }
+
+    rt_serial_config.config_mask =
+        RTSER_SET_BAUD
+        | RTSER_SET_DATA_BITS
+        | RTSER_SET_STOP_BITS
+        | RTSER_SET_PARITY
+        | RTSER_SET_HANDSHAKE
+        ;
+
+    /* Set Baud rate */
+    rt_serial_config.baud_rate = ctx_rtu->baud;
+
+    /* Set data bits (5, 6, 7, 8 bits) */
+    switch (ctx_rtu->data_bit) {
+        case 5:  rt_serial_config.data_bits = RTSER_5_BITS; break;
+        case 6:  rt_serial_config.data_bits = RTSER_6_BITS; break;
+        case 7:  rt_serial_config.data_bits = RTSER_7_BITS; break;
+        case 8:  rt_serial_config.data_bits = RTSER_8_BITS; break;
+        default: rt_serial_config.data_bits = RTSER_8_BITS; break;
+    }
+
+    /* Stop bit (1 or 2) */
+    if (ctx_rtu->stop_bit == 1)
+        rt_serial_config.stop_bits = RTSER_1_STOPB;
+    else /* 2 */
+        rt_serial_config.stop_bits = RTSER_2_STOPB;
+
+    /* Parity bit */
+    if (ctx_rtu->parity == 'N')
+        rt_serial_config.parity = RTSER_NO_PARITY;		/* None */
+    else if (ctx_rtu->parity == 'E')
+        rt_serial_config.parity = RTSER_EVEN_PARITY;	/* Even */
+    else
+        rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
+
+    /* Disable software flow control */
+    rt_serial_config.handshake = RTSER_NO_HAND;
+
+    int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+    if (err) {
+        fprintf(stderr, "%s - rt_dev_ioctl SET CONFIG error, %s\n", __func__,  strerror(-err));
+        rt_dev_close(ctx->s);
+        ctx->s = -1;
+        fprintf(stderr, "%s(%d) error\n", __func__, ctx->s);
+        return -1;
+    }
+    fprintf(stderr, "%s(%s) ok\n", __func__, ctx_rtu->device);
+
+#else
+    /* The O_NOCTTY flag tells UNIX that this program doesn't want
 	   to be the "controlling terminal" for that port. If you
 	   don't specify this then any input (such as keyboard abort
 	   signals and so forth) will affect your process
@@ -3446,63 +3499,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 		return -1;
 	}
 
-#else
-    /* RTDM serial port configuration */
-    struct rtser_config rt_serial_config;
-
-	ctx->s = rt_dev_open(ctx_rtu->device, 0);
-	if (ctx->s < 0) {
-		fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
-				ctx_rtu->device, strerror(errno));
-		return -1;
-	}
-
-	rt_serial_config.config_mask = 
-		RTSER_SET_BAUD
-		| RTSER_SET_DATA_BITS
-		| RTSER_SET_STOP_BITS
-		| RTSER_SET_PARITY
-		| RTSER_SET_HANDSHAKE
-		;
-
-	/* Set Baud rate */
-	rt_serial_config.baud_rate = ctx_rtu->baud;
-
-	/* Set data bits (5, 6, 7, 8 bits) */
-	switch (ctx_rtu->data_bit) {
-		case 5:  rt_serial_config.data_bits = RTSER_5_BITS; break;
-		case 6:  rt_serial_config.data_bits = RTSER_6_BITS; break;
-		case 7:  rt_serial_config.data_bits = RTSER_7_BITS; break;
-		case 8:  rt_serial_config.data_bits = RTSER_8_BITS; break;
-		default: rt_serial_config.data_bits = RTSER_8_BITS; break;
-	}
-
-	/* Stop bit (1 or 2) */
-	if (ctx_rtu->stop_bit == 1)
-		rt_serial_config.stop_bits = RTSER_1_STOPB;
-	else /* 2 */
-		rt_serial_config.stop_bits = RTSER_2_STOPB;
-
-	/* Parity bit */
-	if (ctx_rtu->parity == 'N')
-		rt_serial_config.parity = RTSER_NO_PARITY;		/* None */
-	else if (ctx_rtu->parity == 'E')
-		rt_serial_config.parity = RTSER_EVEN_PARITY;	/* Even */
-	else
-		rt_serial_config.parity = RTSER_ODD_PARITY;		/* Odd */
-
-	/* Disable software flow control */
-    rt_serial_config.handshake = RTSER_NO_HAND;
-
-    int err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
-    if (err) {
-        fprintf(stderr, "%s - rt_dev_ioctl SET CONFIG error, %s\n", __func__,  strerror(-err));
-        rt_dev_close(ctx->s);
-        ctx->s = -1;
-        fprintf(stderr, "%s(%d) error\n", __func__, ctx->s);
-        return -1;
-    }
-    fprintf(stderr, "%s(%s) ok\n", __func__, ctx_rtu->device);
 #endif
 
 	return 0;
@@ -3634,13 +3630,13 @@ static void _modbus_rtu_close(modbus_t *ctx)
 				(int)GetLastError());
 #else
 	if (ctx->s != -1) {
-#if !defined(XENO_RTDM) || (XENO_RTDM == 0)
-		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
-		close(ctx->s);
-#else
+#ifdef __XENO__
         fprintf(stderr, "%s(%s) ...", __func__, ctx_rtu->device);
         rt_dev_close(ctx->s);
         fprintf(stderr, " ok (%s)\n", ctx_rtu->device);
+#else
+		tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
+		close(ctx->s);
 #endif
 	}
 #endif
@@ -3651,25 +3647,22 @@ static int _modbus_rtu_flush(modbus_t *ctx)
 	DBG_PRINT("enter\n");
 
 #if defined(_WIN32)
-
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
 	ctx_rtu->w_ser.n_bytes = 0;
 	return (FlushFileBuffers(ctx_rtu->w_ser.fd) == FALSE);
 
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
+#elif defined(__XENO__)
+    int err;
 
-	return tcflush(ctx->s, TCIOFLUSH);
+    /* RT serial flush is mapped on the ioctl for break control. */
+    err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_BREAK_CTL, NULL);
+    if (err)
+        fprintf(stderr, "%s - rt_dev_ioctl BREAK error, %s\n", __func__,  strerror(-err));
+
+    return 0;
 
 #else
-
-	int err;
-
-	/* RT serial flush is mapped on the ioctl for break control. */
-	err = rt_dev_ioctl(ctx->s, RTSER_RTIOC_BREAK_CTL, NULL);
-	if (err)
-		fprintf(stderr, "%s - rt_dev_ioctl BREAK error, %s\n", __func__,  strerror(-err));
-
-	return 0;
+	return tcflush(ctx->s, TCIOFLUSH);
 
 #endif
 }
@@ -3692,7 +3685,10 @@ static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
 		return -1;
 	}
 
-#elif !defined(XENO_RTDM) || (XENO_RTDM == 0)
+#elif defined(__XENO__)
+    s_rc = 1;
+
+#else
 
 	while ((s_rc = select(ctx->s+1, rset, NULL, NULL, tv)) == -1) {
 		if (errno == EINTR) {
@@ -3712,10 +3708,6 @@ static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
 		errno = ETIMEDOUT;
 		return -1;
 	}
-
-#else
-
-	s_rc = 1;
 
 #endif
 

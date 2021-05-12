@@ -36,13 +36,6 @@
 
 #include "vmLib/libFile.h"
 
-#include "inc.fc/fcComm.h"
-#include "inc.fc/fcTime.h"
-#include "inc.fc/fcSerCom.h"
-#include "inc.fc/fcProfi.h"
-#include "inc.fc/fcModbus.h"
-#include "inc.fc/fcMBus.h"
-
 /* ----  Local Defines:   ----------------------------------------------------- */
 
 /* ----  Global Variables:	 -------------------------------------------------- */

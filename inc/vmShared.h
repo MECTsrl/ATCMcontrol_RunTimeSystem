@@ -92,8 +92,8 @@
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_BYTE,	byCommand); 	/* Command or response ID			*/
-	DEC_VAR(IEC_BYTE,	bySequence);	/* Sequence number					*/
+    DEC_BYTE(IEC_BYTE,	byCommand); 	/* Command or response ID			*/
+    DEC_BYTE(IEC_BYTE,	bySequence);	/* Sequence number					*/
 
 	DEC_VAR(IEC_DATA,	pData[MAX_DATA]);	/* Data buffer					*/
 
@@ -107,8 +107,8 @@ typedef struct		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uBlock);		/* Block number 					*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Data length						*/
-	DEC_VAR(IEC_BYTE,	byLast);		/* Last block in sequence			*/
-	DEC_VAR(IEC_USINT,	usSource);		/* Block source - VMM intern!		*/
+    DEC_BYTE(IEC_BYTE,	byLast);		/* Last block in sequence			*/
+    DEC_BYTE(IEC_USINT,	usSource);		/* Block source - VMM intern!		*/
 	
 	DEC_VAR(XCommand,	CMD);			/* Command / Response				*/
 
@@ -120,8 +120,8 @@ typedef struct		/* --> aligned (2) */
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_BYTE,	byType);		/* Block type						*/
-	DEC_VAR(IEC_BYTE,	byCRC); 		/* Check sum						*/
+    DEC_BYTE(IEC_BYTE,	byType);		/* Block type						*/
+    DEC_BYTE(IEC_BYTE,	byCRC); 		/* Check sum						*/
 	 
 	DEC_VAR(XBlock, 	BLK);			/* Command / Response block 		*/
 
@@ -144,8 +144,8 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset in the segment			*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Size of var. in bytes, 1 for bit */
 	DEC_VAR(IEC_UINT,	uSegment);		/* Segment number of the variable	*/
-	DEC_VAR(IEC_BYTE,	byBit); 		/* Bit offset						*/
-	DEC_VAR(IEC_BYTE,	byDummy);		/* Alignment - Dummy				*/
+    DEC_BYTE(IEC_BYTE,	byBit); 		/* Bit offset						*/
+    DEC_BYTE(IEC_BYTE,	byDummy);		/* Alignment - Dummy				*/
 
 } XVariable;							/* -------------------------------- */
 
@@ -153,17 +153,17 @@ typedef struct		/* --> aligned (2) */
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
-	DEC_VAR(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
-	DEC_VAR(IEC_USINT,	usOffset);		/* Offset in the segment			*/
-	DEC_VAR(IEC_USINT,	usLen); 		/* Size of var. in bytes, 1 for bit */
+    DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
+    DEC_BYTE(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
+    DEC_BYTE(IEC_USINT,	usOffset);		/* Offset in the segment			*/
+    DEC_BYTE(IEC_USINT,	usLen); 		/* Size of var. in bytes, 1 for bit */
 
 } XVariableS;							/* -------------------------------- */
 
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
-	DEC_VAR(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
+    DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
+    DEC_BYTE(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
 	DEC_VAR(IEC_UINT,	uOffset);		/* Offset in the segment			*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Size of var. in bytes, 1 for bit */
 
@@ -171,8 +171,8 @@ typedef struct		/* --> aligned (2) */
 
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
-	DEC_VAR(IEC_BYTE,	byDummy);		/* Alignment - Dummy				*/
+    DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
+    DEC_BYTE(IEC_BYTE,	byDummy);		/* Alignment - Dummy				*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Size of var. in bytes, 1 for bit */
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset in the segment			*/
 	DEC_VAR(IEC_UINT,	uSegment);		/* Segment number of the variable	*/
@@ -239,12 +239,12 @@ typedef struct		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulInterval);	/* Task interval time				*/
 	DEC_VAR(IEC_UINT,	uPriority); 	/* Task priority					*/
-	DEC_VAR(IEC_BYTE,	byPrograms);	/* Count of programs in task		*/
-	DEC_VAR(IEC_BYTE,	byStart);		/* Start interpr. after download	*/
+    DEC_BYTE(IEC_BYTE,	byPrograms);	/* Count of programs in task		*/
+    DEC_BYTE(IEC_BYTE,	byStart);		/* Start interpr. after download	*/
 	DEC_VAR(IEC_UINT,	uRegionsRd);	/* No. of memory read regions		*/
 	DEC_VAR(IEC_UINT,	uRegionsWr);	/* No. of memory write regions		*/
 	DEC_VAR(IEC_DATA,	szName[33]);	/* Taskname 			*/
-	DEC_VAR(IEC_BYTE,	byDummy);		/* alignment byte					*/
+    DEC_BYTE(IEC_BYTE,	byDummy);		/* alignment byte					*/
 										/* use only for versions < V2.05	*/
 } XTask_200;							/* -------------------------------- */
 
@@ -256,14 +256,14 @@ typedef struct		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulInterval);	/* Task interval time				*/
 	DEC_VAR(IEC_UINT,	uPriority); 	/* Task priority					*/
-	DEC_VAR(IEC_BYTE,	byPrograms);	/* Count of programs in task		*/
-	DEC_VAR(IEC_BYTE,	byStart);		/* Start interpr. after download	*/
+    DEC_BYTE(IEC_BYTE,	byPrograms);	/* Count of programs in task		*/
+    DEC_BYTE(IEC_BYTE,	byStart);		/* Start interpr. after download	*/
 	DEC_VAR(IEC_UINT,	uRegionsRd);	/* No. of memory read regions		*/
 	DEC_VAR(IEC_UINT,	uRegionsWr);	/* No. of memory write regions		*/
 	DEC_VAR(IEC_UINT,	uCpyRegions);	/* Count of CopyRegions for the task*/
 	DEC_VAR(IEC_UINT,	uCpyRegOff);	/* offset of CopyRegions for the task*/
 	DEC_VAR(IEC_DATA,	szName[33]);	/* Taskname 			*/
-	DEC_VAR(IEC_BYTE,	byDummy);		/* alignment byte					*/
+    DEC_BYTE(IEC_BYTE,	byDummy);		/* alignment byte					*/
 										/* use only for V2.05 or higher 	*/
 } XTask_205;							/* -------------------------------- */
 
@@ -273,8 +273,8 @@ typedef struct		/* --> aligned (2) */
 
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
-	DEC_VAR(IEC_USINT,	usAttrib);		/* Task flags						*/
+    DEC_BYTE(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
+    DEC_BYTE(IEC_USINT,	usAttrib);		/* Task flags						*/
 	DEC_VAR(IEC_UDINT,	ulPara1);		/* Task parameter #1				*/
 	DEC_VAR(IEC_UDINT,	ulPara2);		/* Task parameter #2				*/
 	DEC_VAR(IEC_UINT,	uRegionsRd);	/* No. of memory read regions		*/
@@ -282,7 +282,7 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UINT,	uCpyRegions);	/* Count of CopyRegions for the task*/
 	DEC_VAR(IEC_UINT,	uCpyRegOff);	/* offset of CopyRegions for the task*/
 	DEC_VAR(IEC_DATA,	szName[33]);	/* Taskname 			*/
-	DEC_VAR(IEC_USINT,	usPriority);	/* Task priority					*/
+    DEC_BYTE(IEC_USINT,	usPriority);	/* Task priority					*/
 
 										/* use only for V2.07 or higher 	*/
 } XTask_207;							/* -------------------------------- */
@@ -291,8 +291,8 @@ typedef struct		/* --> aligned (2) */
 										
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
-	DEC_VAR(IEC_USINT,	usAttrib);		/* Task flags						*/
+    DEC_BYTE(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
+    DEC_BYTE(IEC_USINT,	usAttrib);		/* Task flags						*/
 	DEC_VAR(IEC_UDINT,	ulPara1);		/* Task parametre #1				*/
 	DEC_VAR(IEC_UDINT,	ulPara2);		/* Task parameter #2				*/
 	DEC_VAR(IEC_UDINT,	ulWatchDogMS);	/* Task watchdog, 0 if no watchdog	*/
@@ -301,7 +301,7 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UINT,	uCpyRegions);	/* Count of CopyRegions for the task*/
 	DEC_VAR(IEC_UINT,	uCpyRegOff);	/* offset of CopyRegions for the task*/
 	DEC_VAR(IEC_DATA,	szName[33]);	/* Taskname 						*/
-	DEC_VAR(IEC_USINT,	usPriority);	/* Task priority					*/
+    DEC_BYTE(IEC_USINT,	usPriority);	/* Task priority					*/
 
 										/* use only for V2.10.01 or higher	*/
 } XTask_21001;							/* -------------------------------- */
@@ -325,8 +325,8 @@ typedef struct		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* offset relative to segm address	*/
 	DEC_VAR(IEC_UINT,	uSize); 		/* Size of region					*/
-	DEC_VAR(IEC_BYTE,	bySegment); 	/* Segment of region				*/
-	DEC_VAR(IEC_BYTE,	bRead); 		/* Region is for reading/writing	*/
+    DEC_BYTE(IEC_BYTE,	bySegment); 	/* Segment of region				*/
+    DEC_BYTE(IEC_BYTE,	bRead); 		/* Region is for reading/writing	*/
 
 } XMemRegion;							/* -------------------------------- */
 
@@ -453,9 +453,9 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UINT,	uSegment);		/* Segment number					*/
 	DEC_VAR(IEC_UDINT,	ulSize);		/* Size of object (in byte) 		*/
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* See byFixed						*/
-	DEC_VAR(IEC_BYTE,	byFixed);		/* true: ulOffset = memory address	*/
+    DEC_BYTE(IEC_BYTE,	byFixed);		/* true: ulOffset = memory address	*/
 										/* false: ulOffset = channel offset */
-	DEC_VAR(IEC_BYTE,	byType);		/* Object Type						*/
+    DEC_BYTE(IEC_BYTE,	byType);		/* Object Type						*/
 
 } XDownHeader;							/* -------------------------------- */
 
@@ -463,8 +463,8 @@ typedef struct		/* --> aligned (2) */
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_BYTE,	bySegment); 	/* Segment number					*/
-	DEC_VAR(IEC_BYTE,	byBit); 		/* Bit offset in byte				*/
+    DEC_BYTE(IEC_BYTE,	bySegment); 	/* Segment number					*/
+    DEC_BYTE(IEC_BYTE,	byBit); 		/* Bit offset in byte				*/
 	DEC_VAR(IEC_UINT,	uSize); 		/* Size of object (in bit)			*/
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset to segment				*/
 
@@ -524,8 +524,8 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UINT,	uOldOff);		/* Byte offset of old data			*/
 	DEC_VAR(IEC_UINT,	uNewOff);		/* Byte offset of new data			*/
 	DEC_VAR(IEC_UDINT,	ulSize);		/* Data size to be copied in bit	*/
-	DEC_VAR(IEC_USINT,	usOldBit);		/* Bit	offset of old data			*/
-	DEC_VAR(IEC_USINT,	usNewBit);		/* Bit	offset of new data			*/
+    DEC_BYTE(IEC_USINT,	usOldBit);		/* Bit	offset of old data			*/
+    DEC_BYTE(IEC_USINT,	usNewBit);		/* Bit	offset of new data			*/
 
 } XOCInstCopy;							/* -------------------------------- */
 
@@ -555,8 +555,8 @@ typedef struct		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulDataLen); 	/* Length of file data				*/
 	DEC_VAR(IEC_UINT,	uNameLen);		/* File name length - without ZB!	*/
-	DEC_VAR(IEC_USINT,	usCRC); 		/* Checksum 						*/
-	DEC_VAR(IEC_USINT,	usHash);		/* Hash 							*/
+    DEC_BYTE(IEC_USINT,	usCRC); 		/* Checksum 						*/
+    DEC_BYTE(IEC_USINT,	usHash);		/* Hash 							*/
 
 } XFileDef; 							/* -------------------------------- */
 
@@ -579,8 +579,8 @@ typedef struct		/* --> aligned (2) */
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usBigEndian);	/* TRUE, if target is Big Endian	*/
-	DEC_VAR(IEC_USINT,	usDummy);		/* Alignment dummy					*/
+    DEC_BYTE(IEC_USINT,	usBigEndian);	/* TRUE, if target is Big Endian	*/
+    DEC_BYTE(IEC_USINT,	usDummy);		/* Alignment dummy					*/
 	DEC_VAR(IEC_UINT,	uFirmware); 	/* Firmware version 				*/
 	DEC_VAR(IEC_UINT,	uMaxData);		/* Comm. Buffer size (MAX_DATA) 	*/
 	DEC_VAR(IEC_UINT,	uAddConfig);	/* Size of Additional Config. Data	*/
@@ -596,8 +596,8 @@ typedef struct		/* --> aligned (2) */
  */
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT, usType); 		/* Task index						*/
-	DEC_VAR(IEC_USINT, usNameSize); 	/* Size of Instance name			*/
+    DEC_BYTE(IEC_USINT, usType); 		/* Task index						*/
+    DEC_BYTE(IEC_USINT, usNameSize); 	/* Size of Instance name			*/
 	DEC_VAR(IEC_UINT,  uInst);			/* Instance index					*/
 	DEC_VAR(IEC_UINT,  uChildren);		/* Number of child objects			*/
 	DEC_VAR(IEC_UINT,  uIndex); 		/* Index to type object 			*/
@@ -619,13 +619,13 @@ typedef struct		/* --> aligned (2) */
 
 typedef struct		/* --> aligned (2) */
 {
-	DEC_VAR(IEC_USINT,	usType);		/* Type of variable 				*/
-	DEC_VAR(IEC_USINT,	usNameSize);	/* Size of name (without ZB!)		*/
+    DEC_BYTE(IEC_USINT,	usType);		/* Type of variable 				*/
+    DEC_BYTE(IEC_USINT,	usNameSize);	/* Size of name (without ZB!)		*/
 	DEC_VAR(IEC_UINT,	uInst); 		/* Segment / instance number		*/
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Variable offset					*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Size / number elem / string size */
-	DEC_VAR(IEC_USINT,	usBit); 		/* Bit offset						*/
-	DEC_VAR(IEC_USINT,	usDummy);		/* Alignment dummy					*/
+    DEC_BYTE(IEC_USINT,	usBit); 		/* Bit offset						*/
+    DEC_BYTE(IEC_USINT,	usDummy);		/* Alignment dummy					*/
 	
 } XDBIVar;								/* -------------------------------- */
 
@@ -652,7 +652,7 @@ typedef struct		/* --> aligned (2) */
 	DEC_VAR(IEC_UDINT,	ulMOffs);		/* Offset of memory (%M) channel	*/
 	DEC_VAR(IEC_UDINT,	ulMSize);		/* Size of memory (%M) channel		*/
 
-	DEC_VAR(IEC_USINT,	usChannel); 	/* Corresponding Channel number 	*/
+    DEC_BYTE(IEC_USINT,	usChannel); 	/* Corresponding Channel number 	*/
 	DEC_VAR(IEC_CHAR,	szName[33]);	/* IO layer type (fcdp, bcbac, ...) */
 
 } XIOLayer; 							/* -------------------------------- */
@@ -726,7 +726,7 @@ typedef struct		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_CHAR, szInstKey[35]);	/* HW dependent inst. key, with ZB! */
 
-	DEC_VAR(IEC_USINT, usReserved); 	/* Reserved for future use			*/
+    DEC_BYTE(IEC_USINT, usReserved); 	/* Reserved for future use			*/
 
 } XInstKey; 							/* -------------------------------- */
 
@@ -737,7 +737,7 @@ typedef struct		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_CHAR, szLicKey[25]);	/* License key for feature, with ZB!*/
 
-	DEC_VAR(IEC_USINT, usReserved); 	/* Reserved for future use			*/
+    DEC_BYTE(IEC_USINT, usReserved); 	/* Reserved for future use			*/
 
 } XLicKey;								/* -------------------------------- */
 

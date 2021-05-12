@@ -53,7 +53,7 @@
 #include "vmLib/libModbus.h"
 #include "inc.data/CANopen.h"
 
-#if XENO_RTDM
+#ifdef __XENO__
 #include <native/timer.h>
 #else
 #define RTIME uint64_t
@@ -2642,7 +2642,7 @@ static void *engineThread(void *statusAdr)
             // datetime   NB no writeQdataRegisters();
             struct timespec tv;
             struct tm datetime;
-#if XENO_RTDM
+#ifdef __XENO__
             clock_gettime_overflow(CLOCK_HOST_REALTIME, &tv);
 #else
             clock_gettime_overflow(CLOCK_REALTIME, &tv);
@@ -3664,7 +3664,7 @@ static void *serverThread(void *arg)
     case RTU_SRV: {
         char device[VMM_MAX_PATH];
 
-#if XENO_RTDM
+#ifdef __XENO__
         snprintf(device, VMM_MAX_PATH, "rtser%u", theServers[s].u.serial.port);
 #else
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
@@ -4165,7 +4165,7 @@ static void *clientThread(void *arg)
     case RTU: {
         char device[VMM_MAX_PATH];
 
-#if XENO_RTDM
+#ifdef __XENO__
         snprintf(device, VMM_MAX_PATH, "rtser%u", theDevices[d].u.serial.port);
 #else
         snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theDevices[d].u.serial.port);
@@ -4912,7 +4912,7 @@ static void *datasyncThread(void *statusAdr)
     //osPthreadSetSched(SCHED_FIFO, 0); // datasyncThread
     //osPthreadSetSched(SCHED_OTHER, FC_PRIO_UDP_DAT); // datasyncThread
     //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
-#if XENO_RTDM
+#ifdef __XENO__
     pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
 #else
 #endif
@@ -5693,7 +5693,7 @@ static unsigned plc_serial_number()
 
 /* ---------------------------------------------------------------------------- */
 
-#if XENO_RTDM
+#ifdef __XENO__
 #include <rtdm/rtserial.h>
 #else
 
@@ -5721,7 +5721,7 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
     int fd;
     char devname[VMM_MAX_PATH];
 
-#if XENO_RTDM
+#ifdef __XENO__
     struct rtser_config rt_serial_config;
 
     snprintf(devname, VMM_MAX_PATH, "rtser%u", devnum);

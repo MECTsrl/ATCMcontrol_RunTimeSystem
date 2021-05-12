@@ -56,7 +56,6 @@
 #include <getopt.h>
 #include <sys/reboot.h> // and not <linux/reboot.h>
 
-#include "vmLib/libMect.h"
 #include "inc.data/dataMain.h" // dataEngineStop()
 
 /* ----  Local Defines:   ----------------------------------------------------- */

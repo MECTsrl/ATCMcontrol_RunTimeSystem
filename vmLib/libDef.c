@@ -54,34 +54,6 @@
  */
 #include "libFile.h"
 
-/* Declarations MBus2 Library
- */
-#include "inc/libMBus2.h"
-
-/* Declarations BACnet Library
- */
-#include "inc.bac/bacFun.h"
-
-/* Declarations Mect Library
- */
-#include "libMect.h"
-
-/* Declarations USB Library
- */
-#include "vmLib/libUSB.h"
-
-/* Declarations Datalogger Library
- */
-#include "libDatalog.h"
-
-/* Declarations Mect user utility Library
- */
-#include "libMectUserUtility.h"
-
-/* Declarations HW119 utility Library
- */
-#include "libHW119.h"
-
 /* Declarations Modbus utility Library
  */
 #include "libModbus.h"
@@ -132,24 +104,11 @@ EXECUTE_FUN g_pLibraryFun[] =
 	 */
 	#include "funSys22.h"				/* Reserved Numbers:	180 -	199 */
 
-#if 0
-	/* funMBus2.c - M-Bus library NT
-	 * ------------------------------------------------------------------------
-	 */
-	#include "funMBus2.h"				/* Reserved Numbers:	200 -	229 */
 
-	/* libBac.c - BACnet
-	 * ------------------------------------------------------------------------
-	 */
-	#include "funBac.h" 				/* Reserved Numbers:	230 -	239 */
-#endif
-	
 	/* funMBRTU.c - MODBUS RTU library - MTL: now removed (2015-07-28).
 	 * ------------------------------------------------------------------------
 	 */
-
 										/* Reserved Numbers:	200 -	229 */
-
 	/* 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, */
 	   NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 	/* 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229 */
@@ -158,32 +117,58 @@ EXECUTE_FUN g_pLibraryFun[] =
 	/* funMect.c - Mect library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funMect.h"				/* Reserved Numbers:	230 -	239 */
+                                            /* Reserved Numbers:	230 -	239 */
+    /* 230, 231, 232, 233, 234, 235, 236, 237, 238, 239 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funUSB.c - USB library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funUSB.h"					/* Reserved Numbers:	240 -	249 */
+                                                /* Reserved Numbers:	240 -	249 */
+    /* 240, 241, 242, 243, 244, 245, 246, 247, 248, 249 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funDatalog.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funDatalog.h"				/* Reserved Numbers:	250 -	259 */
+                                                /* Reserved Numbers:	250 -	259 */
+    /* 250, 251, 252, 253, 254, 255, 256, 257, 258, 259 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funMectUserUtility.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funMectUserUtility.h"		/* Reserved Numbers:	260 -	279 */
+                                                    /* Reserved Numbers:	260 -	279 */
+    /* 260, 261, 262, 263, 264, 265, 266, 267, 268, 269 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 270, 271, 272, 273, 274, 275, 276, 277, 278, 279 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funHW119.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funHW119.h"				/* Reserved Numbers:	280 -	299 */
+                                                    /* Reserved Numbers:	280 -	299 */
+    /* 280, 281, 282, 283, 284, 285, 286, 287, 288, 289 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 290, 291, 292, 293, 294, 295, 296, 297, 298, 299 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 	/* funModbus.c - Datalogger library 
 	 * ------------------------------------------------------------------------
 	 */
-	#include "funModbus.h"				/* Reserved Numbers:	300 -	359 */
+                                                    /* Reserved Numbers:	300 -	359 */
+    /* 300, 301, 302, 303, 304, 305, 306, 307, 308, 309 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 310, 311, 312, 313, 314, 315, 316, 317, 318, 319 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 320, 321, 322, 323, 324, 325, 326, 327, 328, 329 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 330, 331, 332, 333, 334, 335, 336, 337, 338, 339 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 340, 341, 342, 343, 344, 345, 346, 347, 348, 349 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+    /* 350, 351, 352, 353, 354, 355, 356, 357, 358, 359 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 };
 
 
@@ -210,17 +195,9 @@ EXECUTE_FB	g_pLibraryFB [] =
 	/* libMBus2.c - M-Bus library NT
 	 * ------------------------------------------------------------------------
 	 */
-	#include "fbMBus2.h"				/* Reserved Numbers:	30	-	39	*/
-
-	/* libSys2.c - System library NT
-	 * ------------------------------------------------------------------------
-	 */
-	#include "fbSys2.h" 				/* Reserved Numbers:		-		*/
-
-	/* libFile.c - File Access library
-	 * ------------------------------------------------------------------------
-	 */
-	#include "fbFile.h" 				/* Reserved Numbers:		-		*/
+                                        /* Reserved Numbers:	30	-	39	*/
+    /*  30,  31,  32,  33,  34,  35,  36,  37,  38,  39 */
+       NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
 
 };
 

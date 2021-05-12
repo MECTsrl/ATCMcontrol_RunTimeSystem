@@ -43,7 +43,6 @@
 /* Task / thread priorities and parameters
  * ----------------------------------------------------------------------------
  */
-#ifdef __XENO__
 #define  FC_PRIO_VMTIMER          81  /*  highest  */
 #define  FC_PRIO_VMM              80
 #define  FC_PRIO_LED              78
@@ -65,29 +64,6 @@
 #define  FC_PRIO_OC               41
 #define  FC_PRIO_RET              40
 #define  FC_PRIO_BAC_FLH          40  /*  lowest   */
-#else
-#define  FC_PRIO_VMTIMER          81  /*  highest  */
-#define  FC_PRIO_VMM              80
-#define  FC_PRIO_LED              78
-#define  FC_PRIO_LIST             75
-#define  FC_PRIO_COM              74
-#define  FC_PRIO_IO_BACNET        65
-#define  FC_PRIO_IO_DAT           65
-#define  FC_PRIO_IO_PROFI_DP      65
-#define  FC_PRIO_IO_TEST          65
-#define  FC_PRIO_BAC_CFG          64
-#define  FC_PRIO_PDP_MGT          64
-#define  FC_PRIO_PDP_WORK         63
-#define  FC_PRIO_VM_MAX           59
-#define  FC_PRIO_VM_MIN           50
-#define  FC_PRIO_UDP_DAT          46
-#define  FC_PRIO_BAC_DEV          45
-#define  FC_PRIO_BAC_COV          44
-#define  FC_PRIO_BAC_SCN          43
-#define  FC_PRIO_OC               41
-#define  FC_PRIO_BAC_FLH          40
-#define  FC_PRIO_RET              40  /*  lowest   */
-#endif
 
 #define  FC_SCHED_VMTIMER          SCHED_FIFO
 #define  FC_SCHED_VMM              SCHED_FIFO

@@ -93,7 +93,7 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 	#define DEC_FUN_DINT(v) 		DEC_VAR(IEC_DINT,	v)
 	#define DEC_FUN_LINT(v) 		DEC_VAR(IEC_LINT,	v)
 
-	#define DEC_FUN_USINT(v)		DEC_VAR(IEC_USINT,	v)
+	#define DEC_FUN_USINT(v)		DEC_BYTE(IEC_USINT,	v)
 	#define DEC_FUN_UINT(v) 		DEC_VAR(IEC_UINT,	v)
 	#define DEC_FUN_UDINT(v)		DEC_VAR(IEC_UDINT,	v)
 	#define DEC_FUN_ULINT(v)		DEC_VAR(IEC_ULINT,	v)
@@ -103,7 +103,7 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 
 	#define DEC_FUN_TIME(v) 		DEC_VAR(IEC_TIME,	v)
 
-	#define DEC_FUN_BYTE(v) 		DEC_VAR(IEC_BYTE,	v)
+	#define DEC_FUN_BYTE(v) 		DEC_BYTE(IEC_BYTE,	v)
 	#define DEC_FUN_WORD(v) 		DEC_VAR(IEC_WORD,	v)
 	#define DEC_FUN_DWORD(v)		DEC_VAR(IEC_DWORD,	v)
 	#define DEC_FUN_LWORD(v)		DEC_VAR(IEC_LWORD,	v)
@@ -114,26 +114,26 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 			
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo)
+									DEC_BYTE(IEC_BYTE,	bo)
   #elif defined (IP_CFG_PTR16)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo)
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo)
   #elif defined (IP_CFG_PTR32)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo)
   #elif defined (IP_CFG_PTR64)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo); \
 									DEC_VAR(IEC_DWORD,	dummy_32_##bo)
   #endif
@@ -143,16 +143,16 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 #if defined(IP_CFG_STACK16) /* ------------------------------------------------ */
 
 	#define DEC_FUN_BOOL(v) 		DEC_VAR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 
 	#define DEC_FUN_SINT(v) 		DEC_VAR(IEC_SINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 	#define DEC_FUN_INT(v)			DEC_VAR(IEC_INT,	v)
 	#define DEC_FUN_DINT(v) 		DEC_VAR(IEC_DINT,	v)
 	#define DEC_FUN_LINT(v) 		DEC_VAR(IEC_LINT,	v)
 
-	#define DEC_FUN_USINT(v)		DEC_VAR(IEC_USINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+	#define DEC_FUN_USINT(v)		DEC_BYTE(IEC_USINT,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 	#define DEC_FUN_UINT(v) 		DEC_VAR(IEC_UINT,	v)
 	#define DEC_FUN_UDINT(v)		DEC_VAR(IEC_UDINT,	v)
 	#define DEC_FUN_ULINT(v)		DEC_VAR(IEC_ULINT,	v)
@@ -162,40 +162,40 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 
 	#define DEC_FUN_TIME(v) 		DEC_VAR(IEC_TIME,	v)
 
-	#define DEC_FUN_BYTE(v) 		DEC_VAR(IEC_BYTE,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+	#define DEC_FUN_BYTE(v) 		DEC_BYTE(IEC_BYTE,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 	#define DEC_FUN_WORD(v) 		DEC_VAR(IEC_WORD,	v)
 	#define DEC_FUN_DWORD(v)		DEC_VAR(IEC_DWORD,	v)
 	#define DEC_FUN_LWORD(v)		DEC_VAR(IEC_LWORD,	v)
 
 	#define DEC_FUN_CHAR(v) 		DEC_VAR(IEC_CHAR,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 
   #if defined (IP_CFG_PTR8)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo)
+									DEC_BYTE(IEC_BYTE,	bo)
   #elif defined (IP_CFG_PTR16)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo)
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo)
   #elif defined (IP_CFG_PTR32)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo)
   #elif defined (IP_CFG_PTR64)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo); \
 									DEC_VAR(IEC_DWORD,	dummy_32_##bo)									
   #endif
@@ -205,19 +205,19 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 #if defined(IP_CFG_STACK32) /* ------------------------------------------------ */
 
 	#define DEC_FUN_BOOL(v) 		DEC_VAR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 
 	#define DEC_FUN_SINT(v) 		DEC_VAR(IEC_SINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 	#define DEC_FUN_INT(v)			DEC_VAR(IEC_INT,	v); 			\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 	#define DEC_FUN_DINT(v) 		DEC_VAR(IEC_DINT,	v)
 	#define DEC_FUN_LINT(v) 		DEC_VAR(IEC_LINT,	v)
 
-	#define DEC_FUN_USINT(v)		DEC_VAR(IEC_USINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+	#define DEC_FUN_USINT(v)		DEC_BYTE(IEC_USINT,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 	#define DEC_FUN_UINT(v) 		DEC_VAR(IEC_UINT,	v); 			\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
@@ -229,8 +229,8 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 
 	#define DEC_FUN_TIME(v) 		DEC_VAR(IEC_TIME,	v)
 
-	#define DEC_FUN_BYTE(v) 		DEC_VAR(IEC_BYTE,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+	#define DEC_FUN_BYTE(v) 		DEC_BYTE(IEC_BYTE,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 	#define DEC_FUN_WORD(v) 		DEC_VAR(IEC_WORD,	v); 			\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
@@ -238,16 +238,16 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 	#define DEC_FUN_LWORD(v)		DEC_VAR(IEC_LWORD,	v)
 
 	#define DEC_FUN_CHAR(v) 		DEC_VAR(IEC_CHAR,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 	
   #if defined (IP_CFG_PTR8)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	bo);			\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
    
   #elif defined (IP_CFG_PTR16)
@@ -255,21 +255,21 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v)
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v)
   #elif defined (IP_CFG_PTR32)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo)
   #elif defined (IP_CFG_PTR64)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##bo); \
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##bo); \
 									DEC_VAR(IEC_WORD,	dummy_16_##bo); \
 									DEC_VAR(IEC_DWORD,	dummy_32_##bo)
   #endif
@@ -279,12 +279,12 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 #if defined(IP_CFG_STACK64) /* ------------------------------------------------ */
 
 	#define DEC_FUN_BOOL(v) 		DEC_VAR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
 	#define DEC_FUN_SINT(v) 		DEC_VAR(IEC_SINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 	#define DEC_FUN_INT(v)			DEC_VAR(IEC_INT,	v); 			\
@@ -294,8 +294,8 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 	#define DEC_FUN_LINT(v) 		DEC_VAR(IEC_LINT,	v)
 
-	#define DEC_FUN_USINT(v)		DEC_VAR(IEC_USINT,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+	#define DEC_FUN_USINT(v)		DEC_BYTE(IEC_USINT,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 	#define DEC_FUN_UINT(v) 		DEC_VAR(IEC_UINT,	v); 			\
@@ -312,8 +312,8 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 	#define DEC_FUN_TIME(v) 		DEC_VAR(IEC_TIME,	v); 			\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
-	#define DEC_FUN_BYTE(v) 		DEC_VAR(IEC_BYTE,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+	#define DEC_FUN_BYTE(v) 		DEC_BYTE(IEC_BYTE,	v); 			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 	#define DEC_FUN_WORD(v) 		DEC_VAR(IEC_WORD,	v); 			\
@@ -324,18 +324,18 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 	#define DEC_FUN_LWORD(v)		DEC_VAR(IEC_LWORD,	v)
 
 	#define DEC_FUN_CHAR(v) 		DEC_VAR(IEC_CHAR,	v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
   #if defined (IP_CFG_PTR8)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v); 			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	bo);			\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
   #elif defined (IP_CFG_PTR16)
@@ -344,23 +344,23 @@ typedef void (* EXECUTE_FB ) (STDLIBFBCALL );
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
   #elif defined (IP_CFG_PTR32)
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v); 			\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v)
   #else
 	#define DEC_FUN_PTR(type,v) 	DEC_PTR(type,		v)
 
 	#define DEC_FUN_BITPTR(v,bo)	DEC_PTR(IEC_BOOL,	v); 			\
-									DEC_VAR(IEC_BYTE,	bo);			\
-									DEC_VAR(IEC_BYTE,	dummy_08_##v);	\
+									DEC_BYTE(IEC_BYTE,	bo);			\
+									DEC_BYTE(IEC_BYTE,	dummy_08_##v);	\
 									DEC_VAR(IEC_WORD,	dummy_16_##v);	\
 									DEC_VAR(IEC_DWORD,	dummy_32_##v)
   #endif

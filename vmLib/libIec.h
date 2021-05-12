@@ -585,13 +585,13 @@ void f_trig (STDLIBFBCALL);
 #if defined(IP_CFG_BOOL)
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 	
 	} SR_TYP;
 	
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 
 	} RS_TYP;
 #endif
@@ -601,19 +601,19 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variables
 		 */
-		DEC_VAR(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 bIn */
+		DEC_BYTE(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 bIn */
 		DEC_VAR(IEC_UDINT, PT);
 		
 		/* output variables
 		 */
-		DEC_VAR(IEC_BYTE,  Q);			/* 7 6 5 4 3 2 1 bOut */		 
+		DEC_BYTE(IEC_BYTE,  Q);			/* 7 6 5 4 3 2 1 bOut */		 
 		DEC_VAR(IEC_UDINT, ET);
 		
 		/* non retain
 		 */
 		DEC_VAR(IEC_UDINT, tStart);
 		DEC_VAR(IEC_BOOL,  bTrig);
-		DEC_VAR(IEC_BYTE,  LastIN);
+		DEC_BYTE(IEC_BYTE,  LastIN);
 
 	} TP_TON_TOF_PAR;
 #endif
@@ -623,12 +623,12 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTU_PAR;
@@ -637,12 +637,12 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTD_PAR;
@@ -651,12 +651,12 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
+		DEC_BYTE(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTUD_PAR;
@@ -667,7 +667,7 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
 
 	} TRIG_PAR;
 #endif
@@ -679,13 +679,13 @@ void f_trig (STDLIBFBCALL);
 #if defined(IP_CFG_BOOL)
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 	
 	} SR_TYP;
 	
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 
 	} RS_TYP;
 #endif
@@ -695,21 +695,21 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variables
 		 */
-		DEC_VAR(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 bIn */ 		
-		DEC_VAR(IEC_BYTE,  dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 bIn */ 		
+		DEC_BYTE(IEC_BYTE,  dummy_08_bIn);
 		DEC_VAR(IEC_UDINT, PT);
 		
 		/* output variables
 		 */
-		DEC_VAR(IEC_BYTE,  Q);			/* 7 6 5 4 3 2 1 bOut */		 
-		DEC_VAR(IEC_BYTE,  dummy_08_bOut);
+		DEC_BYTE(IEC_BYTE,  Q);			/* 7 6 5 4 3 2 1 bOut */		 
+		DEC_BYTE(IEC_BYTE,  dummy_08_bOut);
 		DEC_VAR(IEC_UDINT, ET);
 		
 		/* non retain
 		 */
 		DEC_VAR(IEC_UDINT, tStart);
 		DEC_VAR(IEC_BOOL,  bTrig);
-		DEC_VAR(IEC_BYTE,  LastIN);
+		DEC_BYTE(IEC_BYTE,  LastIN);
 
 	} TP_TON_TOF_PAR;
 #endif
@@ -719,14 +719,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
-		DEC_VAR(IEC_BYTE, dummy_08_qOut);
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, dummy_08_qOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTU_PAR;
@@ -735,14 +735,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
-		DEC_VAR(IEC_BYTE, dummy_08_qOut);
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, dummy_08_qOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTD_PAR;
@@ -751,14 +751,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
-		DEC_VAR(IEC_BYTE, dummy_08_qOut);
+		DEC_BYTE(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
+		DEC_BYTE(IEC_BYTE, dummy_08_qOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTUD_PAR;
@@ -769,7 +769,7 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
 
 	} TRIG_PAR;
 #endif
@@ -781,13 +781,13 @@ void f_trig (STDLIBFBCALL);
 #if defined(IP_CFG_BOOL)
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 	
 	} SR_TYP;
 	
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 Q1 RESET SET1 */
 
 	} RS_TYP;
 #endif
@@ -797,15 +797,15 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variables
 		 */
-		DEC_VAR(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 IN */
-		DEC_VAR(IEC_BYTE,  dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE,  IN); 		/* 7 6 5 4 3 2 1 IN */
+		DEC_BYTE(IEC_BYTE,  dummy_08_bIn);
 		DEC_VAR(IEC_WORD,  dummy_16_bIn);
 		DEC_VAR(IEC_UDINT, PT);
 		
 		/* output variables
 		 */
-		DEC_VAR(IEC_BYTE,  Q);		/* 7 6 5 4 3 2 1 Q */
-		DEC_VAR(IEC_BYTE,  dummy_08_bOut);
+		DEC_BYTE(IEC_BYTE,  Q);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE,  dummy_08_bOut);
 		DEC_VAR(IEC_WORD,  dummy_16_bOut);
 		DEC_VAR(IEC_UDINT, ET);
 		
@@ -813,7 +813,7 @@ void f_trig (STDLIBFBCALL);
 		 */
 		DEC_VAR(IEC_UDINT, tStart);
 		DEC_VAR(IEC_BOOL,  bTrig);
-		DEC_VAR(IEC_BYTE,  LastIN);
+		DEC_BYTE(IEC_BYTE,  LastIN);
 		DEC_VAR(IEC_WORD,  dummy_16_m);
 
 	} TP_TON_TOF_PAR;
@@ -824,14 +824,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CU_EDGE(helper) R CU */ 
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
-		DEC_VAR(IEC_BYTE, dummy_08_bOut);
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, dummy_08_bOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTU_PAR;
@@ -840,14 +840,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 5 4 3 CD_EDGE(helper) LD CD */
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
-		DEC_VAR(IEC_BYTE, dummy_08_bOut);
+		DEC_BYTE(IEC_BYTE, qOut);		/* 7 6 5 4 3 2 1 Q */
+		DEC_BYTE(IEC_BYTE, dummy_08_bOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTD_PAR;
@@ -856,14 +856,14 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
-		DEC_VAR(IEC_BYTE, dummy_08_bIn);
+		DEC_BYTE(IEC_BYTE, bIn); 		/* 7 6 CD_EDGE CU_EDGE LD R CD CU */
+		DEC_BYTE(IEC_BYTE, dummy_08_bIn);
 		DEC_VAR(IEC_INT,  pvIn);
 		
 		/* output variable
 		 */
-		DEC_VAR(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
-		DEC_VAR(IEC_BYTE, dummy_08_bOut);
+		DEC_BYTE(IEC_BYTE, bOut);		/* 7 6 5 4 3 2 qdOut quOut */
+		DEC_BYTE(IEC_BYTE, dummy_08_bOut);
 		DEC_VAR(IEC_INT,  cvOut);
 
 	} CTUD_PAR;
@@ -874,7 +874,7 @@ void f_trig (STDLIBFBCALL);
 	{
 		/* input variable
 		 */
-		DEC_VAR(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
+		DEC_BYTE(IEC_BYTE, b);			/* 7 6 5 4 3 m q clk */
 
 	} TRIG_PAR;
 #endif
@@ -883,7 +883,7 @@ void f_trig (STDLIBFBCALL);
 
 	typedef struct
 	{
-		DEC_VAR(IEC_BYTE,  bDummy);
+		DEC_BYTE(IEC_BYTE,  bDummy);
 		DEC_VAR(IEC_LREAL, lDummy);
 	
 	} FB_ALI_TEST;

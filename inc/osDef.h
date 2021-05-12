@@ -249,7 +249,6 @@
  * RTS_CFG_SYSTEM_LIB ..... Enable system library. (libSys.c can be omitted.)
  * RTS_CFG_UTILITY_LIB .... Enable utility library. (libUtil.c can be omitted.)
  * RTS_CFG_FILE_LIB ....... Enable file library.
- * RTS_CFG_MBUS2_LIB ...... Enable MBus2 library.
  *
  * RTS_CFG_SFC ............ Enable SFC. (libSFC.c can be omitted.)
  * RTS_CFG_FLASH .......... Eanble IEC program flashing. (osFlash.c can be omitted.)
@@ -324,13 +323,7 @@
 #define RTS_CFG_SYSTEM_LIB_NT
 #define RTS_CFG_UTILITY_LIB
 #define RTS_CFG_FILE_LIB
-#undef	RTS_CFG_MBUS2_LIB
 
-#undef	RTS_CFG_MECT_LIB  
-#undef RTS_CFG_MECT_UTY_LIB 
-#define RTS_CFG_USB_LIB
-#undef RTS_CFG_DATALOG_LIB
-#define RTS_CFG_HW119_LIB
 #define RTS_CFG_MODBUS_LIB
 
 #define RTS_CFG_SFC
@@ -339,7 +332,7 @@
 
 #define RTS_CFG_EVENTS
 
-#undef RTS_CFG_EXT_RETAIN
+#undef  RTS_CFG_EXT_RETAIN
 #define RTS_CFG_MECT_RETAIN
 
 #define RTS_CFG_TASK_IMAGE
@@ -737,6 +730,7 @@
 
 /* Common structure member declaration
  */
+#define DEC_BYTE(type, var)		type   var                          // warning: ‘packed’ attribute ignored for field of type ‘unsigned char’ [-Wattributes]
 #define DEC_VAR(type, var)		type   var __attribute__ ((packed)) // necessario
 #define DEC_PTR(type, var)		type * var __attribute__ ((packed)) // necessario
 

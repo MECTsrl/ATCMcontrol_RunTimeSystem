@@ -40,7 +40,6 @@
 
 #include "inc.fc/fcMain.h"
 #include "inc.fc/fcDef.h"
-#include "inc/libMBus2.h"
 
 #include <sys/mman.h>
 #include "inc.mect/mectMain.h"
@@ -458,10 +457,6 @@ IEC_UINT osKillVMTask(STaskInfoVM *pVM)
 
   #if defined(FC_CFG_MBUS_LIB)
 	cleanup_mbus_lib();
-  #endif
-	
-  #if defined(RTS_CFG_MBUS2_LIB)
-	cleanup_mbus2_lib();
   #endif
 	
 	RETURN(uRes);

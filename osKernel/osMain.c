@@ -39,12 +39,7 @@
 #include <fcntl.h>
 #include <sys/timeb.h>
 #include <sys/reboot.h>
-#if defined(RTS_CFG_USB_LIB)
-#include "vmLib/libUSB.h"
-#endif
-#if defined(RTS_CFG_DATALOG_LIB)
-#include <libDatalog.h>
-#endif
+
 /* ----  Local Defines:   ----------------------------------------------------- */
 
 #if defined(RTS_CFG_FILE_NATIVE)
@@ -188,10 +183,7 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			g_bDownloadInProgress = TRUE;
 			g_bDownloadFailed	  = FALSE;
 			if(pVMM->bProjLoaded){
-#if defined(RTS_CFG_USB_LIB)
-#endif
-#if defined(RTS_CFG_DATALOG_LIB)
-#endif
+                // ...
 			}
 #if defined(RTS_CFG_IO_LAYER)
 			g_bIOConfigFailed 	  = FALSE;

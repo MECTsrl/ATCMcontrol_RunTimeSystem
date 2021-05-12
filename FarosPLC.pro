@@ -7,6 +7,8 @@ DEFINES += _SOF_4CPC_SRC_
 
 LIBS += -pthread -lrt
 
+TARGET = fcrts
+
 SOURCES += \
         CANopen/CANopen.c \
         ioData/dataImpl.c \
@@ -61,35 +63,20 @@ SOURCES += \
         vmKernel/vmmRet.c \
         vmKernel/vmmSys.c \
         vmKernel/vmmUtil.c \
-        vmLib/libDatalog.c \
         vmLib/libDef.c \
         vmLib/libFile.c \
-        vmLib/libHW119.c \
         vmLib/libIec.c \
-        vmLib/libMect.c \
-        vmLib/libMectUserUtility.c \
         vmLib/libModbus.c \
         vmLib/libSfc.c \
         vmLib/libSys.c \
         vmLib/libSys2.c \
-        vmLib/libUSB.c \
-        vmLib/libUtil.c \
-        vmLib/privUtyMect.c
+        vmLib/libUtil.c
 
 HEADERS += \
-    inc.bac/bacFun.h \
     inc.data/CANopen.h \
     inc.data/dataMain.h \
-    inc.fc/fcComm.h \
     inc.fc/fcDef.h \
-    inc.fc/fcMBus.h \
     inc.fc/fcMain.h \
-    inc.fc/fcModbus.h \
-    inc.fc/fcProfi.h \
-    inc.fc/fcSerCom.h \
-    inc.fc/fcTime.h \
-    inc.fc/profiDef.h \
-    inc.fc/profiMain.h \
     inc.mect/mectCfgUtil.h \
     inc.mect/mectMain.h \
     inc.mect/mectRetentive.h \
@@ -98,54 +85,33 @@ HEADERS += \
     inc/intOpcds.h \
     inc/iolDef.h \
     inc/libDef.h \
-    inc/libMBus2.h \
     inc/md5.h \
     inc/osAlign.h \
     inc/osDef.h \
     inc/osFile.h \
     inc/osFirst.h \
     inc/osLast.h \
-    inc/osMBus2.h \
     inc/osSocket.h \
     inc/osTarget.h \
     inc/stdInc.h \
-    inc/uthash.h \
     inc/vmShared.h \
     inc/vmmDef.h \
     inc/vmmMain.h \
     ioData/hmi_plc.h \
     vmKernel/vmmSys.h \
-    vmLib/fbFile.h \
     vmLib/fbIec.h \
-    vmLib/fbMBus2.h \
     vmLib/fbSys.h \
-    vmLib/fbSys2.h \
     vmLib/fbUtil.h \
-    vmLib/funBac.h \
-    vmLib/funCanOpen.h \
-    vmLib/funDatalog.h \
     vmLib/funFile.h \
-    vmLib/funHW119.h \
     vmLib/funIec.h \
-    vmLib/funMBus2.h \
-    vmLib/funMect.h \
-    vmLib/funMectUserUtility.h \
-    vmLib/funModbus.h \
     vmLib/funSys.h \
     vmLib/funSys2.h \
     vmLib/funSys22.h \
-    vmLib/funUSB.h \
     vmLib/funUtil.h \
-    vmLib/libDatalog.h \
     vmLib/libFile.h \
-    vmLib/libHW119.h \
     vmLib/libIec.h \
-    vmLib/libMect.h \
-    vmLib/libMectUserUtility.h \
     vmLib/libModbus.h \
     vmLib/libSfc.h \
     vmLib/libSys.h \
     vmLib/libSys2.h \
-    vmLib/libUSB.h \
-    vmLib/libUtil.h \
-    vmLib/privUtyMect.h
+    vmLib/libUtil.h

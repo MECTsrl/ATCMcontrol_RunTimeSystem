@@ -1026,7 +1026,7 @@ typedef struct
 	SIOSegment	C;						/* Task image copy regions			*/
 	SIOSegment	R;						/* Retain segment					*/
 
-	DEC_VAR(IEC_USINT, usChannel);				/* Corresponding Channel number 	*/
+	DEC_BYTE(IEC_USINT, usChannel);				/* Corresponding Channel number 	*/
 	DEC_VAR(IEC_CHAR,  szName[VMM_MAX_IEC_IDENT]);/* IO layer type (fcdp, bcbac, ...) */
 	
 } SIOConfig;							/* -------------------------------- */
@@ -1050,8 +1050,8 @@ typedef struct
 	 */
 	DEC_VAR(IEC_UINT,	uLen);			/* Data length to be accessed		*/
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset in segment (%I, %Q)		*/
-	DEC_VAR(IEC_USINT,	usBit); 		/* Bit offset						*/
-	DEC_VAR(IEC_USINT,	usSegment); 	/* Segment number (%I, %Q)			*/
+	DEC_BYTE(IEC_USINT,	usBit); 		/* Bit offset						*/
+	DEC_BYTE(IEC_USINT,	usSegment); 	/* Segment number (%I, %Q)			*/
 
 } SIONotify;							/* -------------------------------- */
 

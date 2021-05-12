@@ -107,7 +107,7 @@ typedef struct
 #if defined(IP_CFG_INST8)
 typedef struct
 {	
-	DEC_VAR(IEC_BYTE, bEnable);
+	DEC_BYTE(IEC_BYTE, bEnable);
 	DEC_VAR(IEC_DINT, lErrNo);
 
 } SSignalError; /* ------------------------------------------------------------ */
@@ -116,8 +116,8 @@ typedef struct
 #if defined(IP_CFG_INST16)
 typedef struct
 {	
-	DEC_VAR(IEC_BYTE, bEnable);
-	DEC_VAR(IEC_BYTE, dummy_08_bEnable);
+	DEC_BYTE(IEC_BYTE, bEnable);
+	DEC_BYTE(IEC_BYTE, dummy_08_bEnable);
 	DEC_VAR(IEC_DINT, lErrNo);
 
 } SSignalError; /* ------------------------------------------------------------ */
@@ -126,8 +126,8 @@ typedef struct
 #if defined(IP_CFG_INST32) || defined(IP_CFG_INST64)
 typedef struct
 {	
-	DEC_VAR(IEC_BYTE, bEnable);
-	DEC_VAR(IEC_BYTE, dummy_08_bEnable);
+	DEC_BYTE(IEC_BYTE, bEnable);
+	DEC_BYTE(IEC_BYTE, dummy_08_bEnable);
 	DEC_VAR(IEC_WORD, dummy_16_bEnable);
 	DEC_VAR(IEC_DINT, lErrNo);
 

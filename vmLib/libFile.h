@@ -138,7 +138,7 @@ typedef struct
 typedef struct
 {
 	DEC_VAR(LOC_STRING, sName); 		/* File name							*/
-	DEC_VAR(IEC_BYTE,	dummy_08_fileName);
+	DEC_BYTE(IEC_BYTE,	dummy_08_fileName);
 	DEC_VAR(IEC_UDINT,	ulMode);		/* File access mode 					*/
 	DEC_VAR(IEC_DINT,	lPos);			/* Start position.						*/
 	DEC_VAR(IEC_UDINT,	ulError);		/* Last error code						*/
@@ -153,7 +153,7 @@ typedef struct
 typedef struct
 {
 	DEC_VAR(LOC_STRING, sName); 		/* File name							*/
-	DEC_VAR(IEC_BYTE,	dummy_08_fileName);
+	DEC_BYTE(IEC_BYTE,	dummy_08_fileName);
 	DEC_VAR(IEC_WORD,	dummy_16_fileName);
 	DEC_VAR(IEC_UDINT,	ulMode);		/* File access mode 					*/
 	DEC_VAR(IEC_DINT,	lPos);			/* Start position.						*/
