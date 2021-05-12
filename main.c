@@ -209,12 +209,12 @@ int main(int argc, char *argv[])
 
 #ifdef __XENO__
     printf("Xenomai enabled\n");
+#endif
     struct rlimit rlimit;
     int retval;
     rlimit.rlim_cur = rlimit.rlim_max = 128 * 1024;
     retval = setrlimit(RLIMIT_STACK, &rlimit);
     mlockall(MCL_CURRENT | MCL_FUTURE);
-#endif
 
     if (application_options(argc, argv) != 0) {
         fprintf(stderr, "%s: command line option error.\n", __func__);
@@ -222,7 +222,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // mlockall(MCL_CURRENT | MCL_FUTURE);
     app_name = argv[0];
 
     /* Enable Core Dumps
