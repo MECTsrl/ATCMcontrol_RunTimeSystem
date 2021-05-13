@@ -44,6 +44,8 @@
 #include <syslog.h>
 #endif
 
+#include <limits.h> // PTHREAD_STACK_MIN
+
 /* ----  Local Defines:   ----------------------------------------------------- */
 
 #define VM_MAGIC            0xA5A5u
@@ -487,34 +489,35 @@ IEC_UINT osTrace(IEC_CHAR *szFormat, ...)
 }
 #endif /* RTS_CFG_DEBUG_OUTPUT */
 
-#ifdef __XENO__
 static unsigned threads_num = 0;
-#endif
+
 int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
                         void *(*start_routine)(void *), void *arg,
                         const char *name, size_t stacksize)
 {
 	int retval;
-
-#ifdef __XENO__
-	pthread_attr_t attr_x;
-	pthread_attr_t *attr_p;
+    pthread_attr_t *attr_p = attr;
+    pthread_attr_t attr_x;
 
 	printf("osPthreadCreate: %02u %s", ++threads_num, name);
 
-	attr_p = attr;
-	if (attr_p == NULL) {
+    if (attr_p == NULL) {
 		attr_p = &attr_x;
 
 		pthread_attr_init(attr_p);
 	}
-
 	if (stacksize < PTHREAD_STACK_MIN) {
 		stacksize = PTHREAD_STACK_MIN;
 	}
+#ifdef __XENO__
     if (stacksize < 65536) {
 		stacksize = 65536;
 	}
+#else
+    if (stacksize < 131072) {
+        stacksize = 131072;
+    }
+#endif
 
     pthread_attr_setdetachstate(attr_p, PTHREAD_CREATE_DETACHED);
     pthread_attr_setstacksize(attr_p, stacksize);
@@ -524,16 +527,21 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 	printf("\n");
 	fflush(stdout);
 
-	retval = pthread_create(thread, attr, start_routine, arg);
+    retval = pthread_create(thread, attr_p, start_routine, arg);
     if (retval) {
-        fprintf(stderr, "[%s] ERROR creating %s thread: %s.\n", __func__, name, strerror(errno));
+        fprintf(stderr, "[%s] ERROR creating %s thread: ", __func__, name);
+        switch (retval) {
+        case EAGAIN: fputs("EAGAIN", stderr); break;
+        case EINVAL: fputs("EINVAL", stderr); break;
+        case EPERM: fputs("EPERM", stderr); break;
+        default: fprintf(stderr, "%d", retval);
+        }
+        fprintf(stderr, ", %s.\n", strerror(errno));
     } else {
+#ifdef __XENO__
         pthread_set_name_np(*thread, name);
-    }
-#else
-	retval = pthread_create(thread, attr, start_routine, arg);
 #endif
-
+    }
 	return retval;
 }
 
@@ -619,8 +627,6 @@ int clock_gettime_overflow(clockid_t clk_id, struct timespec *tp)
 IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
 {
 	IEC_UINT uRes = OK;
-
-#ifdef __XENO__
     struct timespec timer_next;
     lldiv_t x;
 	int retval; 
@@ -629,19 +635,12 @@ IEC_UINT osSleepAbsolute(IEC_ULINT ullTime)
     x = lldiv(ullTime, 1000ULL);
     timer_next.tv_sec = x.quot - xx_clock_offset_s;
     timer_next.tv_nsec = x.rem * 1E6;
+
 	// do wait
 	do {
         retval = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &timer_next, NULL);
 	} while (retval == EINTR);
-#else
-    IEC_ULINT now = osGetTime64();
-
-    if (ullTime > now) {
-        IEC_UDINT delta_ms = ullTime - now;
-        usleep(delta_ms * 1000);
-	}
-#endif
-	RETURN(uRes);
+    RETURN(uRes);
 }
 
 IEC_UDINT osElapsedTime32(IEC_UDINT now, IEC_UDINT start)
@@ -731,22 +730,12 @@ IEC_ULINT osGetTimeUS(void)
  */
 IEC_UDINT osGetTime32Ex(void)
 {
-#ifdef __XENO__
 	struct timespec tv;
 	IEC_ULINT time_ms;
 
 	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
 	time_ms = (IEC_ULINT)tv.tv_sec * 1000ull + (IEC_ULINT)tv.tv_nsec / UN_MILIONE_ULL;
 	return (IEC_UDINT)time_ms;
-#else
-	static struct timeval tv;
-
-	if (gettimeofday(&tv, NULL) == -1)
-	{
-		return 0;
-	}
-	return (IEC_UDINT)((IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_usec + 500u) / 1000u);
-#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -757,22 +746,12 @@ IEC_UDINT osGetTime32Ex(void)
  */
 IEC_ULINT osGetTime64Ex(void)
 {
-#ifdef __XENO__
 	struct timespec tv;
 	IEC_ULINT time_ms;
 
 	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
 	time_ms = (IEC_ULINT)tv.tv_sec * 1000ull + (IEC_ULINT)tv.tv_nsec / UN_MILIONE_ULL;
 	return time_ms;
-#else
-	static struct timeval tv;
-
-	if (gettimeofday(&tv, NULL) == -1)
-	{
-		return 0;
-	}
-	return (IEC_ULINT)tv.tv_sec * (IEC_ULINT)1000u + (tv.tv_usec + 500u) / 1000u;
-#endif
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -783,22 +762,12 @@ IEC_ULINT osGetTime64Ex(void)
  */
 IEC_ULINT osGetTimeUSEx(void)
 {
-#ifdef __XENO__
 	struct timespec tv;
 	IEC_ULINT time_us;
 
 	clock_gettime_overflow(CLOCK_MONOTONIC, &tv);
 	time_us = (IEC_ULINT)tv.tv_sec * UN_MILIONE_ULL + (IEC_ULINT)tv.tv_nsec / 1000ull;
 	return time_us;
-#else
-	static struct timeval tv;
-
-	if (gettimeofday(&tv, NULL) == -1)
-	{
-		return 0;
-	}
-    return (IEC_ULINT)tv.tv_sec * UN_MILIONE_UL + tv.tv_usec;
-#endif
 }
 
 /* ---------------------------------------------------------------------------- */

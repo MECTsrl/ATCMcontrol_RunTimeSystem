@@ -53,6 +53,23 @@
 #include "vmLib/libModbus.h"
 #include "inc.data/CANopen.h"
 
+#if defined(__linux__) && defined(__arm__)
+
+#ifdef __XENO__
+#define SERIAL_DEVNAME "rtser%u"
+#else
+#define SERIAL_DEVNAME "/dev/ttySP%u"
+#endif
+
+#elif defined(__linux__) && defined(__amd64__)
+
+#define SERIAL_DEVNAME "/dev/ttyUSB%u"
+
+#else
+#error unknown platform
+
+#endif
+
 #ifdef __XENO__
 #include <native/timer.h>
 #else
@@ -3664,11 +3681,7 @@ static void *serverThread(void *arg)
     case RTU_SRV: {
         char device[VMM_MAX_PATH];
 
-#ifdef __XENO__
-        snprintf(device, VMM_MAX_PATH, "rtser%u", theServers[s].u.serial.port);
-#else
-        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theServers[s].u.serial.port);
-#endif
+        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theServers[s].u.serial.port);
         theServers[s].ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
                             theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
         theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
@@ -4165,11 +4178,7 @@ static void *clientThread(void *arg)
     case RTU: {
         char device[VMM_MAX_PATH];
 
-#ifdef __XENO__
-        snprintf(device, VMM_MAX_PATH, "rtser%u", theDevices[d].u.serial.port);
-#else
-        snprintf(device, VMM_MAX_PATH, "/dev/ttySP%u", theDevices[d].u.serial.port);
-#endif
+        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theDevices[d].u.serial.port);
         theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.serial.baudrate,
                             theDevices[d].u.serial.parity, theDevices[d].u.serial.databits, theDevices[d].u.serial.stopbits);
     }   break;
@@ -4914,7 +4923,6 @@ static void *datasyncThread(void *statusAdr)
     //osPthreadSetSched(SCHED_OTHER, 0); // datasyncThread
 #ifdef __XENO__
     pthread_set_mode_np(0, PTHREAD_RPIOFF); // avoid problems from the udp send calls
-#else
 #endif
     plcServer = newPlcServer();
     threadInitOK = (plcServer != NULL);
@@ -5695,7 +5703,11 @@ static unsigned plc_serial_number()
 
 #ifdef __XENO__
 #include <rtdm/rtserial.h>
+
 #else
+
+#include <termios.h>
+#include <unistd.h>
 
 static int rt_dev_open(const char *path, int oflag) {
     return open(path, oflag);
@@ -5718,16 +5730,17 @@ int rt_dev_close(int fd)
 
 static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigned databits, unsigned stopbits, unsigned timeout_ms)
 {
-    int fd;
-    char devname[VMM_MAX_PATH];
+    int fd = -1;
+    char devname[VMM_MAX_PATH] = "";
+    int err = 0;
 
+    snprintf(devname, VMM_MAX_PATH, SERIAL_DEVNAME, devnum);
 #ifdef __XENO__
     struct rtser_config rt_serial_config;
 
-    snprintf(devname, VMM_MAX_PATH, "rtser%u", devnum);
     fd = rt_dev_open(devname, 0);
     if (fd < 0) {
-        return -1;
+        goto exit_open_failure;
     }
     rt_serial_config.config_mask =
         RTSER_SET_BAUD
@@ -5769,17 +5782,149 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
     /* Response timeout in ns */
     rt_serial_config.rx_timeout = timeout_ms * 1E6;
 
-    int err = rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
+    err = rt_dev_ioctl(fd, RTSER_RTIOC_SET_CONFIG, &rt_serial_config);
     if (err) {
-        fprintf(stderr, "%s(uart%u) error: %s\n", __func__, devnum, strerror(-err));
         rt_dev_close(fd);
         fd = -1;
-        return -1;
+        goto exit_ioctl_failure;
     }
-    fprintf(stderr, "%s(%d=uart%u) ok\n", __func__, fd, devnum);
 #else
+    /* from libmodbus */
+
+    struct termios serial_config;
+    speed_t speed;
+    int flags;
+
+    flags = O_RDWR | O_NOCTTY | O_NDELAY | O_EXCL;
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
 #endif
+    fd = open(devname, flags);
+    if (fd < 0) {
+        goto exit_open_failure;
+    }
+    memset(&serial_config, 0, sizeof(serial_config));
+
+    /* Set Baud rate */
+    switch (baudrate) {
+    case 2400:
+        speed = B2400;
+        break;
+    case 4800:
+        speed = B4800;
+        break;
+    case 9600:
+        speed = B9600;
+        break;
+    case 19200:
+        speed = B19200;
+        break;
+    case 38400:
+        speed = B38400;
+        break;
+    case 57600:
+        speed = B57600;
+        break;
+    case 115200:
+        speed = B115200;
+        break;
+    case 230400:
+        speed = B230400;
+        break;
+    default:
+        speed = B9600;
+        fprintf(stderr,"%s(%d=uart%u) wrong baudate %u\n", __func__, fd, devnum, baudrate);
+    }
+    if (cfsetspeed(&serial_config, speed)) {
+        err = errno;
+        close(fd);
+        goto exit_ioctl_failure;
+    }
+
+    /* C_CFLAG      Control options
+       CLOCAL       Local line - do not change "owner" of port
+       CREAD        Enable receiver
+     */
+    serial_config.c_cflag |= (CREAD | CLOCAL);
+    /* CSIZE, HUPCL, CRTSCTS (hardware flow control) */
+
+    /* Set data bits (5, 6, 7, 8 bits)
+       CSIZE        Bit mask for data bits
+     */
+    serial_config.c_cflag &= ~CSIZE;
+    switch (databits) {
+        case 5:
+            serial_config.c_cflag |= CS5;
+            break;
+        case 6:
+            serial_config.c_cflag |= CS6;
+            break;
+        case 7:
+            serial_config.c_cflag |= CS7;
+            break;
+        case 8:
+        default:
+            serial_config.c_cflag |= CS8;
+            break;
+    }
+
+    /* Stop bit (1 or 2) */
+    if (stopbits == 1)
+        serial_config.c_cflag &=~ CSTOPB;
+    else /* 2 */
+        serial_config.c_cflag |= CSTOPB;
+
+    /* Parity bit */
+    if (parity == 'N') {
+        /* None */
+        serial_config.c_cflag &=~ PARENB;
+    } else if (parity == 'E') {
+        /* Even */
+        serial_config.c_cflag |= PARENB;
+        serial_config.c_cflag &=~ PARODD;
+    } else {
+        /* Odd */
+        serial_config.c_cflag |= PARENB;
+        serial_config.c_cflag |= PARODD;
+    }
+
+    /* Raw input */
+    serial_config.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    if (parity == 'N') {
+        /* None */
+        serial_config.c_iflag &= ~INPCK;
+    } else {
+        serial_config.c_iflag |= INPCK;
+    }
+
+    /* Disable software flow control */
+    serial_config.c_iflag &= ~(IXON | IXOFF | IXANY);
+
+    /* Raw ouput */
+    serial_config.c_oflag &=~ OPOST;
+
+    /* Unused because we use open with the NDELAY option */
+    serial_config.c_cc[VMIN] = 0;
+    serial_config.c_cc[VTIME] = 0;
+
+    if (tcsetattr(fd, TCSANOW, &serial_config) < 0) {
+        err = errno;
+        close(fd);
+        fd = -1;
+        goto exit_ioctl_failure;
+    }
+#endif
+    fprintf(stderr, "%s(%d=uart%u) ok\n", __func__, fd, devnum);
     return fd;
+
+exit_open_failure:
+    fprintf(stderr, "%s(uart%u) open error\n", __func__, devnum);
+    return -1;
+
+exit_ioctl_failure:
+    fprintf(stderr, "%s(uart%u) error: %s\n", __func__, devnum, strerror(-err));
+    return -1;
+
 }
 
 static int mect_bcc(char *buf, unsigned len)
@@ -5796,6 +5941,7 @@ static int mect_bcc(char *buf, unsigned len)
 static void mect_printbuf(char *msg, char *buf, unsigned len)
 {
     int i;
+
     fprintf(stderr, msg);
     for (i = 0; i < len; ++i) {
         fprintf(stderr, " %02x", buf[i]);

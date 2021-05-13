@@ -209,11 +209,20 @@ int main(int argc, char *argv[])
 
 #ifdef __XENO__
     printf("Xenomai enabled\n");
-#endif
     struct rlimit rlimit;
     int retval;
     rlimit.rlim_cur = rlimit.rlim_max = 128 * 1024;
     retval = setrlimit(RLIMIT_STACK, &rlimit);
+#else
+    struct rlimit rlimit;
+    int retval;
+    rlimit.rlim_cur = rlimit.rlim_max = 1024 * 1024;
+    retval = setrlimit(RLIMIT_STACK, &rlimit);
+    if (retval) {
+        perror("setrlimit");
+        return 1;
+    }
+#endif
     mlockall(MCL_CURRENT | MCL_FUTURE);
 
     if (application_options(argc, argv) != 0) {
@@ -241,6 +250,15 @@ int main(int argc, char *argv[])
         {
             fprintf(stdout, "setrlimit failed (reason:%d (%s))\r\n", os_errno, OS_STRERROR);
         }
+    }
+
+    /* number of  processes  and  threads for  a real user ID */
+    struct rlimit limit;
+
+    if (getrlimit(RLIMIT_NPROC, &limit) == -1) {
+        fprintf(stdout, "getrlimit failed (reason:%d (%s))\r\n", os_errno, OS_STRERROR);
+    } else {
+        fprintf(stdout, "getrlimit RLIMIT_NPROC: cur=%lu max=%lu\n", limit.rlim_cur, limit.rlim_max);
     }
 
     struct sigaction new_action;
@@ -343,7 +361,9 @@ int main(int argc, char *argv[])
     /* kernel needs to know our pid to be able to send us a signal ->
      * we use debugfs for this -> do not forget to mount the debugfs!
      */
+#ifdef __XENO__
     writepid();
+#endif
     /* open and load retentive file */
     fd = open (RETENTIVE_FILE, O_RDWR | O_SYNC);
     if(fd == -1)
@@ -794,7 +814,7 @@ IEC_UINT writepid(void)
     }
     sprintf(buf, "%i", getpid());
     if (write(configfd, buf, strlen(buf) + 1) < 0) {
-        fprintf(stderr, "write '%d' failed (reason:%d (%s))\r\n", buf, os_errno, OS_STRERROR);
+        fprintf(stderr, "write '%s' failed (reason:%d (%s))\r\n", buf, os_errno, OS_STRERROR);
         RETURN(ERR_ERROR);
     }
 #ifdef MECT_RETAIN_DEBUG
