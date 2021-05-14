@@ -65,7 +65,7 @@ IEC_UINT fileInitialize(STaskInfoVMM *pVMM)
  * fileOpen
  *
  */
-IEC_UINT fileOpen(IEC_UDINT *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL bText)
+IEC_UINT fileOpen(FILEPTR *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL bText)
 {
 	IEC_CHAR *szMode;
 	IEC_CHAR *szText;
@@ -92,9 +92,9 @@ IEC_UINT fileOpen(IEC_UDINT *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL 
 
 	utilFormatString(szBuff, "%s%s", szMode, szText);
 
-	*hpFile = (IEC_UDINT)osfopen(szName, szBuff);
+    *hpFile = (FILEPTR)osfopen(szName, szBuff);
 
-	RETURN((IEC_UINT)(*hpFile == 0 ? ERR_FILE_OPEN : OK));
+    RETURN((IEC_UINT)(*hpFile == VMF_INVALID_HANDLE ? ERR_FILE_OPEN : OK));
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -102,7 +102,7 @@ IEC_UINT fileOpen(IEC_UDINT *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL 
  * fileClose
  *
  */
-IEC_UINT fileClose(IEC_UDINT hFile)
+IEC_UINT fileClose(FILEPTR hFile)
 {
 	IEC_UINT uRes = (IEC_UINT)(osfclose((VMF_FILE)hFile) == VMF_RET_OK ? OK : ERR_FILE_CLOSE);
 	
@@ -114,7 +114,7 @@ IEC_UINT fileClose(IEC_UDINT hFile)
  * fileSeek
  *
  */
-IEC_UINT fileSeek(IEC_UDINT hFile, IEC_UDINT ulOffset, IEC_INT iSet)
+IEC_UINT fileSeek(FILEPTR hFile, IEC_UDINT ulOffset, IEC_INT iSet)
 {
 	IEC_INT  iOrigin;
 	IEC_UINT uRes;
@@ -144,7 +144,7 @@ IEC_UINT fileSeek(IEC_UDINT hFile, IEC_UDINT ulOffset, IEC_INT iSet)
  * fileRead
  *
  */
-IEC_UINT fileRead(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT *upLen)
+IEC_UINT fileRead(FILEPTR hFile, IEC_DATA *pData, IEC_UINT *upLen)
 {
 	IEC_UINT uRes = OK;
 	IEC_UINT uLen = *upLen;
@@ -174,7 +174,7 @@ IEC_UINT fileRead(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT *upLen)
  * fileReadLine
  *
  */
-IEC_UINT fileReadLine(IEC_UDINT hFile, IEC_CHAR *szData, IEC_UINT uLen)
+IEC_UINT fileReadLine(FILEPTR hFile, IEC_CHAR *szData, IEC_UINT uLen)
 {
 	IEC_UINT uRes = OK;
 
@@ -203,7 +203,7 @@ IEC_UINT fileReadLine(IEC_UDINT hFile, IEC_CHAR *szData, IEC_UINT uLen)
  * fileWrite
  *
  */
-IEC_UINT fileWrite(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT uLen)
+IEC_UINT fileWrite(FILEPTR hFile, IEC_DATA *pData, IEC_UINT uLen)
 {
 	if (hFile == 0)
 	{
@@ -223,7 +223,7 @@ IEC_UINT fileWrite(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT uLen)
  * fileWriteLine
  *
  */
-IEC_UINT fileWriteLine(IEC_UDINT hFile, IEC_CHAR *szData)
+IEC_UINT fileWriteLine(FILEPTR hFile, IEC_CHAR *szData)
 {
 	if (hFile == 0)
 	{

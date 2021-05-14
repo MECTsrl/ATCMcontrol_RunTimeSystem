@@ -392,7 +392,7 @@ void fa_sync_closeFile(STDLIBFUNCALL)
 	
 	if (pFD && pFD->hFile)
 	{
-		if(xxxClose(pFD->hFile))
+        if (xxxClose(pFD->hFile))
 		{
 			pFile->ulError = CFA_CommonError;
 			return;

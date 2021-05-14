@@ -607,7 +607,7 @@ static IEC_UINT retWrite(SRetFile *pRF)
 {
 	IEC_UINT uRes = OK;
 
-	IEC_UDINT hRetain	= (IEC_UDINT)VMF_INVALID_HANDLE;
+    FILEPTR hRetain	= VMF_INVALID_HANDLE;
 	IEC_CHAR  szRetain[VMM_MAX_PATH +  1];
 
 	IEC_UDINT ulRemain;
@@ -688,7 +688,7 @@ static IEC_UINT retRead(IEC_UDINT ulID, IEC_UDINT ulUsed, SRetFile **ppRF)
 {
 	IEC_UINT uRes = OK;
 
-	IEC_UDINT hRetain	= (IEC_UDINT)VMF_INVALID_HANDLE;
+    FILEPTR hRetain	= VMF_INVALID_HANDLE;
 	IEC_CHAR  szRetain[VMM_MAX_PATH +  1];
 	
 	IEC_UDINT ulRemain	= sizeof(SRetFile) + ulUsed;
@@ -839,7 +839,7 @@ static IEC_UINT retFindFile(SRetFile **ppRF, IEC_BOOL *pExist)
 	IEC_UINT  uRes = OK;
 
 	IEC_CHAR  szRetain[VMM_MAX_PATH +  1];
-	IEC_UDINT hRetain;
+    FILEPTR hRetain;
 
 	IEC_UDINT ulIDLatest1 = RET_INVALID_ID;
 	IEC_UDINT ulIDLatest2 = RET_INVALID_ID;
@@ -963,7 +963,7 @@ static IEC_UINT retClearFiles(IEC_UDINT ulIDActive, IEC_BOOL *pExist)
 	IEC_UINT i;
 
 	IEC_CHAR  szRetain[VMM_MAX_PATH +  1];
-	IEC_UDINT hRetain;
+    FILEPTR hRetain;
 
 	SRetFile RF;
 

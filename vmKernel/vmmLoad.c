@@ -63,7 +63,7 @@ IEC_UINT ldInitTaskInfo(void)
 	IEC_BOOL bExist = FALSE;
 	IEC_CHAR pszFileName[VMM_MAX_PATH +  1];
 
-	IEC_UDINT hFile;
+    FILEPTR hFile = FILEBAD;
 
 	IEC_UINT	 i;
 	SSysLoadTask LT;
@@ -125,7 +125,7 @@ IEC_UINT ldWriteTaskInfo(IEC_UINT uTask, IEC_UDINT ulID)
 	IEC_UINT uRes = OK;
 
 	IEC_CHAR pszFileName[VMM_MAX_PATH +  1];
-	IEC_UDINT hFile;
+    FILEPTR hFile = VMF_INVALID_HANDLE;
 
 	SSysLoadTask LT;
 
@@ -190,7 +190,7 @@ IEC_UINT ldClearTaskInfo(IEC_UINT uTask)
 	IEC_UINT uRes = OK;
 
 	IEC_CHAR pszFileName[VMM_MAX_PATH +  1];
-	IEC_UDINT hFile;
+    FILEPTR hFile = VMF_INVALID_HANDLE;
 
 	SSysLoadTask LT;
 	

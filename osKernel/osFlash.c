@@ -38,12 +38,11 @@
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 
-#define FLASH_FILE_CLOSE(fh)	xxxClose((fh)); \
-								(fh)=(IEC_UDINT)VMF_INVALID_HANDLE;
+#define FLASH_FILE_CLOSE(fh)	{ xxxClose((fh)); (fh)=VMF_INVALID_HANDLE; }
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
-static IEC_UDINT g_hFlash		= (IEC_UDINT)VMF_INVALID_HANDLE;
+static FILEPTR g_hFlash		= VMF_INVALID_HANDLE;
 static IEC_UDINT g_ulCount		= 0;
 
 /* ----  Local Functions:	--------------------------------------------------- */
@@ -76,7 +75,7 @@ IEC_UINT osClearFlash(IEC_UINT *upRetry)
 
 	*upRetry = 0;
 
-	if (g_hFlash != (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash != VMF_INVALID_HANDLE)
 	{
 		FLASH_FILE_CLOSE(g_hFlash);
 	}
@@ -113,7 +112,7 @@ IEC_UINT osFWInit()
 {
 	IEC_CHAR pszFileName[VMM_MAX_PATH +  1];
 
-	if (g_hFlash != (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash != VMF_INVALID_HANDLE)
 	{
 		FLASH_FILE_CLOSE(g_hFlash);
 	}
@@ -136,7 +135,7 @@ IEC_UINT osFWInit()
  */
 IEC_UINT osFWFinish()
 {
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}
@@ -158,7 +157,7 @@ IEC_UINT osFWFinish()
  */
 IEC_UINT osFlashWrite(IEC_DATA *pData, IEC_UINT uLen)
 {
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}
@@ -185,7 +184,7 @@ IEC_UINT osFRInit()
 	IEC_CHAR pszFileName[VMM_MAX_PATH + 1];
 	IEC_BOOL bExist;
 
-	if (g_hFlash != (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash != VMF_INVALID_HANDLE)
 	{
 		FLASH_FILE_CLOSE(g_hFlash);
 	}
@@ -218,7 +217,7 @@ IEC_UINT osFRInit()
  */
 IEC_UINT osFRFinish()
 {
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}
@@ -243,7 +242,7 @@ IEC_UINT osFRInitDomain(IEC_UINT uDomain, IEC_UDINT *ulpLen)
 	IEC_UINT uRead;
 
 	*ulpLen = 0;
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}
@@ -288,7 +287,7 @@ IEC_UINT osFRInitDomain(IEC_UINT uDomain, IEC_UDINT *ulpLen)
  */
 IEC_UINT osFRFinishDomain(IEC_UINT uDomain)
 {
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}
@@ -314,7 +313,7 @@ IEC_UINT osFlashRead(IEC_UINT uDomain, IEC_UINT uBlock, IEC_DATA *pData, IEC_UIN
 {
 	IEC_UINT uRead;
 
-	if (g_hFlash == (IEC_UDINT)VMF_INVALID_HANDLE)
+    if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
 	}

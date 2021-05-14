@@ -394,7 +394,7 @@ IEC_UINT actClearResource(STaskInfoVMM *pVMM, IEC_UINT *upRetry, IEC_BOOL bWarmS
 IEC_UINT actClearCustomDL(STaskInfoVMM *pVMM)
 {
 	IEC_UINT  uRes	 = OK;
-	IEC_UDINT hMap	 = 0;
+    FILEPTR   hMap	 = FILEBAD;
 	IEC_BOOL  bExist = FALSE;
 
 	IEC_CHAR  szFile[VMM_MAX_PATH];
@@ -440,7 +440,7 @@ IEC_UINT actClearCustomDL(STaskInfoVMM *pVMM)
  */
 #if defined(RTS_CFG_FILE_ACCESS) || defined(RTS_CFG_FILE_NATIVE)
 
-IEC_UINT actGetFileData(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UDINT hFile)
+IEC_UINT actGetFileData(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, FILEPTR hFile)
 {
 	IEC_UINT uRes;
 	IEC_UINT uToCopy;
@@ -1359,14 +1359,14 @@ IEC_UINT actGetTask(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UINT 
  */
 #if defined(RTS_CFG_FILE_ACCESS) || defined(RTS_CFG_FILE_NATIVE)
 
-IEC_UINT actCloseFile(IEC_UDINT *pFile)
+IEC_UINT actCloseFile(FILEPTR *pFile)
 {
 	IEC_UINT uRes = OK;
 
 	if (*pFile != 0)
 	{
 		uRes = xxxClose(*pFile);
-		*pFile = 0;
+        *pFile = FILEBAD;
 	}
 
 	RETURN(uRes);

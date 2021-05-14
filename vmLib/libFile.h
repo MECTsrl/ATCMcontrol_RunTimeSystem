@@ -168,7 +168,7 @@ typedef struct
 typedef struct fa_fd_pair_tag
 {
 	FA_SYNC_FILE*		   pFile;
-	IEC_UDINT			   hFile;
+    FILEPTR                hFile;
 	struct fa_fd_pair_tag *pNext;
 
 } fa_fd_pair, fa_fd_map;

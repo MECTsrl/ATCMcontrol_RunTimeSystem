@@ -665,7 +665,7 @@ IEC_UINT utilCreateDir(IEC_CHAR *pBuffer, IEC_UINT uLen,
  */
 #if defined(RTS_CFG_FILE_ACCESS) || defined(RTS_CFG_FILE_NATIVE)
 
-IEC_UINT utilCreateFile(IEC_UDINT *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, 
+IEC_UINT utilCreateFile(FILEPTR *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen,
 			IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile)
 {
 	IEC_UINT uRes = fpGetDir(pBuffer, uLen);
@@ -706,7 +706,7 @@ IEC_UINT utilCreateFile(IEC_UDINT *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen,
  */
 #if defined(RTS_CFG_FILE_ACCESS) || defined(RTS_CFG_FILE_NATIVE)
 
-IEC_UINT utilOpenFile(IEC_UDINT *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, 
+IEC_UINT utilOpenFile(FILEPTR *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen,
 					  IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, 
 					  IEC_CHAR *szFile, IEC_UINT uMode)
 {
@@ -813,8 +813,8 @@ IEC_UINT utilDeleteList(IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) 
 						IEC_CHAR *szDir, IEC_CHAR *szMap, IEC_CHAR *szFile)
 {
 	IEC_UINT	uRes = OK;
-	IEC_UDINT	hMap;
-	IEC_UDINT	hTemp;
+    FILEPTR     hMap = FILEBAD;
+    FILEPTR 	hTemp = FILEBAD;
 	IEC_BOOL	bExist;
 
 	/* Open map file and create temporary file
@@ -912,7 +912,7 @@ IEC_UINT utilCreateList(IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) 
 						IEC_CHAR *szDir, IEC_CHAR *szMap, IEC_CHAR *szFile)
 {
 	IEC_UINT	uRes = OK;
-	IEC_UDINT	hMap;
+    FILEPTR     hMap = FILEBAD;
 
 	/* Create/open map file
 	 */

@@ -76,8 +76,8 @@ IEC_UINT dbiInitialize(STaskInfoVMM *pVMM)
 		RETURN(OK);
 	}
 
-	pDBI->hInst = (IEC_UDINT)VMF_INVALID_HANDLE;
-	pDBI->hVar	= (IEC_UDINT)VMF_INVALID_HANDLE;
+    pDBI->hInst = VMF_INVALID_HANDLE;
+    pDBI->hVar	= VMF_INVALID_HANDLE;
 
 	pDBI->pInstRoot = NULL;
 	pDBI->pTypes	= NULL;
@@ -136,16 +136,16 @@ IEC_UINT dbiFinalize(STaskInfoVMM *pVMM)
 		RETURN(uRes);
 	}
 
-	if ((VMF_FILE)pDBI->hInst != VMF_INVALID_HANDLE)
+    if (pDBI->hInst != VMF_INVALID_HANDLE)
 	{
 		xxxClose(pDBI->hInst);
-		pDBI->hInst = (IEC_UDINT)VMF_INVALID_HANDLE;
+        pDBI->hInst = VMF_INVALID_HANDLE;
 	}
 
-	if ((VMF_FILE)pDBI->hVar != VMF_INVALID_HANDLE)
+    if (pDBI->hVar != VMF_INVALID_HANDLE)
 	{
 		xxxClose(pDBI->hVar);
-		pDBI->hVar = (IEC_UDINT)VMF_INVALID_HANDLE;
+        pDBI->hVar = VMF_INVALID_HANDLE;
 	}
 
 	pDBI->bInitialized = FALSE;
@@ -458,7 +458,7 @@ static IEC_UINT dbiLoadInstance(STaskInfoVMM *pVMM, SDBIInstance **ppInst, IEC_U
 		RETURN(uRes);
 	}
 
-	if ((VMF_FILE)pDBI->hInst == VMF_INVALID_HANDLE)
+    if (pDBI->hInst == VMF_INVALID_HANDLE)
 	{
 		uRes =	utilOpenFile(&pDBI->hInst, (IEC_CHAR*)pVMM->pBuffer, sizeof(pVMM->pBuffer), osGetDBIDir,
 								VMM_DIR_DBI, DBI_FILE_INSTANCE, FIO_MODE_READ);
@@ -761,7 +761,7 @@ static IEC_UINT dbiLoadTypes(STaskInfoVMM *pVMM)
 {
 	IEC_UINT  uRes = OK;
 
-	IEC_UDINT hFile;
+    FILEPTR hFile = VMF_INVALID_HANDLE;
 	IEC_UINT  uLen;
 	IEC_UDINT ulTypes;
 	IEC_UINT  i;
@@ -908,7 +908,7 @@ static IEC_UINT dbiLoadMember(STaskInfoVMM *pVMM, SDBIType *pType)
 	SDBIInfo *pDBI	= &pVMM->DBI;
 	SDBIVar  *pVar;
 
-	if ((VMF_FILE)pDBI->hVar == VMF_INVALID_HANDLE)
+    if (pDBI->hVar == VMF_INVALID_HANDLE)
 	{
 		uRes =	utilOpenFile(&pDBI->hVar, (IEC_CHAR*)pVMM->pBuffer, sizeof(pVMM->pBuffer), osGetDBIDir,
 								VMM_DIR_DBI, DBI_FILE_VAR, FIO_MODE_READ);

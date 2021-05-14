@@ -59,7 +59,7 @@ IEC_UINT osGetLoadAvg(IEC_REAL *fp1, IEC_REAL *fp5, IEC_REAL *fp15, IEC_UDINT *u
 
   #if defined(RTS_CFG_LINUX)
 
-	IEC_UDINT hFile = 0;
+    FILEPTR hFile = FILEBAD;
 	IEC_CHAR  szBuff[2048];
 
 	IEC_UDINT ulPLast;
@@ -135,7 +135,7 @@ IEC_UINT osGetMemInfo(IEC_UDINT *ulpTotal, IEC_UDINT *ulpUsed, IEC_UDINT *ulpFre
 	IEC_UINT uRes = OK;
 
   #if defined(RTS_CFG_LINUX)
-	IEC_UDINT hFile = 0;
+    FILEPTR hFile = FILEBAD;
 	IEC_CHAR  szBuff[2048];
 
 	IEC_UDINT s, b, c;
@@ -218,8 +218,8 @@ IEC_UINT osGetStat(SProcTime *pPT)
 	IEC_UINT uRes = OK;
 
   #if defined(RTS_CFG_LINUX)
-	IEC_UDINT hFile = 0;
-	IEC_CHAR  szBuff[2048];
+    FILEPTR hFile = FILEBAD;
+    IEC_CHAR  szBuff[2048];
 
 	uRes = fileOpen(&hFile, FILE_STAT, FIO_MODE_READ, TRUE);
 	if (uRes != OK)
@@ -349,7 +349,7 @@ IEC_UINT osGetTaskStat(IEC_UDINT ulID, STaskTime *pTT)
 
   #if defined(RTS_CFG_LINUX)
 
-	IEC_UDINT hFile = 0;
+    FILEPTR hFile = FILEBAD;
 
 	IEC_CHAR  szBuff[2048];
 	IEC_CHAR  szDummy[2048];
@@ -474,7 +474,7 @@ IEC_UINT osGetTaskStatM(IEC_UDINT ulID, IEC_UDINT *ulpSize, IEC_UDINT *ulpRes)
 	IEC_UINT uRes = OK;
 
   #if defined(RTS_CFG_LINUX)
-	IEC_UDINT hFile = 0;
+    FILEPTR hFile = FILEBAD;
 
 	IEC_CHAR  szBuff[2048];
 	

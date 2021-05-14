@@ -178,7 +178,7 @@ int hmiClientPoll(const HmiClient *client, const HmiPlcBlock *hmiBlock, HmiPlcBl
                     bytes = recvfrom(client->udpSocket, plcBlock, sizeof(HmiPlcBlock),
                                      0, (struct sockaddr *)&udpAddress, &len);
                     if (bytes != sizeof(HmiPlcBlock) || bytes != plcBlock->bytes) {
-                        fprintf(stderr, "%s() recvfrom failure: bytes=%ld,%ld (%ld)\n", __func__,
+                        fprintf(stderr, "%s() recvfrom failure: bytes=%ld,%d (%ld)\n", __func__,
                                 bytes, plcBlock->bytes, sizeof(HmiPlcBlock));
                         retval = -4; // size error
 
@@ -278,7 +278,7 @@ int plcServerWait(PlcServer *server, HmiPlcBlock *hmiBlock, unsigned timeout_ms)
                      0, (struct sockaddr *)&server->hmiAddress, &server->hmiAddressLen);
 
             if (bytes != sizeof(HmiPlcBlock) || bytes != hmiBlock->bytes) {
-                fprintf(stderr, "%s() recvfrom failure: bytes=%ld,%ld (%ld)\n", __func__,
+                fprintf(stderr, "%s() recvfrom failure: bytes=%ld,%d (%ld)\n", __func__,
                         bytes, hmiBlock->bytes, sizeof(HmiPlcBlock));
                 retval = -4; // size error
 

@@ -54,9 +54,9 @@ enum varStatus {
     varStatus_DO_WRITE     = 0x40  // after doWrite() or endWrite()
 };
 
-#pragma pack(push, 1)
+#pragma pack(push, 1) // funziona?
 
-typedef union varUnion {
+typedef union  __attribute__ ((__aligned__((1)))) varUnion {
     uint8_t  u8;  // BYTE  BIT        BYTE_BIT   WORD_BIT   DWORD_BIT
     uint16_t u16; // UINT  UINT_BA
     uint32_t u32; // UDINT UDINT_BADC UDINT_CDAB UDINT_DCBA
@@ -65,8 +65,8 @@ typedef union varUnion {
     float    f;   // REAL  REAL_BADC  REAL_CDAB  REAL_DCBA
 } varUnion;
 
-typedef struct {
-    ssize_t bytes;
+typedef struct  __attribute__ ((__aligned__((1)))) {
+    int32_t bytes; // ex ssize_t
     uint32_t seqnum;
     uint16_t first;
     uint16_t last;

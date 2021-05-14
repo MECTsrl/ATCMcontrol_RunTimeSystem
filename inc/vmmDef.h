@@ -708,8 +708,8 @@ typedef struct
 
 typedef struct
 {
-	IEC_UDINT	hLoad;					/* Handle for project loading.		*/
-	IEC_UDINT	hSave;					/* Handle for project storing.		*/
+    FILEPTR	hLoad;					/* Handle for project loading.		*/
+    FILEPTR	hSave;					/* Handle for project storing.		*/
 
 } SDLProj;								/* -------------------------------- */
 
@@ -723,9 +723,9 @@ typedef struct
 
 typedef struct
 {
-	IEC_UDINT	hLoad;					/* Handle for data file loading.	*/
-	IEC_UDINT	hSave;					/* Handle for data file storing.	*/
-	IEC_UDINT	hDir;					/* Handle for directory operations. */
+    FILEPTR  	hLoad;					/* Handle for data file loading.	*/
+    FILEPTR 	hSave;					/* Handle for data file storing.	*/
+    FILEPTR 	hDir;					/* Handle for directory operations. */
 
 	IEC_UINT	uRetry; 				/* Retry count. 					*/
 
@@ -741,8 +741,8 @@ typedef struct
 
 typedef struct
 {
-	IEC_UDINT	hF1;
-	IEC_UDINT	hF2;
+    FILEPTR 	hF1;
+    FILEPTR 	hF2;
 	
 	SFileDef	FD;
 
@@ -826,9 +826,8 @@ typedef struct
 	IEC_UINT	uTypes; 				/* Number of elements in type list	*/
 	SDBIType	*pTypes;				/* Type List						*/
 
-	IEC_UDINT	hInst;
-	IEC_UDINT	hVar;
-
+    FILEPTR     hInst;
+    FILEPTR     hVar;
 } SDBIInfo; 							/* -------------------------------- */
 
 #endif

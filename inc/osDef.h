@@ -830,7 +830,8 @@ typedef struct
 #define TRUE		1
 #endif
 
-
+#define FILEPTR     void *
+#define FILEBAD     NULL
 
 /* Interpreter - Supported Data Types
  * ----------------------------------------------------------------------------

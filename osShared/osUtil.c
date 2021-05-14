@@ -458,7 +458,7 @@ IEC_UINT osTrace(IEC_CHAR *szFormat, ...)
 
   #if defined(RTS_CFG_DEBUG_FILE)
 	{
-		IEC_UDINT	hF;
+        FILEPTR	hF = VMF_INVALID_HANDLE;
 		IEC_UINT	uRes;
 		IEC_CHAR	szFile[VMM_MAX_PATH + 1];
 

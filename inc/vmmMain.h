@@ -226,7 +226,7 @@ IEC_UINT actDLInit	(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uMode, IEC_UINT
 IEC_UINT actDLFile	(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uMode, IEC_UINT uDomain, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szMap);
 IEC_UINT actDLFinish(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uMode, IEC_UINT uDomain);
 
-IEC_UINT actCloseFile(IEC_UDINT *pFile);
+IEC_UINT actCloseFile(FILEPTR *pFile);
 
 IEC_UINT actCmdSaveFile(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uCmd);
 IEC_UINT actResSaveFile(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uCmd);
@@ -247,7 +247,7 @@ IEC_UINT actGetIOLayer			(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC
 IEC_UINT actGetPrograms 		(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UINT uObj, SIndex		*pProg);
 IEC_UINT actGetImageRegions 	(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UINT uRd,	IEC_UINT	uWr,		SRegion *pRd, SRegion *pWr);
 IEC_UINT actGetTask 			(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UINT uObj, STaskInfoVM **ppVM,		STask		*pTSK, IEC_UINT uTasks);
-IEC_UINT actGetFileData 		(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UDINT hFile);
+IEC_UINT actGetFileData 		(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, FILEPTR hFile);
 IEC_UINT actGetDownHeader		(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, SDownHeader *pHeader);
 IEC_UINT actGetDownDirect		(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, SDownDirect *pDirect);
 IEC_UINT actGetFileDef			(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, SFileDef *pFileDef);
@@ -281,8 +281,8 @@ IEC_BOOL utilCheckString(IEC_CHAR *szString, IEC_UINT uMax);
 
 #if defined(RTS_CFG_FILE_ACCESS) || defined(RTS_CFG_FILE_NATIVE)
 IEC_UINT utilCreateDir (IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile);
-IEC_UINT utilCreateFile(IEC_UDINT *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile);
-IEC_UINT utilOpenFile(IEC_UDINT *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile, IEC_UINT uMode);
+IEC_UINT utilCreateFile(FILEPTR *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile);
+IEC_UINT utilOpenFile(FILEPTR *hpFile, IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile, IEC_UINT uMode);
 IEC_UINT utilExistFile (IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile, IEC_BOOL *bpExist);
 IEC_UINT utilDeleteFile(IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFile);
 IEC_UINT utilRenameFile(IEC_CHAR *pBuffer, IEC_UINT uLen, IEC_UINT (* fpGetDir) (IEC_CHAR *, IEC_UINT), IEC_CHAR *szDir, IEC_CHAR *szFrom, IEC_CHAR *szTo);
@@ -400,13 +400,13 @@ IEC_UINT dbiGetTaskNr(STaskInfoVMM *pVMM, IEC_DATA *pTask, XBlock *pBlock);
 #if defined(RTS_CFG_FILE_NATIVE)
 
 IEC_UINT fileInitialize(STaskInfoVMM *pVMM);
-IEC_UINT fileOpen(IEC_UDINT *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL bText);
-IEC_UINT fileClose(IEC_UDINT hFile);
-IEC_UINT fileSeek(IEC_UDINT hFile, IEC_UDINT ulOffset, IEC_INT iOrigin);
-IEC_UINT fileRead(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT *upLen);
-IEC_UINT fileReadLine(IEC_UDINT hFile, IEC_CHAR *szData, IEC_UINT uLen);
-IEC_UINT fileWrite(IEC_UDINT hFile, IEC_DATA *pData, IEC_UINT uLen);
-IEC_UINT fileWriteLine(IEC_UDINT hFile, IEC_CHAR *szData);
+IEC_UINT fileOpen(FILEPTR *hpFile, IEC_CHAR *szName, IEC_UINT uMode, IEC_BOOL bText);
+IEC_UINT fileClose(FILEPTR hFile);
+IEC_UINT fileSeek(FILEPTR hFile, IEC_UDINT ulOffset, IEC_INT iOrigin);
+IEC_UINT fileRead(FILEPTR hFile, IEC_DATA *pData, IEC_UINT *upLen);
+IEC_UINT fileReadLine(FILEPTR hFile, IEC_CHAR *szData, IEC_UINT uLen);
+IEC_UINT fileWrite(FILEPTR hFile, IEC_DATA *pData, IEC_UINT uLen);
+IEC_UINT fileWriteLine(FILEPTR hFile, IEC_CHAR *szData);
 IEC_UINT fileCreateDir(IEC_CHAR *szPath, IEC_BOOL bDirOnly, IEC_UINT uMode);
 IEC_UINT fileRename(IEC_CHAR *szFrom, IEC_CHAR *szTo);
 IEC_UINT fileRemove(IEC_CHAR *szFile);

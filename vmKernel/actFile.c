@@ -74,7 +74,7 @@ IEC_UINT cmdSaveProject(STaskInfoVMM *pVMM, XBlock *pBlock)
 		}
 	}
 
-	if (pPRJ->hSave == 0)
+    if (pPRJ->hSave == FILEBAD)
 	{
 		RETURN(ERR_FILE_SYNC);
 	}
@@ -263,7 +263,7 @@ IEC_UINT resLoadFile(STaskInfoVMM *pVMM, XBlock *pBlock)
 		RETURN(OK);
 	}
 
-	if (pDAT->hLoad == 0)
+    if (pDAT->hLoad == FILEBAD)
 	{
 		RETURN(ERR_FILE_SYNC);
 	}
@@ -388,7 +388,7 @@ IEC_UINT resDir(STaskInfoVMM *pVMM, XBlock *pBlock)
 		}
 	}
 
-	if (pDAT->hDir == 0)
+    if (pDAT->hDir == FILEBAD)
 	{
 		RETURN(ERR_FILE_SYNC);
 	}
@@ -521,7 +521,7 @@ IEC_UINT actCmdSaveFile(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uCmd)
 		OS_MEMCPY(pVMM->DLB.pRecv, pBlock->CMD.pData, uOff);
 	}
 
-	if (pDAT->hSave == 0)
+    if (pDAT->hSave == FILEBAD)
 	{
 		/* File closed by a synchronous transfer from another client
 		 */

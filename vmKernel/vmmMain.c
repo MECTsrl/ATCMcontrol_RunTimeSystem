@@ -516,7 +516,7 @@ static IEC_UINT vmmInitialize(STaskInfoVMM **ppVMM)
 	 */
 #if defined(RTS_CFG_DEBUG_FILE)
 	{
-		IEC_UDINT hF;
+        FILEPTR hF = FILEBAD;
 
 		uRes = utilCreateFile(&hF, (IEC_CHAR *)pVMM->pBuffer, VMM_MAX_PATH, osGetTraceDir, VMM_DIR_TRACE, VMM_FILE_TRACE);
 		if (uRes != OK)

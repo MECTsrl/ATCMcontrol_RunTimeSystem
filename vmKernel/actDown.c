@@ -1304,7 +1304,7 @@ IEC_UINT actDLFile(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uMode, IEC_UINT 
 		RETURN(ERR_INVALID_DATA);
 	}
 
-	if (pBlock->byLast == TRUE && pFIL->hF1 != 0)
+    if (pBlock->byLast == TRUE && pFIL->hF1 != FILEBAD)
 	{
 		RETURN(ERR_INVALID_DATA);
 	}
@@ -1314,7 +1314,7 @@ IEC_UINT actDLFile(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uMode, IEC_UINT 
 		RETURN(ERR_INVALID_DATA);
 	}
 
-	if (pBlock->byLast == TRUE && pFIL->hF2 != 0)
+    if (pBlock->byLast == TRUE && pFIL->hF2 != FILEBAD)
 	{
 		actCloseFile(&pFIL->hF2);
 	}
