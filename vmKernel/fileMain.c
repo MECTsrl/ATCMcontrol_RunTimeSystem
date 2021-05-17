@@ -56,6 +56,7 @@ static IEC_UINT fileCreateDirTree(IEC_CHAR *szPath, IEC_BOOL bDirOnly, IEC_BOOL 
  */
 IEC_UINT fileInitialize(STaskInfoVMM *pVMM)
 {
+    (void)pVMM;
 
 	RETURN(OK);
 }

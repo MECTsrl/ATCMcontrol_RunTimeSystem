@@ -92,7 +92,7 @@ app_property_name_check(char *line, const char *prop)
  * @ingroup config
  */
 	static char *
-app_expect_equal(const char *fn, char *line, unsigned ln, char *cf)
+app_expect_equal(const char *fn, char *line, unsigned ln, const char *cf)
 {
 	assert(fn != NULL);
 	assert(line != NULL);
@@ -118,7 +118,7 @@ int get_u_int16(char *ptr, const char *id, u_int16_t *value, unsigned line_num, 
     if (ptr == NULL) {
         return 0;
     }
-    ptr = app_expect_equal(__func__, ptr, line_num, APP_CONFIG_FILE);
+    ptr = app_expect_equal(__func__, ptr, line_num, filename);
     if (ptr == NULL) {
         return -1;
     }
@@ -132,7 +132,7 @@ int get_u_int32(char *ptr, const char *id, u_int32_t *value, unsigned line_num, 
     if (ptr == NULL) {
         return 0;
     }
-    ptr = app_expect_equal(__func__, ptr, line_num, APP_CONFIG_FILE);
+    ptr = app_expect_equal(__func__, ptr, line_num, filename);
     if (ptr == NULL) {
         return -1;
     }
@@ -146,7 +146,7 @@ int get_char(char *ptr, const char *id, char *value, unsigned line_num, const ch
     if (ptr == NULL) {
         return 0;
     }
-    ptr = app_expect_equal(__func__, ptr, line_num, APP_CONFIG_FILE);
+    ptr = app_expect_equal(__func__, ptr, line_num, filename);
     if (ptr == NULL) {
         return -1;
     }
@@ -160,7 +160,7 @@ int get_name(char *ptr, const char *id, char *name, unsigned line_num, const cha
     if (ptr == NULL) {
         return 0;
     }
-    ptr = app_expect_equal(__func__, ptr, line_num, APP_CONFIG_FILE);
+    ptr = app_expect_equal(__func__, ptr, line_num, filename);
     if (ptr == NULL) {
         return -1;
     }

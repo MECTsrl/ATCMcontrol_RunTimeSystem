@@ -730,9 +730,10 @@
 
 /* Common structure member declaration
  */
+#define ALIGNED_STRUCT(n)       __attribute__ ((__aligned__((n))))
 #define DEC_BYTE(type, var)		type   var                          // warning: ‘packed’ attribute ignored for field of type ‘unsigned char’ [-Wattributes]
-#define DEC_VAR(type, var)		type   var __attribute__ ((packed)) // necessario
-#define DEC_PTR(type, var)		type * var __attribute__ ((packed)) // necessario
+#define DEC_VAR(type, var)		type   var // __attribute__ ((packed)) // necessario
+#define DEC_PTR(type, var)		type * var // __attribute__ ((packed)) // necessario
 
 /* Pointer arithmetic
  */
@@ -1049,19 +1050,32 @@ typedef struct
 /* Critical Sections - Mapping
  * ----------------------------------------------------------------------------
  */
+#ifdef RTS_CFG_DEBUG_OUTPUT
+#define OS_BEGIN_CRITICAL_SECTION(cs)									\
+    {																	\
+        pthread_cleanup_push(VMM_CleanUp_Mutex, (void *)(cs));			\
+        IEC_UINT uCSResCS;												\
+        uCSResCS = osBeginCriticalSection(cs);							\
+        TR_RET(uCSResCS);
+
+#define OS_END_CRITICAL_SECTION(cs) 									\
+        uCSResCS = osEndCriticalSection(cs);							\
+        TR_RET(uCSResCS);												\
+        pthread_cleanup_pop(0);											\
+    }
+
+#else
 #define OS_BEGIN_CRITICAL_SECTION(cs)									\
 	{																	\
 		pthread_cleanup_push(VMM_CleanUp_Mutex, (void *)(cs));			\
-		IEC_UINT uCSResCS;												\
-		uCSResCS = osBeginCriticalSection(cs);							\
-		TR_RET(uCSResCS);
+        osBeginCriticalSection(cs);
 
 #define OS_END_CRITICAL_SECTION(cs) 									\
-		uCSResCS = osEndCriticalSection(cs);							\
-		TR_RET(uCSResCS);												\
+        osEndCriticalSection(cs);               						\
 		pthread_cleanup_pop(0);											\
 	}
 
+#endif
 
 
 /* Target Specific Interpreter Execution checking

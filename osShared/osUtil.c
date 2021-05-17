@@ -537,6 +537,7 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
         default: fprintf(stderr, "%d", retval);
         }
         fprintf(stderr, ", %s.\n", strerror(errno));
+        *thread = WRONG_THREAD;
     } else {
 #ifdef __XENO__
         pthread_set_name_np(*thread, name);

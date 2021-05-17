@@ -484,7 +484,7 @@ typedef struct
 
 } SOnlChg;								/* -------------------------------- */
 
-#define LIST_OFF(x) 	((x) > 0 ? (x) : 0u)
+#define LIST_OFF(x) 	((x) > 0 ? (IEC_UINT)(x) : 0u)
 
  
 /* (Task local) Interpreter Data
@@ -649,7 +649,7 @@ typedef struct
 	IEC_UINT	uLen;
 
 	IEC_UINT	uTask;					/* ID of the communication task 	*/
-	IEC_UDINT	hSocket;				/* OS-handle of the socket. 		*/
+    IEC_DINT	hSocket;				/* OS-handle of the socket. 		*/
 	IEC_UDINT	hTask;					/* OS-handle of the task.			*/
 
 } SComTCP;								/* -------------------------------- */

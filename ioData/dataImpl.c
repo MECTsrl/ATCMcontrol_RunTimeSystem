@@ -452,7 +452,7 @@ struct CrossTableRecord {
     u_int32_t Offset;
     u_int16_t Block;
     u_int16_t BlockBase;
-    int16_t BlockSize;
+    u_int16_t BlockSize;
     int Output;
     int16_t Counter;
     int32_t OldVal;
@@ -483,7 +483,7 @@ struct Alarms {
     char ALCompareVar[MAX_IDNAME_LEN];
     u_int16_t SourceAddr;
     u_int16_t CompareAddr;
-    u_int32_t ALCompareVal;
+    varUnion  ALCompareVal;
     u_int16_t ALOperator;
     u_int16_t ALFilterTime;
     u_int16_t ALFilterCount;
@@ -499,8 +499,8 @@ static u_int32_t *retentive = NULL;
 static int do_flush_retentives = FALSE;
 #endif
 
-static pthread_t theEngineThread_id = -1;
-static pthread_t theDataSyncThread_id = -1;
+static pthread_t theEngineThread_id = WRONG_THREAD;
+static pthread_t theDataSyncThread_id = WRONG_THREAD;
 static enum threadStatus theEngineThreadStatus = NOT_STARTED;
 static enum threadStatus theDataSyncThreadStatus = NOT_STARTED;
 
@@ -528,8 +528,8 @@ static void AlarmMngr(void);
 
 static void PLCsync_clearHvars(void);
 static void PLCsync_do_read(u_int16_t addr);
-static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr);
-static void PLCsync(PlcServer *plcServer);
+static unsigned PLCsync_do_write(u_int16_t addr);
+static void PLCsync();
 static void doWriteDeviceRetentives(u_int32_t d);
 static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values, u_int32_t *flags, unsigned addrMax);
 
@@ -912,6 +912,7 @@ static inline void set_dword_bit(u_int32_t *data, unsigned n, unsigned value)
 static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
 {
     char *p, *r;
+    (void)len;
 
     if (lastAlarmEvent >= DimAlarmsCT) {
         return -1;
@@ -965,7 +966,7 @@ static int newAlarmEvent(int isAlarm, u_int16_t addr, char *expr, size_t len)
         } else {
             // number
             ALCrossTable[lastAlarmEvent].ALCompareVar[0] = 0;
-            memcpy(&ALCrossTable[lastAlarmEvent].ALCompareVal, &f, sizeof(u_int32_t));
+            ALCrossTable[lastAlarmEvent].ALCompareVal.f = f;
         }
     }
     return 0;
@@ -1092,7 +1093,7 @@ static int LoadXTable(void)
         ALCrossTable[addr].TagAddr = 0;
         ALCrossTable[addr].SourceAddr = 0;
         ALCrossTable[addr].CompareAddr = 0;
-        ALCrossTable[addr].ALCompareVal = 0;
+        ALCrossTable[addr].ALCompareVal.u32 = 0;
         ALCrossTable[addr].ALOperator = 0;
         ALCrossTable[addr].ALFilterTime = 0;
         ALCrossTable[addr].ALFilterCount = 0;
@@ -1618,7 +1619,7 @@ static int LoadXTable(void)
             } else {
                 // the comparison is with a fixed value, now check for the vartype
                 // since we saved the value as float before
-                float fvalue = *(float *)&ALCrossTable[indx].ALCompareVal;
+                float fvalue = ALCrossTable[indx].ALCompareVal.f;
                 int n;
 
                 switch (CrossTable[addr].Types) {
@@ -1627,11 +1628,11 @@ static int LoadXTable(void)
                 case WORD_BIT:
                 case DWORD_BIT:
                     if (fvalue <= 0.0) {
-                        ALCrossTable[indx].ALCompareVal = 0;
+                        ALCrossTable[indx].ALCompareVal.u32 = 0;
                     } else if (fvalue <= 1.0) {
-                        ALCrossTable[indx].ALCompareVal = 1;
+                        ALCrossTable[indx].ALCompareVal.u32 = 1;
                     } else {
-                        ALCrossTable[indx].ALCompareVal = 2;
+                        ALCrossTable[indx].ALCompareVal.u32 = 2;
                     }
                     break;
                 case INT16:
@@ -1639,15 +1640,7 @@ static int LoadXTable(void)
                     for (n = 0; n < CrossTable[addr].Decimal; ++n) {
                         fvalue *= 10;
                     }
-                    if (fvalue <= 0.0) {
-                        // NB this may either overflow or underflow
-                        int16_t val = fvalue;
-                        ALCrossTable[indx].ALCompareVal = 0;
-                        memcpy(&ALCrossTable[indx].ALCompareVal, &val, sizeof(int16_t));
-                    } else {
-                        // NB this may either overflow or underflow
-                        ALCrossTable[indx].ALCompareVal = fvalue;
-                    }
+                    ALCrossTable[indx].ALCompareVal.i16 = fvalue;
                     break;
                 case DINT:
                 case DINTDCBA:
@@ -1656,14 +1649,7 @@ static int LoadXTable(void)
                     for (n = 0; n < CrossTable[addr].Decimal; ++n) {
                         fvalue *= 10;
                     }
-                    if (fvalue <= 0.0) {
-                        // NB this may either overflow or underflow
-                        int32_t val = fvalue;
-                        memcpy(&ALCrossTable[indx].ALCompareVal, &val, sizeof(u_int32_t));
-                    } else {
-                        // NB this may either overflow or underflow
-                        ALCrossTable[indx].ALCompareVal = fvalue;
-                    }
+                    ALCrossTable[indx].ALCompareVal.i32 = fvalue;
                     break;
                 case UINT8:
                 case UINT16:
@@ -1680,7 +1666,7 @@ static int LoadXTable(void)
                         }
                     }
                     // NB this may overflow
-                    ALCrossTable[indx].ALCompareVal = fvalue;
+                    ALCrossTable[indx].ALCompareVal.u32 = fvalue;
                     break;
                 case REAL:
                 case REALDCBA:
@@ -1692,27 +1678,19 @@ static int LoadXTable(void)
                     ; // FIXME: assert
                 }
 
-                union {
-                    int32_t i32value;
-                    int16_t i16value;
-                    u_int32_t uvalue;
-                    float fvalue;
-                } CompareVal;
-                CompareVal.uvalue = ALCrossTable[indx].ALCompareVal;
-
                 switch (ALCrossTable[indx].comparison)
                 {
                 case COMP_UNSIGNED:
-                    fprintf(stderr, " %u", CompareVal.uvalue);
+                    fprintf(stderr, " %u", ALCrossTable[indx].ALCompareVal.u32);
                     break;
                 case COMP_SIGNED16:
-                    fprintf(stderr, " %d", CompareVal.i16value);
+                    fprintf(stderr, " %d", ALCrossTable[indx].ALCompareVal.i16);
                     break;
                 case COMP_SIGNED32:
-                    fprintf(stderr, " %d", CompareVal.i32value);
+                    fprintf(stderr, " %d", ALCrossTable[indx].ALCompareVal.i32);
                     break;
                 case COMP_FLOATING:
-                    fprintf(stderr, " %f", fvalue);
+                    fprintf(stderr, " %f", ALCrossTable[indx].ALCompareVal.f);
                     break;
                 default:
                     ;
@@ -1810,71 +1788,65 @@ static void AlarmMngr(void)
 
         } else {
             register u_int16_t CompareAddr = ALCrossTable[i].CompareAddr;
-            union {
-                int32_t i32value;
-                int16_t i16value;
-                u_int32_t uvalue;
-                float fvalue;
-            } SourceValue, CompareVal;
+            varUnion SourceValue, CompareVal;
 
-            SourceValue.uvalue = VAR_VALUE(SourceAddr);
+            SourceValue = plcBlock.values[SourceAddr]; // VAR_VALUE(SourceAddr);
 
             // checking either against fixed value or against variable value
             if (CompareAddr == 0) {
                 // fixed value
-                CompareVal.uvalue = ALCrossTable[i].ALCompareVal;
+                CompareVal = ALCrossTable[i].ALCompareVal;
             } else if (VAR_STATE(CompareAddr) != DATA_OK) {
                 // unreliable values
                 continue;
             } else {
-                CompareVal.uvalue = VAR_VALUE(CompareAddr);
+                CompareVal = plcBlock.values[CompareAddr]; // VAR_VALUE(CompareAddr);
                 // FIXME: align decimals and types
-
             }
 
             // comparison types
             switch (ALCrossTable[i].comparison) {
             case COMP_UNSIGNED:
                 switch (Operator) {
-                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.uvalue == CompareVal.uvalue); break;
-                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.uvalue != CompareVal.uvalue); break;
-                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.uvalue >  CompareVal.uvalue); break;
-                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.uvalue >= CompareVal.uvalue); break;
-                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.uvalue <  CompareVal.uvalue); break;
-                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.uvalue <= CompareVal.uvalue); break;
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.u32 == CompareVal.u32); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.u32 != CompareVal.u32); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.u32 >  CompareVal.u32); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.u32 >= CompareVal.u32); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.u32 <  CompareVal.u32); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.u32 <= CompareVal.u32); break;
                 default             : ;
                 }
                 break;
             case COMP_SIGNED16:
                 switch (Operator) {
-                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i16value == CompareVal.i16value); break;
-                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i16value != CompareVal.i16value); break;
-                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i16value >  CompareVal.i16value); break;
-                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i16value >= CompareVal.i16value); break;
-                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i16value <  CompareVal.i16value); break;
-                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i16value <= CompareVal.i16value); break;
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i16 == CompareVal.i16); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i16 != CompareVal.i16); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i16 >  CompareVal.i16); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i16 >= CompareVal.i16); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i16 <  CompareVal.i16); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i16 <= CompareVal.i16); break;
                 default             : ;
                 }
                 break;
             case COMP_SIGNED32:
                 switch (Operator) {
-                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i32value == CompareVal.i32value); break;
-                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i32value != CompareVal.i32value); break;
-                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i32value >  CompareVal.i32value); break;
-                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i32value >= CompareVal.i32value); break;
-                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i32value <  CompareVal.i32value); break;
-                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i32value <= CompareVal.i32value); break;
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.i32 == CompareVal.i32); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.i32 != CompareVal.i32); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.i32 >  CompareVal.i32); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.i32 >= CompareVal.i32); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.i32 <  CompareVal.i32); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.i32 <= CompareVal.i32); break;
                 default             : ;
                 }
                 break;
             case COMP_FLOATING:
                 switch (Operator) {
-                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.fvalue == CompareVal.fvalue); break;
-                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.fvalue != CompareVal.fvalue); break;
-                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.fvalue >  CompareVal.fvalue); break;
-                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.fvalue >= CompareVal.fvalue); break;
-                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.fvalue <  CompareVal.fvalue); break;
-                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.fvalue <= CompareVal.fvalue); break;
+                case OPER_EQUAL     : checkAlarmEvent(i, SourceValue.f == CompareVal.f); break;
+                case OPER_NOT_EQUAL : checkAlarmEvent(i, SourceValue.f != CompareVal.f); break;
+                case OPER_GREATER   : checkAlarmEvent(i, SourceValue.f >  CompareVal.f); break;
+                case OPER_GREATER_EQ: checkAlarmEvent(i, SourceValue.f >= CompareVal.f); break;
+                case OPER_SMALLER   : checkAlarmEvent(i, SourceValue.f <  CompareVal.f); break;
+                case OPER_SMALLER_EQ: checkAlarmEvent(i, SourceValue.f <= CompareVal.f); break;
                 default             : ;
                 }
                 break;
@@ -1940,7 +1912,7 @@ static void PLCsync_do_read(u_int16_t addr)
     }
 }
 
-static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr)
+static unsigned PLCsync_do_write(u_int16_t addr)
 {
     unsigned written = 0;
 
@@ -1985,7 +1957,7 @@ static unsigned PLCsync_do_write(PlcServer *plcServer, u_int16_t addr)
     return written;
 }
 
-static void PLCsync(PlcServer *plcServer)
+static void PLCsync()
 {
     uint16_t addr;
     uint16_t first = 1;
@@ -2023,7 +1995,7 @@ static void PLCsync(PlcServer *plcServer)
             break;
 
         case varStatus_DO_WRITE:
-            written = PLCsync_do_write(plcServer, addr);
+            written = PLCsync_do_write(addr);
             // check for multiple writes
             if (written > 1) {
                 addr += (written - 1);
@@ -2061,7 +2033,7 @@ static int checkServersDevicesAndNodes()
 
         while (fgets(row, 1024, hmi_ini)) {
             char *p = &row[0];
-            int i;
+            unsigned i;
 
             // trim
             for (i = 0; i < strlen(row); ++i) {
@@ -2149,7 +2121,7 @@ static int checkServersDevicesAndNodes()
                         }
                         if (theServers[s].port != CrossTable[i].Port) {
                             fprintf(stderr,
-                                "%s() WARNING in variable #%u wrong 'Port' %s (should be %u)\n",
+                                "%s() WARNING in variable #%u wrong 'Port' %d (should be %u)\n",
                                 __func__, i, CrossTable[i].Port, theServers[s].port);
                         }
                         if (theServers[s].NodeId != CrossTable[i].NodeId) {
@@ -2164,7 +2136,7 @@ static int checkServersDevicesAndNodes()
                 if (s < theServersNumber) {
                     // ok already present
                 } else if (theServersNumber >= MAX_SERVERS) {
-                    fprintf(stderr, "%s() too many servers\n", __func__, MAX_SERVERS);
+                    fprintf(stderr, "%s() too many servers (max=%d)\n", __func__, MAX_SERVERS);
                     retval = -1;
                 } else {
                     // new server entry
@@ -2225,7 +2197,7 @@ static int checkServersDevicesAndNodes()
                         ;
                     }
                     theServers[s].NodeId = CrossTable[i].NodeId;
-                    theServers[s].thread_id = 0;
+                    theServers[s].thread_id = WRONG_THREAD;
                     theServers[s].status = SRV_RUNNING0;
                     theServers[s].thread_status = NOT_STARTED;
                     // theServers[s].serverMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -2290,7 +2262,7 @@ static int checkServersDevicesAndNodes()
                     theDevices[d].var_num += 1; // this one, also Htype
                 } else if (theDevicesNumber >= MAX_DEVICES) {
                     CrossTable[i].device = 0xffff; // FIXME: error
-                    fprintf(stderr, "%s() too many devices\n", __func__, MAX_DEVICES);
+                    fprintf(stderr, "%s() too many devices (max=%d)\n", __func__, MAX_DEVICES);
                     retval = -1;
                 } else {
                     // new device entry
@@ -2420,7 +2392,7 @@ static int checkServersDevicesAndNodes()
                     CrossTable[i].node = n; // found
                 } else if (theNodesNumber >= MAX_NODES) {
                     CrossTable[i].node = 0xffff;
-                    fprintf(stderr, "%s() too many nodes\n", __func__, MAX_NODES);
+                    fprintf(stderr, "%s() too many nodes (max=%d)\n", __func__, MAX_NODES);
                     retval = -1;
                 } else {
                     // new node entry
@@ -2546,7 +2518,7 @@ static void *engineThread(void *statusAdr)
         // create servers
         for (s = 0; s < theServersNumber; ++s) {
             theServers[s].thread_status = NOT_STARTED;
-            if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, (void *)s, theServers[s].name, 0) == 0) {
+            if (osPthreadCreate(&theServers[s].thread_id, NULL, &serverThread, &theServers[s], theServers[s].name, 0) == 0) {
                 do {
                     osSleep(THE_CONFIG_DELAY_ms); // not sched_yield();
                 } while (theServers[s].thread_status != RUNNING);
@@ -2557,7 +2529,7 @@ static void *engineThread(void *statusAdr)
         // create clients
         for (d = 0; d < theDevicesNumber; ++d) {
             theDevices[d].thread_status = NOT_STARTED;
-            if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, (void *)d, theDevices[d].name, 0) == 0) {
+            if (osPthreadCreate(&theDevices[d].thread_id, NULL, &clientThread, &theDevices[d], theDevices[d].name, 0) == 0) {
                 do {
                     osSleep(THE_CONFIG_DELAY_ms); // not sched_yield();
                 } while (theDevices[d].thread_status != RUNNING);
@@ -3660,7 +3632,8 @@ static inline void updateServerBusyTime(u_int32_t s)
 
 static void *serverThread(void *arg)
 {
-    u_int32_t s = (u_int32_t)arg;
+    struct ServerStruct *theServer = (struct ServerStruct *)arg;
+    u_int32_t s = (theServer - &theServer[0]) / sizeof(struct ServerStruct);
     u_int8_t query[MODBUS_TCP_MAX_ADU_LENGTH];
     int master_socket;
     int rc;
@@ -3674,40 +3647,40 @@ static void *serverThread(void *arg)
     // thread init
     // XX_GPIO_SET(4);
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // serverThread
-    pthread_mutex_init(&theServers[s].mutex, NULL);
-    timeout_tv.tv_sec = theServers[s].timeout_ms  / 1000;
-    timeout_tv.tv_usec = (theServers[s].timeout_ms % 1000) * 1000;
-    switch (theServers[s].protocol) {
+    pthread_mutex_init(&theServer->mutex, NULL);
+    timeout_tv.tv_sec = theServer->timeout_ms  / 1000;
+    timeout_tv.tv_usec = (theServer->timeout_ms % 1000) * 1000;
+    switch (theServer->protocol) {
     case RTU_SRV: {
         char device[VMM_MAX_PATH];
 
-        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theServers[s].u.serial.port);
-        theServers[s].ctx = modbus_new_rtu(device, theServers[s].u.serial.baudrate,
-                            theServers[s].u.serial.parity, theServers[s].u.serial.databits, theServers[s].u.serial.stopbits);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
+        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theServer->u.serial.port);
+        theServer->ctx = modbus_new_rtu(device, theServer->u.serial.baudrate,
+                            theServer->u.serial.parity, theServer->u.serial.databits, theServer->u.serial.stopbits);
+        theServer->mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     case TCP_SRV: {
         char buffer[MAX_IPADDR_LEN];
 
-        theServers[s].ctx = modbus_new_tcp(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
+        theServer->ctx = modbus_new_tcp(ipaddr2str(theServer->u.tcp_ip.IPaddr, buffer), theServer->u.tcp_ip.port);
+        theServer->mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     case TCPRTU_SRV: {
         char buffer[MAX_IPADDR_LEN];
 
-        theServers[s].ctx = modbus_new_tcprtu(ipaddr2str(theServers[s].u.tcp_ip.IPaddr, buffer), theServers[s].u.tcp_ip.port);
-        theServers[s].mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
+        theServer->ctx = modbus_new_tcprtu(ipaddr2str(theServer->u.tcp_ip.IPaddr, buffer), theServer->u.tcp_ip.port);
+        theServer->mb_mapping = modbus_mapping_new(0, 0, REG_SRV_NUMBER, 0);
     }   break;
     default:
         ;
     }
-    if (theServers[s].ctx != NULL && theServers[s].mb_mapping != NULL
-     && modbus_set_slave(theServers[s].ctx, theServers[s].NodeId) == 0) {
+    if (theServer->ctx != NULL && theServer->mb_mapping != NULL
+     && modbus_set_slave(theServer->ctx, theServer->NodeId) == 0) {
         threadInitOK = TRUE;
     }
 
     // run
-    theServers[s].thread_status = RUNNING;
+    theServer->thread_status = RUNNING;
     if (!threadInitOK)
         changeServerStatus(s, SRV_RUNNING1);
     else
@@ -3728,20 +3701,20 @@ static void *serverThread(void *arg)
 
         // get file descriptor or bind and listen
         if (server_socket == -1) {
-            switch (theServers[s].protocol) {
+            switch (theServer->protocol) {
             case RTU_SRV:
-                if (modbus_connect(theServers[s].ctx)) {
+                if (modbus_connect(theServer->ctx)) {
                     server_socket = -1;
                 } else {
-                    server_socket = modbus_get_socket(theServers[s].ctx); // here socket is file descriptor
-                    modbus_set_response_timeout(theServers[s].ctx, &timeout_tv);
+                    server_socket = modbus_get_socket(theServer->ctx); // here socket is file descriptor
+                    modbus_set_response_timeout(theServer->ctx, &timeout_tv);
                 }
                 break;
             case TCP_SRV:
-                server_socket = modbus_tcp_listen(theServers[s].ctx, THE_SRV_MAX_CLIENTS);
+                server_socket = modbus_tcp_listen(theServer->ctx, THE_SRV_MAX_CLIENTS);
                 break;
             case TCPRTU_SRV:
-                server_socket = modbus_tcprtu_listen(theServers[s].ctx, THE_SRV_MAX_CLIENTS);
+                server_socket = modbus_tcprtu_listen(theServer->ctx, THE_SRV_MAX_CLIENTS);
                 break;
             default:
                 ;
@@ -3759,15 +3732,15 @@ static void *serverThread(void *arg)
         }
 
         // XX_GPIO_CLR(4);
-        if (theServers[s].protocol == RTU_SRV) {
+        if (theServer->protocol == RTU_SRV) {
             // (single connection) force silence then read with timeout
-            osSleep(theServers[s].silence_ms);
+            osSleep(theServer->silence_ms);
         } else {
             // (multiple connection) wait on server socket, only until timeout
             do {
                 rdset = refset;
-                timeout_tv.tv_sec = theServers[s].timeout_ms  / 1000;
-                timeout_tv.tv_usec = (theServers[s].timeout_ms % 1000) * 1000;
+                timeout_tv.tv_sec = theServer->timeout_ms  / 1000;
+                timeout_tv.tv_usec = (theServer->timeout_ms % 1000) * 1000;
                 rc = select(fdmax+1, &rdset, NULL, NULL, &timeout_tv);
             } while ((rc == 0 || (rc < 0 && errno == EINTR)) && engineStatus != enExiting);
             // condition above for:
@@ -3800,14 +3773,14 @@ static void *serverThread(void *arg)
 #define _FC_REPORT_SLAVE_ID           0x11
 #define _FC_MASK_WRITE_REGISTER       0x16
 #define _FC_WRITE_AND_READ_REGISTERS  0x17
-        switch (theServers[s].protocol) {
+        switch (theServer->protocol) {
         case RTU_SRV:
             // unique client (serial line)
-            rc = modbus_receive(theServers[s].ctx, query);
+            rc = modbus_receive(theServer->ctx, query);
             if (rc > 0) {
                 // XX_GPIO_CLR(4);
-                osSleep(theServers[s].silence_ms);
-                pthread_mutex_lock(&theServers[s].mutex);
+                osSleep(theServer->silence_ms);
+                pthread_mutex_lock(&theServer->mutex);
                 {
                     // XX_GPIO_SET(4);
                     switch (query[1]) {
@@ -3817,26 +3790,26 @@ static void *serverThread(void *arg)
                     case _FC_READ_INPUT_REGISTERS:
                     case _FC_READ_EXCEPTION_STATUS:
                     case _FC_REPORT_SLAVE_ID:
-                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
+                        incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_READS);
                         break;
                     case _FC_WRITE_SINGLE_COIL:
                     case _FC_WRITE_SINGLE_REGISTER:
                     case _FC_WRITE_MULTIPLE_COILS:
                     case _FC_WRITE_MULTIPLE_REGISTERS:
                     case _FC_MASK_WRITE_REGISTER:
-                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
+                        incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_WRITES);
                         break;
                     case _FC_WRITE_AND_READ_REGISTERS:
-                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
-                        incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
+                        incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_WRITES);
+                        incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_READS);
                         break;
                     default:
                         break;
                     }
-                    modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
+                    modbus_reply(theServer->ctx, query, rc, theServer->mb_mapping);
                     // XX_GPIO_CLR(4);
                 }
-                pthread_mutex_unlock(&theServers[s].mutex);
+                pthread_mutex_unlock(&theServer->mutex);
             }
             break;
         case TCP_SRV:
@@ -3870,40 +3843,40 @@ static void *serverThread(void *arg)
 #endif
                     }
                 } else {
-                    modbus_set_socket(theServers[s].ctx, master_socket);
-                    rc = modbus_receive(theServers[s].ctx, query);
-                    if (rc > 0 && theServers[s].mb_mapping != NULL) {
+                    modbus_set_socket(theServer->ctx, master_socket);
+                    rc = modbus_receive(theServer->ctx, query);
+                    if (rc > 0 && theServer->mb_mapping != NULL) {
                         // XX_GPIO_CLR(4);
-                        pthread_mutex_lock(&theServers[s].mutex);
+                        pthread_mutex_lock(&theServer->mutex);
                         {
                             // XX_GPIO_SET(4);
-                            switch (query[(theServers[s].protocol == TCP_SRV) ? 7 : 1]) {
+                            switch (query[(theServer->protocol == TCP_SRV) ? 7 : 1]) {
                             case _FC_READ_COILS:
                             case _FC_READ_DISCRETE_INPUTS:
                             case _FC_READ_HOLDING_REGISTERS:
                             case _FC_READ_INPUT_REGISTERS:
                             case _FC_READ_EXCEPTION_STATUS:
                             case _FC_REPORT_SLAVE_ID:
-                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
+                                incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_READS);
                                 break;
                             case _FC_WRITE_SINGLE_COIL:
                             case _FC_WRITE_SINGLE_REGISTER:
                             case _FC_WRITE_MULTIPLE_COILS:
                             case _FC_WRITE_MULTIPLE_REGISTERS:
                             case _FC_MASK_WRITE_REGISTER:
-                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
+                                incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_WRITES);
                                 break;
                             case _FC_WRITE_AND_READ_REGISTERS:
-                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_WRITES);
-                                incDiagnostic(theServers[s].diagnosticAddr, DIAGNOSTIC_READS);
+                                incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_WRITES);
+                                incDiagnostic(theServer->diagnosticAddr, DIAGNOSTIC_READS);
                                 break;
                             default:
                                 ;
                             }
-                            modbus_reply(theServers[s].ctx, query, rc, theServers[s].mb_mapping);
+                            modbus_reply(theServer->ctx, query, rc, theServer->mb_mapping);
                             // XX_GPIO_CLR(4);
                         }
-                        pthread_mutex_unlock(&theServers[s].mutex);
+                        pthread_mutex_unlock(&theServer->mutex);
                     } else if (rc == -1) {
                         fprintf(stderr, "Connection closed on socket %d\n", master_socket);
                         close(master_socket);
@@ -3924,22 +3897,22 @@ static void *serverThread(void *arg)
     }
 
     // thread clean
-    switch (theServers[s].protocol) {
+    switch (theServer->protocol) {
     case RTU_SRV:
     case TCP_SRV:
     case TCPRTU_SRV:
-        if (theServers[s].mb_mapping != NULL) {
-            modbus_mapping_free(theServers[s].mb_mapping);
-            theServers[s].mb_mapping = NULL;
+        if (theServer->mb_mapping != NULL) {
+            modbus_mapping_free(theServer->mb_mapping);
+            theServer->mb_mapping = NULL;
         }
         if (server_socket != -1) {
             shutdown(server_socket, SHUT_RDWR);
             close(server_socket);
             server_socket = -1;
          }
-        if (theServers[s].ctx != NULL) {
-            modbus_close(theServers[s].ctx);
-            modbus_free(theServers[s].ctx);
+        if (theServer->ctx != NULL) {
+            modbus_close(theServer->ctx);
+            modbus_free(theServer->ctx);
         }
         break;
     default:
@@ -3948,8 +3921,8 @@ static void *serverThread(void *arg)
 
     // exit
     // XX_GPIO_CLR(4);
-    fprintf(stderr, "EXITING: %s\n", theServers[s].name);
-    theServers[s].thread_status = EXITING;
+    fprintf(stderr, "EXITING: %s\n", theServer->name);
+    theServer->thread_status = EXITING;
     return arg;
 }
 
@@ -4142,7 +4115,8 @@ static unsigned checkAddr(unsigned d, unsigned DataAddr, unsigned DataNumber)
 
 static void *clientThread(void *arg)
 {
-    u_int32_t d = (u_int32_t)arg;
+    struct ClientStruct *theDevice = (struct ClientStruct *)arg;
+    u_int32_t d = (theDevice - &theDevices[0]) / sizeof(struct ClientStruct);
     u_int16_t v;
 
     // device connection management
@@ -4150,18 +4124,15 @@ static void *clientThread(void *arg)
 
     // device queue management by priority and periods
     u_int16_t prio;                         // priority of variables
-    u_int16_t write_index;                  // current write index in queue
     int we_have_variables[MAX_PRIORITY];    // do we have variables at that priority?
     u_int16_t read_addr[MAX_PRIORITY];      // current read address in crosstable for each priority
     RTIME read_time_ns[MAX_PRIORITY];   // next read time for each priority
 
     // data for each fieldbus operation
-    u_int16_t QueueIndex = 0;// command index in the queue
     u_int16_t readOperation; // read/write
     u_int16_t DataAddr = 0;  // variable address in the crosstable
     u_int32_t DataValue[MAX_VALUES]; // max 64 reads and 16 writes
     u_int32_t DataNumber;    // max 64 reads and 16 writes
-    u_int16_t DataNodeId;    // variable node ID ("0" if not applicable)
     u_int16_t Data_node;     // global index of the node in theNodes[]
     enum fieldbusError error;
 
@@ -4169,32 +4140,32 @@ static void *clientThread(void *arg)
     // ------------------------------------------ thread init
     // XX_GPIO_SET_69(d);
     osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT); // clientThread
-    theDevices[d].modbus_ctx = NULL;
-    theDevices[d].mect_fd = -1;
+    theDevice->modbus_ctx = NULL;
+    theDevice->mect_fd = -1;
     // "new"
-    switch (theDevices[d].protocol) {
+    switch (theDevice->protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU: {
         char device[VMM_MAX_PATH];
 
-        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theDevices[d].u.serial.port);
-        theDevices[d].modbus_ctx = modbus_new_rtu(device, theDevices[d].u.serial.baudrate,
-                            theDevices[d].u.serial.parity, theDevices[d].u.serial.databits, theDevices[d].u.serial.stopbits);
+        snprintf(device, VMM_MAX_PATH, SERIAL_DEVNAME, theDevice->u.serial.port);
+        theDevice->modbus_ctx = modbus_new_rtu(device, theDevice->u.serial.baudrate,
+                            theDevice->u.serial.parity, theDevice->u.serial.databits, theDevice->u.serial.stopbits);
     }   break;
     case TCP: {
         char buffer[MAX_IPADDR_LEN];
 
-        theDevices[d].modbus_ctx = modbus_new_tcp(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+        theDevice->modbus_ctx = modbus_new_tcp(ipaddr2str(theDevice->u.tcp_ip.IPaddr, buffer), theDevice->u.tcp_ip.port);
     }   break;
     case TCPRTU: {
         char buffer[MAX_IPADDR_LEN];
 
-        theDevices[d].modbus_ctx = modbus_new_tcprtu(ipaddr2str(theDevices[d].u.tcp_ip.IPaddr, buffer), theDevices[d].u.tcp_ip.port);
+        theDevice->modbus_ctx = modbus_new_tcprtu(ipaddr2str(theDevice->u.tcp_ip.IPaddr, buffer), theDevice->u.tcp_ip.port);
     }   break;
     case CANOPEN: {
         u_int16_t addr;
-        CANopenStart(theDevices[d].u.can.bus); // may start more threads
+        CANopenStart(theDevice->u.can.bus); // may start more threads
         // get the unspecified CANopen variables offsets ("CH0_NETRUN" ...)
         for (addr = 1; addr <= DimCrossTable; ++addr) {
             if (CrossTable[addr].Enable > 0 && CrossTable[addr].device == d) {
@@ -4207,7 +4178,7 @@ static void *clientThread(void *arg)
             }
         }
         if (verbose_print_enabled) {
-            CANopenList(theDevices[d].u.can.bus);
+            CANopenList(theDevice->u.can.bus);
         }
     }   break;
     case MECT: // new (nothing to do)
@@ -4220,20 +4191,20 @@ static void *clientThread(void *arg)
         ;
     }
     // check the "new" result
-    switch (theDevices[d].protocol) {
+    switch (theDevice->protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU:
     case TCP:
     case TCPRTU:
-        if (theDevices[d].modbus_ctx == NULL) {
+        if (theDevice->modbus_ctx == NULL) {
             changeDeviceStatus(d, NO_HOPE);
         } else {
             changeDeviceStatus(d, NOT_CONNECTED);
         }
         break;
     case CANOPEN: {
-        u_int8_t channel = theDevices[d].u.can.bus;
+        u_int8_t channel = theDevice->u.can.bus;
         struct CANopenStatus status;
         CANopenGetChannelStatus(channel, &status);
         if (status.running || status.error != 0xffffffff) {
@@ -4255,13 +4226,13 @@ static void *clientThread(void *arg)
     }
 
     // ------------------------------------------ run
-    fprintf(stderr, "%s: ", theDevices[d].name);
-    switch (theDevices[d].protocol) {
+    fprintf(stderr, "%s: ", theDevice->name);
+    switch (theDevice->protocol) {
     case PLC: // FIXME: assert
         break;
     case RTU:
     case MECT:
-        fprintf(stderr, "@%u/%u/%c/%u, ", theDevices[d].u.serial.baudrate, theDevices[d].u.serial.databits, theDevices[d].u.serial.parity, theDevices[d].u.serial.stopbits);
+        fprintf(stderr, "@%u/%u/%c/%u, ", theDevice->u.serial.baudrate, theDevice->u.serial.databits, theDevice->u.serial.parity, theDevice->u.serial.stopbits);
         break;
     case TCP:
     case TCPRTU:
@@ -4275,32 +4246,31 @@ static void *clientThread(void *arg)
     default:
         ;
     }
-    fprintf(stderr, "silence_ms=%u, timeout_ms=%u\n", theDevices[d].silence_ms, theDevices[d].timeout_ms);
-    response_timeout.tv_sec = theDevices[d].timeout_ms / 1000;
-    response_timeout.tv_usec = (theDevices[d].timeout_ms % 1000) * 1000;
+    fprintf(stderr, "silence_ms=%u, timeout_ms=%u\n", theDevice->silence_ms, theDevice->timeout_ms);
+    response_timeout.tv_sec = theDevice->timeout_ms / 1000;
+    response_timeout.tv_usec = (theDevice->timeout_ms % 1000) * 1000;
     startDeviceTiming(d);
-    write_index = 1;
     for (prio = 0; prio < MAX_PRIORITY; ++prio) {
-        read_time_ns[prio] = theDevices[d].current_time_ns;
+        read_time_ns[prio] = theDevice->current_time_ns;
         read_addr[prio] = 0;
         we_have_variables[prio] = 0;
     }
     // for each priority check if we have variables at that priority
-    for (v = 0; v < theDevices[d].var_num; ++v) {
-        DataAddr = theDevices[d].device_vars[v].addr;
+    for (v = 0; v < theDevice->var_num; ++v) {
+        DataAddr = theDevice->device_vars[v].addr;
         if (CrossTable[DataAddr].Enable > 0 && CrossTable[DataAddr].Enable <= MAX_PRIORITY) {
             prio = CrossTable[DataAddr].Enable - 1;
             we_have_variables[prio] = 1; // also Htype
         }
     }
     if (verbose_print_enabled) {
-        fprintf(stderr, "%s: reading variables {", theDevices[d].name);
+        fprintf(stderr, "%s: reading variables {", theDevice->name);
         for (prio = 0; prio < MAX_PRIORITY; ++prio) {
             if (we_have_variables[prio]) {
                 fprintf(stderr, "\n\t%u:", prio + 1);
-                for (v = 0; v < theDevices[d].var_num; ++v) {
-                    if (CrossTable[theDevices[d].device_vars[v].addr].Enable == (prio + 1)) {
-                        fprintf(stderr, " %u%s", theDevices[d].device_vars[v].addr, theDevices[d].device_vars[v].active ? "" : "(H)");
+                for (v = 0; v < theDevice->var_num; ++v) {
+                    if (CrossTable[theDevice->device_vars[v].addr].Enable == (prio + 1)) {
+                        fprintf(stderr, " %u%s", theDevice->device_vars[v].addr, theDevice->device_vars[v].active ? "" : "(H)");
                     }
                 }
             }
@@ -4318,7 +4288,7 @@ static void *clientThread(void *arg)
     doWriteDeviceRetentives(d);
 
     // let the engine continue
-    theDevices[d].thread_status = RUNNING;
+    theDevice->thread_status = RUNNING;
 
     while (engineStatus != enExiting) {
 
@@ -4328,7 +4298,7 @@ static void *clientThread(void *arg)
         updateDeviceTiming(d);
 
         // trivial scenario
-        if (engineStatus != enRunning || theDevices[d].status == NO_HOPE) {
+        if (engineStatus != enRunning || theDevice->status == NO_HOPE) {
             // XX_GPIO_CLR_69(d);
             osSleep(THE_CONNECTION_DELAY_ms);
             continue;
@@ -4340,7 +4310,7 @@ static void *clientThread(void *arg)
             RTIME next_ns;
 
             // wait for next operation or next programmed read
-            next_ns = theDevices[d].current_time_ns + THE_MAX_CLIENT_SLEEP_ns;
+            next_ns = theDevice->current_time_ns + THE_MAX_CLIENT_SLEEP_ns;
             for (prio = 0; prio < MAX_PRIORITY; ++prio) {
                 if (we_have_variables[prio]) {
                     if (read_time_ns[prio] < next_ns) {
@@ -4348,8 +4318,10 @@ static void *clientThread(void *arg)
                     }
                 }
             }
-            if (next_ns > theDevices[d].current_time_ns) {
-                int timeout, invalid_timeout, invalid_permission, other_error;
+            if (next_ns > theDevice->current_time_ns) {
+#ifdef VERBOSE_DEBUG
+                int invalid_timeout, invalid_permission, other_error;
+#endif
                 struct timespec abstime;
                 TIMESPEC_FROM_RTIME(abstime, next_ns);
 
@@ -4360,12 +4332,16 @@ static void *clientThread(void *arg)
                     saved_errno = errno;
                     // XX_GPIO_SET_69(d);
 
+#ifdef VERBOSE_DEBUG
                     timeout = invalid_timeout = invalid_permission = other_error = FALSE;
+#endif
                     errno = saved_errno;
                     if (errno ==  EINVAL) {
-                        fprintf(stderr, "%s@%09llu ms: problem with (%us, %ldns).\n",
-                            theDevices[d].name, theDevices[d].current_time_ns, abstime.tv_sec, abstime.tv_nsec);
+                        fprintf(stderr, "%s@%09llu ms: problem with (%ds, %ldns).\n",
+                            theDevice->name, theDevice->current_time_ns, abstime.tv_sec, abstime.tv_nsec);
+#ifdef VERBOSE_DEBUG
                         invalid_timeout = TRUE;
+#endif
                         break;
                     }
                     if (errno == EINTR) {
@@ -4375,14 +4351,20 @@ static void *clientThread(void *arg)
                         break;
                     }
                     if (errno ==  ETIMEDOUT) {
+#ifdef VERBOSE_DEBUG
                         timeout = TRUE;
+#endif
                         break;
                     }
                     if (errno ==  EPERM) {
+#ifdef VERBOSE_DEBUG
                         invalid_permission = TRUE;
+#endif
                         break;
                     }
+#ifdef VERBOSE_DEBUG
                     other_error = TRUE;
+#endif
                     break;
                 } while (TRUE);
 
@@ -4390,14 +4372,14 @@ static void *clientThread(void *arg)
                 updateDeviceTiming(d);
 #ifdef VERBOSE_DEBUG
                 if (invalid_timeout || invalid_permission || other_error) {
-                    fprintf(stderr, "%s@%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", theDevices[d].name, theDevices[d].current_time_ms,
+                    fprintf(stderr, "%s@%09u ms: woke up because %s (%09u ms = %u s + %d ns)\n", theDevice->name, theDevice->current_time_ms,
                         timeout?"timeout":(invalid_timeout?"invalid_timeout":(invalid_permission?"invalid_permission":(other_error?"other_error":"signal"))),
                         next_ms, abstime.tv_sec, abstime.tv_nsec);
                 }
 #endif
             } else {
 #ifdef VERBOSE_DEBUG
-                fprintf(stderr, "%s@%09u ms: immediate restart\n", theDevices[d].name, theDevices[d].current_time_ms);
+                fprintf(stderr, "%s@%09u ms: immediate restart\n", theDevice->name, theDevice->current_time_ms);
 #endif
             }
         }
@@ -4410,29 +4392,28 @@ static void *clientThread(void *arg)
                 // XX_GPIO_SET_69(d);
 
                 // is it there an immediate write requests from PLC to this device?
-                if (theDevices[d].PLCwriteRequestNumber > 0) {
+                if (theDevice->PLCwriteRequestNumber > 0) {
                     u_int16_t n;
 
-                    QueueIndex = 0;
-                    DataAddr = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Addr;
+                    DataAddr = theDevice->PLCwriteRequests[theDevice->PLCwriteRequestGet].Addr;
                     // data values from the local queue only, the *_BIT management is in fieldWrite()
-                    DataNumber = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Number;
+                    DataNumber = theDevice->PLCwriteRequests[theDevice->PLCwriteRequestGet].Number;
                     readOperation = FALSE;
                     // check
                     DataAddr = checkAddr(d, DataAddr, DataNumber);
                     if (DataAddr > 0) {
                         for (n = 0; n < DataNumber; ++n) {
-                            DataValue[n] = theDevices[d].PLCwriteRequests[theDevices[d].PLCwriteRequestGet].Values[n];
+                            DataValue[n] = theDevice->PLCwriteRequests[theDevice->PLCwriteRequestGet].Values[n];
                         }
                     }
 
                     // write requests circular buffer (even if check failed)
-                    theDevices[d].PLCwriteRequestGet = (theDevices[d].PLCwriteRequestGet + 1) % MaxLocalQueue;
-                    theDevices[d].PLCwriteRequestNumber -= 1;
+                    theDevice->PLCwriteRequestGet = (theDevice->PLCwriteRequestGet + 1) % MaxLocalQueue;
+                    theDevice->PLCwriteRequestNumber -= 1;
 
-                    setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevices[d].PLCwriteRequestNumber);
+                    setDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_WRITE_QUEUE, theDevice->PLCwriteRequestNumber);
 #ifdef VERBOSE_DEBUG
-                    fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevices[d].name, theDevices[d].current_time_ms, DataAddr, theDevices[d].PLCwriteRequestNumber);
+                    fprintf(stderr, "%s@%09u ms: write PLC [%u], there are still %u\n", theDevice->name, theDevice->current_time_ms, DataAddr, theDevice->PLCwriteRequestNumber);
 #endif
                 }
 
@@ -4449,15 +4430,15 @@ static void *clientThread(void *arg)
                             continue;
                         }
                         // only when the timer expires
-                        if (read_time_ns[prio] <= theDevices[d].current_time_ns) {
+                        if (read_time_ns[prio] <= theDevice->current_time_ns) {
 
                             // is it there anything to read at this priority for this device?
                             int found = FALSE;
 
                             // {P,S,F} and active {H}
-                            for (v = read_addr[prio]; v < theDevices[d].var_num; ++v) {
-                                if (theDevices[d].device_vars[v].active) {
-                                    addr = theDevices[d].device_vars[v].addr;
+                            for (v = read_addr[prio]; v < theDevice->var_num; ++v) {
+                                if (theDevice->device_vars[v].active) {
+                                    addr = theDevice->device_vars[v].addr;
                                     if (CrossTable[addr].Enable == (prio + 1) && addr == CrossTable[addr].BlockBase) {
                                         if (theNodes[CrossTable[addr].node].status != NODE_DISABLED) {
                                             found = TRUE;
@@ -4467,7 +4448,6 @@ static void *clientThread(void *arg)
                                 }
                             }
                             if (found) {
-                                QueueIndex = 0;
                                 DataAddr = addr; // CrossTable[addr].BlockBase;
                                 DataNumber = CrossTable[addr].BlockSize;
                                 if (DataNumber > MAX_VALUES) {
@@ -4479,20 +4459,20 @@ static void *clientThread(void *arg)
                                 // keep the index for the next loop
                                 read_addr[prio] = v + DataNumber; // may overlap DimCrossTable, it's ok
 #ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%s@%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, DataAddr, addr, read_addr[prio]);
+                                fprintf(stderr, "%s@%09u ms: read %uPSF [%u] (was [%u]), will check [%u]\n", theDevice->name, theDevice->current_time_ms, prio+1, DataAddr, addr, read_addr[prio]);
 #endif
                                 break;
                             } else {
                                 // compute next tic for this priority, restarting from the first
                                 RTIME period_ns = system_ini.system.read_period_ms[prio] * 1E6;
                                 read_time_ns[prio] += period_ns;
-                                if (read_time_ns[prio] <= theDevices[d].current_time_ns) {
-                                    RTIME n = theDevices[d].current_time_ns / period_ns;
+                                if (read_time_ns[prio] <= theDevice->current_time_ns) {
+                                    RTIME n = theDevice->current_time_ns / period_ns;
                                     read_time_ns[prio] = (n + 1) * period_ns;
                                 }
                                 read_addr[prio] = 0;
 #ifdef VERBOSE_DEBUG
-                                fprintf(stderr, "%s@%09u ms: no read %uHPSF will restart at %09u ms\n", theDevices[d].name, theDevices[d].current_time_ms, prio+1, read_time_ms[prio]);
+                                fprintf(stderr, "%s@%09u ms: no read %uHPSF will restart at %09u ms\n", theDevice->name, theDevice->current_time_ms, prio+1, read_time_ms[prio]);
 #endif
                             }
                         }
@@ -4515,52 +4495,51 @@ static void *clientThread(void *arg)
 
         // XX_GPIO_SET_69(d);
         // maybe either a retry or a new operation
-        DataNodeId = CrossTable[DataAddr].NodeId;
         Data_node = CrossTable[DataAddr].node;
 
         // manage the device status (before operation)
-        switch (theDevices[d].status) {
+        switch (theDevice->status) {
         case ZERO:
         case NO_HOPE: // FIXME: assert
             break;
         case NOT_CONNECTED:
             // try connection
-            switch (theDevices[d].protocol) {
+            switch (theDevice->protocol) {
             case PLC: // FIXME: assert
                 break;
             case RTU:
-                fprintf(stderr, "%s modbus_connect()\n", theDevices[d].name);
-                if (modbus_connect(theDevices[d].modbus_ctx) >= 0) {
-                    modbus_set_response_timeout(theDevices[d].modbus_ctx, &response_timeout);
+                fprintf(stderr, "%s modbus_connect()\n", theDevice->name);
+                if (modbus_connect(theDevice->modbus_ctx) >= 0) {
+                    modbus_set_response_timeout(theDevice->modbus_ctx, &response_timeout);
                     changeDeviceStatus(d, CONNECTED);
                 }
                 break;
             case TCP:
             case TCPRTU:
-                if (modbus_connect(theDevices[d].modbus_ctx) >= 0) {
-                    if (modbus_flush(theDevices[d].modbus_ctx) >= 0) {
-                        modbus_set_response_timeout(theDevices[d].modbus_ctx, &response_timeout);
+                if (modbus_connect(theDevice->modbus_ctx) >= 0) {
+                    if (modbus_flush(theDevice->modbus_ctx) >= 0) {
+                        modbus_set_response_timeout(theDevice->modbus_ctx, &response_timeout);
                         changeDeviceStatus(d, CONNECTED);
                     } else {
-                        modbus_close(theDevices[d].modbus_ctx);
+                        modbus_close(theDevice->modbus_ctx);
                     }
                 }
                 break;
             case CANOPEN: {
-                u_int8_t channel = theDevices[d].u.can.bus;
+                u_int8_t channel = theDevice->u.can.bus;
                 if (CANopenConfigured(channel)) {
                     changeDeviceStatus(d, CONNECTED);
                 }
             }   break;
             case MECT: // connect()
-                theDevices[d].mect_fd = mect_connect(
-                    theDevices[d].u.serial.port,
-                    theDevices[d].u.serial.baudrate,
-                    theDevices[d].u.serial.parity,
-                    theDevices[d].u.serial.databits,
-                    theDevices[d].u.serial.stopbits,
-                    theDevices[d].timeout_ms);
-                if (theDevices[d].mect_fd >= 0) {
+                theDevice->mect_fd = mect_connect(
+                    theDevice->u.serial.port,
+                    theDevice->u.serial.baudrate,
+                    theDevice->u.serial.parity,
+                    theDevice->u.serial.databits,
+                    theDevice->u.serial.stopbits,
+                    theDevice->timeout_ms);
+                if (theDevice->mect_fd >= 0) {
                     changeDeviceStatus(d, CONNECTED);
                 }
                 break;
@@ -4573,7 +4552,7 @@ static void *clientThread(void *arg)
                 ;
             }
             // if connection attempts fail too much, then rest a bit
-            if (theDevices[d].status == NOT_CONNECTED && theDevices[d].elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
+            if (theDevice->status == NOT_CONNECTED && theDevice->elapsed_time_ns >= THE_DEVICE_SILENCE_ns) {
                 changeDeviceStatus(d, DEVICE_BLACKLIST); // also data=0 and status=DATA_ERROR
             }
             break;
@@ -4584,7 +4563,7 @@ static void *clientThread(void *arg)
             // ok proceed with the fieldbus operations
             break;
         case DEVICE_BLACKLIST:
-            if (theDevices[d].elapsed_time_ns >= THE_DEVICE_BLACKLIST_ns) {
+            if (theDevice->elapsed_time_ns >= THE_DEVICE_BLACKLIST_ns) {
                 changeDeviceStatus(d, NOT_CONNECTED);
             }
             break;
@@ -4593,7 +4572,7 @@ static void *clientThread(void *arg)
         }
 
         // can we continue?
-        if (theDevices[d].status != CONNECTED && theDevices[d].status != CONNECTED_WITH_ERRORS) {
+        if (theDevice->status != CONNECTED && theDevice->status != CONNECTED_WITH_ERRORS) {
             // XX_GPIO_CLR_69(d);
             osSleep(THE_CONNECTION_DELAY_ms);
             continue;
@@ -4606,15 +4585,15 @@ static void *clientThread(void *arg)
         } else if (theNodes[Data_node].status == DISCONNECTED || theNodes[Data_node].status == BLACKLIST) {
             error = TimeoutError;
 #ifdef VERBOSE_DEBUG
-              if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
+              if (theDevice->protocol == RTU /*&& theDevice->port == 0 && theDevice->u.serial.baudrate == 38400*/) {
                 fprintf(stderr, "%s@%09u ms: %s (blacklist) %u vars @ %u\n",
-                        theDevices[d].name, theDevices[d].current_time_ms,
+                        theDevice->name, theDevice->current_time_ms,
                         Operation == READ ? "read" : "write",
                         DataNumber, DataAddr);
               }
 #endif
         } else if (theNodes[Data_node].status == NODE_DISABLED) {
-            int i;
+            unsigned i;
             error = NoError;
             for (i = 0; i < DataNumber; ++i) {
                 DataValue[i] = 0;
@@ -4624,10 +4603,10 @@ static void *clientThread(void *arg)
             // the device is connected, so operate, without locking the mutex
             updateDeviceIdleTime(d);
             if (readOperation) {
-                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_READS);
+                incDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_READS);
                 error = fieldbusRead(d, DataAddr, DataValue, DataNumber);
             } else {
-                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_WRITES);
+                incDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_WRITES);
                 if (CrossTable[DataAddr].Output) {
                     error = fieldbusWrite(d, DataAddr, DataValue, DataNumber);
                 } else {
@@ -4638,7 +4617,7 @@ static void *clientThread(void *arg)
 
             // fieldbus wait silence_ms afterwards
         }
-        setDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_LAST_ERROR, error);
+        setDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_LAST_ERROR, error);
 
         // check error and set values and flags
         // XX_GPIO_CLR_69(d);
@@ -4648,8 +4627,8 @@ static void *clientThread(void *arg)
 
             // XX_GPIO_SET_69(d);
 #ifdef VERBOSE_DEBUG
-            if (theDevices[d].protocol == RTU /*&& theDevices[d].port == 0 && theDevices[d].u.serial.baudrate == 38400*/) {
-            fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevices[d].name, theDevices[d].current_time_ms,
+            if (theDevice->protocol == RTU /*&& theDevice->port == 0 && theDevice->u.serial.baudrate == 38400*/) {
+            fprintf(stderr, "%s@%09u ms: %s %s %u vars @ %u\n", theDevice->name, theDevice->current_time_ms,
                     Operation == READ ? "read" : "write",
                     error == NoError ? "ok" : "error",
                     DataNumber, DataAddr);
@@ -4663,7 +4642,7 @@ static void *clientThread(void *arg)
                 if (theNodes[Data_node].status != NODE_OK && theNodes[Data_node].status != NODE_DISABLED)
                     changeNodeStatus(d, Data_node, NODE_OK);
                 // device status
-                if (theDevices[d].status != CONNECTED)
+                if (theDevice->status != CONNECTED)
                     changeDeviceStatus(d, CONNECTED);
                 // data values and status
                 for (i = 0; i < DataNumber; ++i) {
@@ -4673,7 +4652,7 @@ static void *clientThread(void *arg)
                 break;
 
             case CommError:
-                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_COMM_ERRORS);
+                incDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_COMM_ERRORS);
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4725,14 +4704,14 @@ static void *clientThread(void *arg)
                     ;
                 }
                 // device status
-                if (theDevices[d].status == CONNECTED_WITH_ERRORS) {
+                if (theDevice->status == CONNECTED_WITH_ERRORS) {
                     // we received something, even if wrong
                     changeDeviceStatus(d, CONNECTED);
                 }
                 break;
 
             case TimeoutError:
-                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_TIMEOUTS);
+                incDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_TIMEOUTS);
                 // node status
                 switch (theNodes[Data_node].status) {
                 case NODE_OK:
@@ -4806,12 +4785,12 @@ static void *clientThread(void *arg)
                     ;
                 }
                 // device status
-                if (theDevices[d].status == CONNECTED) {
+                if (theDevice->status == CONNECTED) {
                     changeDeviceStatus(d, CONNECTED_WITH_ERRORS);
                 } else {
                     // maybe we need a reset?
                     updateDeviceTiming(d);
-                    if (theDevices[d].elapsed_time_ns > THE_DEVICE_SILENCE_ns) {
+                    if (theDevice->elapsed_time_ns > THE_DEVICE_SILENCE_ns) {
                         // too much silence
                         do_fieldbusReset = TRUE;
                         changeDeviceStatus(d, NOT_CONNECTED); // also data=0 status=DATA_ERROR
@@ -4820,7 +4799,7 @@ static void *clientThread(void *arg)
                 break;
 
             case ConnReset:
-                incDiagnostic(theDevices[d].diagnosticAddr, DIAGNOSTIC_TIMEOUTS); // TIMEOUTS(RESET)
+                incDiagnostic(theDevice->diagnosticAddr, DIAGNOSTIC_TIMEOUTS); // TIMEOUTS(RESET)
                 // node status
                 changeNodeStatus(d, Data_node, DISCONNECTED);
                 // data values and status
@@ -4850,12 +4829,12 @@ static void *clientThread(void *arg)
         }
 
         // if necessary respect the silence, with unlocked mutex
-        switch (theDevices[d].protocol) {
+        switch (theDevice->protocol) {
         case RTU:
         case MECT:
-            if (theDevices[d].silence_ms > 0) {
+            if (theDevice->silence_ms > 0) {
                 // XX_GPIO_CLR_69(d);
-                osSleep(theDevices[d].silence_ms);
+                osSleep(theDevice->silence_ms);
                 // XX_GPIO_SET_69(d);
             }
             break;
@@ -4868,24 +4847,24 @@ static void *clientThread(void *arg)
     // XX_GPIO_SET_69(d);
 
     // thread clean
-    switch (theDevices[d].protocol) {
+    switch (theDevice->protocol) {
     case PLC:
         // FIXME: assert
         break;
     case RTU:
     case TCP:
     case TCPRTU:
-        if (theDevices[d].modbus_ctx != NULL) {
-            modbus_close(theDevices[d].modbus_ctx);
-            modbus_free(theDevices[d].modbus_ctx);
-            theDevices[d].modbus_ctx = NULL;
+        if (theDevice->modbus_ctx != NULL) {
+            modbus_close(theDevice->modbus_ctx);
+            modbus_free(theDevice->modbus_ctx);
+            theDevice->modbus_ctx = NULL;
         }
         break;
     case CANOPEN:
-        CANopenStop(theDevices[d].u.can.bus);
+        CANopenStop(theDevice->u.can.bus);
         break;
     case MECT: // close()
-        mect_close(theDevices[d].mect_fd);
+        mect_close(theDevice->mect_fd);
         break;
     case RTU_SRV:
     case TCP_SRV:
@@ -4896,14 +4875,14 @@ static void *clientThread(void *arg)
     }
 
     // cleanup
-    if (theDevices[d].device_vars != NULL) {
-        free(theDevices[d].device_vars);
-        theDevices[d].device_vars = NULL;
+    if (theDevice->device_vars != NULL) {
+        free(theDevice->device_vars);
+        theDevice->device_vars = NULL;
     }
     // exit
     // XX_GPIO_CLR_69(d);
-    fprintf(stderr, "EXITING: %s\n", theDevices[d].name);
-    theDevices[d].thread_status = EXITING;
+    fprintf(stderr, "EXITING: %s\n", theDevice->name);
+    theDevice->thread_status = EXITING;
     return arg;
 }
 
@@ -4948,7 +4927,7 @@ static void *datasyncThread(void *statusAdr)
         pthread_mutex_lock(&theCrosstableClientMutex);
         {
             if (engineStatus != enExiting) {
-                PLCsync(plcServer);
+                PLCsync();
             }
         }
         pthread_mutex_unlock(&theCrosstableClientMutex);
@@ -4975,7 +4954,7 @@ static void *datasyncThread(void *statusAdr)
 void dataEngineStart(void)
 {
     // initialize
-    theDataSyncThread_id = -1;
+    theDataSyncThread_id = WRONG_THREAD;
     theDataSyncThreadStatus = NOT_STARTED;
     int s, d, n;
 
@@ -5025,7 +5004,7 @@ void dataEngineStart(void)
         if (lenRetentive == LAST_RETENTIVE * 4) {
             OS_MEMCPY(&VAR_VALUE(1), retentive, LAST_RETENTIVE * 4);
         } else {
-            fprintf(stderr, "Wrong retentive file size: got %u expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
+            fprintf(stderr, "Wrong retentive file size: got %ld expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
         }
     }
 #endif
@@ -5039,10 +5018,10 @@ void dataEngineStart(void)
         pthread_cond_init(&theAlarmsEventsCondvar, &attr);
     }
     for (s = 0; s < MAX_SERVERS; ++s) {
-        theServers[s].thread_id = -1;
+        theServers[s].thread_id = WRONG_THREAD;
     }
     for (d = 0; d < MAX_DEVICES; ++d) {
-        theDevices[d].thread_id = -1;
+        theDevices[d].thread_id = WRONG_THREAD;
     }
 
     // start the engine thread
@@ -5056,7 +5035,7 @@ void dataEngineStart(void)
 void dataEngineStop(void)
 {
     void *retval;
-    int n;
+    unsigned n;
 
     if (engineStatus == enIdle) {
         // SIGINT arrived before initialization
@@ -5065,27 +5044,27 @@ void dataEngineStop(void)
     setEngineStatus(enExiting);
 
     for (n = 0; n < theDevicesNumber; ++n) {
-        if (theDevices[n].thread_id != -1) {
+        if (theDevices[n].thread_id != WRONG_THREAD) {
             pthread_join(theDevices[n].thread_id, &retval);
-            theDevices[n].thread_id = -1;
+            theDevices[n].thread_id = WRONG_THREAD;
             fprintf(stderr, "joined dev(%d)\n", n);
         }
     }
     for (n = 0; n < theServersNumber; ++n) {
-        if (theServers[n].thread_id != -1) {
+        if (theServers[n].thread_id != WRONG_THREAD) {
             pthread_join(theServers[n].thread_id, &retval);
-            theServers[n].thread_id = -1;
+            theServers[n].thread_id = WRONG_THREAD;
         fprintf(stderr, "joined srv(%d)\n", n);
         }
     }
-    if (theDataSyncThread_id != -1) {
+    if (theDataSyncThread_id != WRONG_THREAD) {
         pthread_join(theDataSyncThread_id, &retval);
-        theDataSyncThread_id = -1;
+        theDataSyncThread_id = WRONG_THREAD;
         fprintf(stderr, "joined datasync\n");
     }
-    if (theEngineThread_id != -1) {
+    if (theEngineThread_id != WRONG_THREAD) {
         pthread_join(theEngineThread_id, &retval);
-        theEngineThread_id = -1;
+        theEngineThread_id = WRONG_THREAD;
         fprintf(stderr, "joined engine\n");
     }
 }
@@ -5107,6 +5086,7 @@ void dataEnginePwrFailStop(void)
 IEC_UINT dataInitialize(IEC_UINT uIOLayer)
 {
 	IEC_UINT        uRes = OK;
+    (void)uIOLayer;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataInitialize() ...\n");
@@ -5127,6 +5107,8 @@ IEC_UINT dataInitialize(IEC_UINT uIOLayer)
 IEC_UINT dataFinalize(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT        uRes = OK;
+    (void)uIOLayer;
+    (void)pIO;
 
 #if defined(RTS_CFG_SYSLOAD)
 	uRes = ldClearTaskInfo(TASK_OFFS_IOL_DAT);
@@ -5145,6 +5127,8 @@ IEC_UINT dataFinalize(IEC_UINT uIOLayer, SIOConfig *pIO)
 IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT uRes = OK;
+    (void)uIOLayer;
+    (void)pIO;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyConfig() ...\n");
@@ -5163,6 +5147,8 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT uRes = OK;
+    (void)uIOLayer;
+    (void)pIO;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyStart() ... \n");
@@ -5186,6 +5172,8 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 IEC_UINT dataNotifyStop(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT uRes = OK;
+    (void)uIOLayer;
+    (void)pIO;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyStop() ...\n");
@@ -5254,7 +5242,8 @@ static unsigned doWriteVariable(unsigned addr, unsigned value, u_int32_t *values
 
             // (2 of 3) extract the requests for the other variables
             if (values) {
-                register int base, size, type, protocol, node, offset, n;
+                register int size, protocol, node;
+                register unsigned n, base, type, offset;
 
                 // are there any other consecutive writes to the same block?
                 base = CrossTable[addr].BlockBase;
@@ -5709,10 +5698,6 @@ static unsigned plc_serial_number()
 #include <termios.h>
 #include <unistd.h>
 
-static int rt_dev_open(const char *path, int oflag) {
-    return open(path, oflag);
-}
-
 static ssize_t rt_dev_read(int fd, void *buf, size_t nbyte) {
     return read(fd, buf, nbyte);
 }
@@ -5790,7 +5775,7 @@ static int mect_connect(unsigned devnum, unsigned baudrate, char parity, unsigne
     }
 #else
     /* from libmodbus */
-
+    (void)timeout_ms;
     struct termios serial_config;
     speed_t speed;
     int flags;
@@ -5929,7 +5914,8 @@ exit_ioctl_failure:
 
 static int mect_bcc(char *buf, unsigned len)
 {
-    int i, bcc = buf[0];
+    unsigned i;
+    int bcc = buf[0];
 
     for (i = 1; i < len; ++i) {
         bcc ^= buf[i];
@@ -5940,9 +5926,9 @@ static int mect_bcc(char *buf, unsigned len)
 
 static void mect_printbuf(char *msg, char *buf, unsigned len)
 {
-    int i;
+    unsigned i;
 
-    fprintf(stderr, msg);
+    fputs(msg, stderr);
     for (i = 0; i < len; ++i) {
         fprintf(stderr, " %02x", buf[i]);
     }

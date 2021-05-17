@@ -128,11 +128,12 @@ void fa_sync_openFile(STDLIBFUNCALL)
 {
 	FA_SYNC_OPENFILE_PAR OS_SPTR *pPar	= (FA_SYNC_OPENFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	fa_fd_pair	*pFD;
 	IEC_CHAR	szFile[VMM_MAX_IEC_STRLEN + 1];
 	IEC_UINT	uMode;
 	IEC_UDINT	uRes = OK;
+    (void)pVM;
+    (void)pIP;
 
 	utilIecToAnsi((IEC_STRING OS_LPTR *)&pFile->sName, szFile);
 	
@@ -195,12 +196,12 @@ void fa_sync_readFile(STDLIBFUNCALL)
 {
 	FA_SYNC_READFILE_PAR OS_SPTR *pPar	= (FA_SYNC_READFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	fa_fd_pair	*pFD;
-
 	IEC_UINT uRes = OK;
 	IEC_UINT uLen = (IEC_UINT)*pPar->ulLength;
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->bRet		= TRUE;
 	*pPar->ulLength = 0;
 	pFile->ulError	= CFA_NoError;
@@ -276,10 +277,11 @@ void fa_sync_renameFile(STDLIBFUNCALL)
 {
 	FA_SYNC_RENAMEFILE_PAR OS_SPTR *pPar	= (FA_SYNC_RENAMEFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	IEC_CHAR szOld[VMM_MAX_IEC_STRLEN + 1];
 	IEC_CHAR szNew[VMM_MAX_IEC_STRLEN + 1];
-	
+    (void)pVM;
+    (void)pIP;
+
 	utilIecToAnsi((IEC_STRING OS_LPTR *)&pFile->sName, szOld);
 	utilIecToAnsi((IEC_STRING OS_LPTR *)pPar->newName, szNew);
 	
@@ -306,11 +308,11 @@ void fa_sync_writeFile(STDLIBFUNCALL)
 {
 	FA_SYNC_WRITEFILE_PAR OS_SPTR *pPar = (FA_SYNC_WRITEFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	fa_fd_pair	*pFD;
-
 	IEC_UINT uRes;
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->bRet = TRUE;
 	
 	if (get_fd(pFile, &pFD) != OK)
@@ -377,10 +379,11 @@ void fa_sync_closeFile(STDLIBFUNCALL)
 {
 	FA_SYNC_CLOSEFILE_PAR OS_SPTR *pPar = (FA_SYNC_CLOSEFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	fa_fd_pair	*pFD;
 	IEC_CHAR	szFile[VMM_MAX_IEC_STRLEN + 1];
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->bRet = TRUE;
 	utilIecToAnsi((IEC_STRING OS_LPTR *)&pFile->sName, szFile);
 	
@@ -419,9 +422,10 @@ void fa_sync_createDirectory(STDLIBFUNCALL)
 {
 	FA_SYNC_CREATEDIRECTORY_PAR OS_SPTR *pPar	= (FA_SYNC_CREATEDIRECTORY_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 				= pPar->file;
-
 	IEC_CHAR	szFile[VMM_MAX_IEC_STRLEN + 1];
 	IEC_UINT	uMode;
+    (void)pVM;
+    (void)pIP;
 
 	utilIecToAnsi((IEC_STRING OS_LPTR *)&pFile->sName, szFile);
 	
@@ -461,8 +465,9 @@ void fa_sync_deleteFile(STDLIBFUNCALL)
 {
 	FA_SYNC_DELETEFILE_PAR OS_SPTR *pPar	= (FA_SYNC_DELETEFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 			= pPar->file;
-
 	IEC_CHAR szFile[VMM_MAX_IEC_STRLEN + 1];
+    (void)pVM;
+    (void)pIP;
 
 	utilIecToAnsi((IEC_STRING OS_DPTR *)&pFile->sName, szFile);
 	
@@ -487,11 +492,11 @@ void fa_sync_existsFile(STDLIBFUNCALL)
 {
 	FA_SYNC_EXISTSFILE_PAR OS_SPTR *pPar	= (FA_SYNC_EXISTSFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 			= pPar->file;
-
 	IEC_CHAR szFile[VMM_MAX_IEC_STRLEN + 1];
-
 	struct osstructstat 	status;
-	
+    (void)pVM;
+    (void)pIP;
+
 	utilIecToAnsi((IEC_STRING OS_DPTR *)&pFile->sName, szFile);
 	
 	if(osstat(szFile, &status))
@@ -515,11 +520,11 @@ void fa_sync_getSize(STDLIBFUNCALL)
 {
 	FA_SYNC_GETSIZE_PAR OS_SPTR *pPar	= (FA_SYNC_GETSIZE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 		= pPar->file;
-
 	IEC_CHAR szFile[VMM_MAX_IEC_STRLEN + 1];
-
 	struct osstructstat 	status;
-	
+    (void)pVM;
+    (void)pIP;
+
 	utilIecToAnsi((IEC_STRING OS_DPTR *)&pFile->sName, szFile);
 	
 	if(osstat(szFile, &status))
@@ -544,10 +549,11 @@ void fa_sync_getSize(STDLIBFUNCALL)
 void fa_get_diskFreeSpace(STDLIBFUNCALL)
 {
 	FA_GET_DISKFREESPACE_PAR OS_SPTR *pPar	= (FA_GET_DISKFREESPACE_PAR OS_SPTR *)pIN;
-
 	IEC_UDINT ulFree;
 	IEC_CHAR  szFile[VMM_MAX_IEC_STRLEN + 1];
-	
+    (void)pVM;
+    (void)pIP;
+
 	utilIecToAnsi(pPar->sPath, szFile);
 
 	if(osGetFreeDiskSpace(szFile, &ulFree) != OK)
@@ -570,8 +576,9 @@ void fa_get_diskFreeSpace(STDLIBFUNCALL)
 void fa_error_string(STDLIBFUNCALL)
 {
 	FA_ERROR_STRING_PAR OS_SPTR *pPar = (FA_ERROR_STRING_PAR OS_SPTR *)pIN;
-
 	IEC_CHAR *szTemp;
+    (void)pVM;
+    (void)pIP;
 
 	switch(pPar->lError)
 	{
@@ -610,17 +617,16 @@ void fa_sync_arrayReadFile(STDLIBFUNCALL)
 {
 	FA_SYNC_ARRAYREADFILE_PAR OS_SPTR *pPar = (FA_SYNC_ARRAYREADFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 			= pPar->file;
-
 	fa_fd_pair	*pFD;
-
 	IEC_UINT uRes = OK;
 	IEC_UINT uLen = (IEC_UINT)*pPar->ulLength;
-	
+    (void)pIP;
+
 	pPar->bRet			= TRUE;
 	*pPar->ulLength 	= 0;
 	pFile->ulError		= CFA_NoError;
 	
-	if (uLen > GET_AR_LEN(pPar->pData) - pPar->ulPos || pPar->ulPos < 0)
+    if (uLen > GET_AR_LEN(pPar->pData) - pPar->ulPos) //  || pPar->ulPos < 0)
 	{
 		libSetException(pVM, EXCEPT_ARRAY_RANGE);
 		pFile->ulError = CFA_InvalidArgument;	
@@ -690,11 +696,10 @@ void fa_sync_arrayWriteFile(STDLIBFUNCALL)
 {
 	FA_SYNC_ARRAYWRITEFILE_PAR OS_SPTR *pPar	= (FA_SYNC_ARRAYWRITEFILE_PAR OS_SPTR *)pIN;
 	FA_SYNC_FILE OS_DPTR *pFile 				= pPar->file;
-
 	fa_fd_pair	*pFD;
-
 	IEC_UINT uRes;
-	
+    (void)pIP;
+
 	pPar->bRet = TRUE;
 	
 	if (get_fd(pFile, &pFD) != OK)
@@ -703,7 +708,7 @@ void fa_sync_arrayWriteFile(STDLIBFUNCALL)
 		return;
 	}
 
-	if (pPar->ulLen > GET_AR_LEN(pPar->pData) - pPar->ulPos || pPar->ulPos < 0 ||  pPar->ulLen < 0)
+    if (pPar->ulLen > GET_AR_LEN(pPar->pData) - pPar->ulPos) // || pPar->ulPos < 0 ||  pPar->ulLen < 0)
 	{
 		libSetException(pVM, EXCEPT_ARRAY_RANGE);
 		pFile->ulError = CFA_InvalidArgument;	
@@ -767,7 +772,9 @@ void fa_sync_arrayWriteFile(STDLIBFUNCALL)
 void fa_flush(STDLIBFUNCALL)
 {
 	FA_FLUSH_PAR* pPar = (FA_FLUSH_PAR*)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->ulRet = osfflush(NULL) == EOF ? CFA_CommonError : CFA_NoError;
 }
 

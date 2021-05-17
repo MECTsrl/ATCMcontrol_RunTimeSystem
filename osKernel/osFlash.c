@@ -287,6 +287,8 @@ IEC_UINT osFRInitDomain(IEC_UINT uDomain, IEC_UDINT *ulpLen)
  */
 IEC_UINT osFRFinishDomain(IEC_UINT uDomain)
 {
+    (void)uDomain;
+
     if (g_hFlash == VMF_INVALID_HANDLE)
 	{
 		RETURN(ERR_FLASH);
@@ -312,6 +314,8 @@ IEC_UINT osFRFinishDomain(IEC_UINT uDomain)
 IEC_UINT osFlashRead(IEC_UINT uDomain, IEC_UINT uBlock, IEC_DATA *pData, IEC_UINT uLen)
 {
 	IEC_UINT uRead;
+    (void)uDomain;
+    (void)uBlock;
 
     if (g_hFlash == VMF_INVALID_HANDLE)
 	{

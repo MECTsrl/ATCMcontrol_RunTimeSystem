@@ -90,7 +90,7 @@
 
 /* Command/Response
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_BYTE,	byCommand); 	/* Command or response ID			*/
     DEC_BYTE(IEC_BYTE,	bySequence);	/* Sequence number					*/
@@ -103,7 +103,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Command/Response Block
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uBlock);		/* Block number 					*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Data length						*/
@@ -118,7 +118,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Block Frame
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_BYTE,	byType);		/* Block type						*/
     DEC_BYTE(IEC_BYTE,	byCRC); 		/* Check sum						*/
@@ -139,7 +139,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Variable Description (< 2.1.0)
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset in the segment			*/
 	DEC_VAR(IEC_UINT,	uLen);			/* Size of var. in bytes, 1 for bit */
@@ -151,7 +151,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Variable Description (>= 2.1.0)
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
     DEC_BYTE(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
@@ -160,7 +160,7 @@ typedef struct		/* --> aligned (2) */
 
 } XVariableS;							/* -------------------------------- */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
     DEC_BYTE(IEC_USINT,	usSegment); 	/* Segment number of the variable	*/
@@ -169,7 +169,7 @@ typedef struct		/* --> aligned (2) */
 
 } XVariableM;							/* -------------------------------- */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usType);		/* Type (S,M,L) and bit offset		*/
     DEC_BYTE(IEC_BYTE,	byDummy);		/* Alignment - Dummy				*/
@@ -182,7 +182,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Value Description
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(XVariable,	VAR);			/* Variable description 			*/
 
@@ -199,7 +199,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Breakpoint Definition - Downloaded from OPC-Server
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uCode); 		/* Code index of breakpoint 		*/
 	DEC_VAR(IEC_UINT,	uInst); 		/* Instance index of breakpoint 	*/	
@@ -210,7 +210,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Breakpoint Notification - Uploaded to the OPC - server
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(XBreakpoint,	BP);		/* Breakpoint definition			*/
 	DEC_VAR(IEC_UINT,		uTask); 	/* Concerned task					*/
@@ -222,7 +222,7 @@ typedef struct		/* --> aligned (2) */
 /* Index Definition
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uCode); 		/* Index: Code block list			*/
 	DEC_VAR(IEC_UINT,	uInst); 		/* Index: Object list (instance)	*/
@@ -235,7 +235,7 @@ typedef struct		/* --> aligned (2) */
  */
 #if ! defined(INC_RTS)
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulInterval);	/* Task interval time				*/
 	DEC_VAR(IEC_UINT,	uPriority); 	/* Task priority					*/
@@ -252,7 +252,7 @@ typedef struct		/* --> aligned (2) */
 
 #if ! defined(INC_RTS)
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulInterval);	/* Task interval time				*/
 	DEC_VAR(IEC_UINT,	uPriority); 	/* Task priority					*/
@@ -271,7 +271,7 @@ typedef struct		/* --> aligned (2) */
 
 #if ! defined(INC_RTS)
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
     DEC_BYTE(IEC_USINT,	usAttrib);		/* Task flags						*/
@@ -289,7 +289,7 @@ typedef struct		/* --> aligned (2) */
 
 #endif /* ! INC_RTS */
 										
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usPrograms);	/* Count of programs in task		*/
     DEC_BYTE(IEC_USINT,	usAttrib);		/* Task flags						*/
@@ -310,7 +310,7 @@ typedef struct		/* --> aligned (2) */
 /* Object Definition
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_PTR(IEC_DATA,	pAdr);			/* Start address of object			*/
 	DEC_VAR(IEC_UDINT,	ulSize);		/* Size of object					*/
@@ -321,7 +321,7 @@ typedef struct		/* --> aligned (2) */
 /* Memory region definition (relative to a segment address)
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* offset relative to segm address	*/
 	DEC_VAR(IEC_UINT,	uSize); 		/* Size of region					*/
@@ -336,7 +336,7 @@ typedef struct		/* --> aligned (2) */
  */
 #if ! defined(INC_RTS)
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulBinDLVersion);/* the version of the binary		*/
 										/* download format					*/
@@ -351,7 +351,7 @@ typedef struct		/* --> aligned (2) */
 
 } XProject_200; 						/* -------------------------------- */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulBinDLVersion);/* the version of the binary		*/
 										/* download format					*/
@@ -369,7 +369,7 @@ typedef struct		/* --> aligned (2) */
 
 } XProject_205; 						/* use only for V2.05 or higher 	*/
 										/* -------------------------------- */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulBinDLVersion);/* the version of the binary		*/
 										/* download format					*/
@@ -390,7 +390,7 @@ typedef struct		/* --> aligned (2) */
 										/* -------------------------------- */
 #endif /* ! INC_RTS */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulBinDLVersion);/* the version of the binary		*/
 										/* download format					*/
@@ -413,7 +413,7 @@ typedef struct		/* --> aligned (2) */
 
 										/* Extended project informations
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_CHAR,	szProjVers[MAX_INFO_SHORT]);/* Project version		*/
 	DEC_VAR(IEC_CHAR,	szProjName[MAX_INFO_SHORT]);/* Project name 		*/
@@ -431,7 +431,7 @@ typedef struct		/* --> aligned (2) */
 /* State Information Polling
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_UDINT,	ulResState);	/* Resource state information		*/
 
@@ -447,7 +447,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Automatic variables and instance objects
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uIndex);		/* Code block index 				*/
 	DEC_VAR(IEC_UINT,	uSegment);		/* Segment number					*/
@@ -461,7 +461,7 @@ typedef struct		/* --> aligned (2) */
 
 /* Direct variables
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_BYTE,	bySegment); 	/* Segment number					*/
     DEC_BYTE(IEC_BYTE,	byBit); 		/* Bit offset in byte				*/
@@ -475,7 +475,7 @@ typedef struct		/* --> aligned (2) */
 /* Copy region definition
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uiInst);		/* Index: Object list (instance)	*/
 	DEC_VAR(IEC_UINT,	uiOffSrc);		/* offset relative to the instance	*/
@@ -490,7 +490,7 @@ typedef struct		/* --> aligned (2) */
  */
 #if ! defined(INC_RTS)					/* Obsolet, use XFile_210 instead	*/
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulLen); 		/* Data length of DBI file			*/
 	DEC_VAR(IEC_UDINT,	ulOffset);		/* Offset of file in container		*/
@@ -505,7 +505,7 @@ typedef struct		/* --> aligned (2) */
 /* Online Change
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uCode); 		/* No. of changed code objects		*/
 	DEC_VAR(IEC_UINT,	uData); 		/* No. of changed data objects		*/
@@ -517,7 +517,7 @@ typedef struct		/* --> aligned (2) */
 
 } XOnlineChange;						/* -------------------------------- */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UINT,	uOld);			/* Old index of changed data object */
 	DEC_VAR(IEC_UINT,	uNew);			/* New index of changed data object */
@@ -536,7 +536,7 @@ typedef struct		/* --> aligned (2) */
  */
 #if ! defined(INC_RTS)					/* Obsolete, use XFile_210 instead	*/
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulLen); 		/* Data length of DBI file			*/
 	DEC_VAR(IEC_CHAR,	szName[100]);	/* DBI file name					*/
@@ -551,7 +551,7 @@ typedef struct		/* --> aligned (2) */
  * ----------------------------------------------------------------------------
  */
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulDataLen); 	/* Length of file data				*/
 	DEC_VAR(IEC_UINT,	uNameLen);		/* File name length - without ZB!	*/
@@ -565,7 +565,7 @@ typedef struct		/* --> aligned (2) */
 /* Alignment test structure
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_CHAR,	cDummy);
 	DEC_VAR(IEC_LREAL,	lDummy);
@@ -577,7 +577,7 @@ typedef struct		/* --> aligned (2) */
 /* Configuration upload
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usBigEndian);	/* TRUE, if target is Big Endian	*/
     DEC_BYTE(IEC_USINT,	usDummy);		/* Alignment dummy					*/
@@ -594,7 +594,7 @@ typedef struct		/* --> aligned (2) */
 /* Debug information download
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT, usType); 		/* Task index						*/
     DEC_BYTE(IEC_USINT, usNameSize); 	/* Size of Instance name			*/
@@ -608,7 +608,7 @@ typedef struct		/* --> aligned (2) */
 } XDBIInstance; 						/* -------------------------------- */
 
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT, ulOffset);		/* File Offset to member array		*/
 	DEC_VAR(IEC_UINT,  uMember);		/* Number of member variables		*/
@@ -617,7 +617,7 @@ typedef struct		/* --> aligned (2) */
 } XDBIType; 							/* -------------------------------- */
 
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
     DEC_BYTE(IEC_USINT,	usType);		/* Type of variable 				*/
     DEC_BYTE(IEC_USINT,	usNameSize);	/* Size of name (without ZB!)		*/
@@ -630,7 +630,7 @@ typedef struct		/* --> aligned (2) */
 } XDBIVar;								/* -------------------------------- */
 
 
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(XDBIVar,	xVar);			/* Variable 						*/
 
@@ -643,7 +643,7 @@ typedef struct		/* --> aligned (2) */
 /* IO Layer / Field Bus Channel Information
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2) */
 {
 	DEC_VAR(IEC_UDINT,	ulIOffs);		/* Offset of input (%I) channel 	*/
 	DEC_VAR(IEC_UDINT,	ulISize);		/* Size of input (%I) channel		*/
@@ -662,7 +662,7 @@ typedef struct		/* --> aligned (2) */
 /* Firmware Download
  * ----------------------------------------------------------------------------
  */
-typedef struct		/* --> aligned (2)	*/ 
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_UDINT,	uForwardID);	/* ID of firmware target control	*/
 										/* (-1 if target is local control)	*/
@@ -683,7 +683,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Version information upload
  */
-typedef struct		/* --> aligned (2)	*/ 
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_UDINT,	ulFirmware);	/* Firmware version of RTS. 		*/
 	
@@ -695,7 +695,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Type information upload
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_CHAR,	szType[100]);	/* Type name of RTS.				*/
 
@@ -704,7 +704,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Serial number upload
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_UDINT,	ulSerialNo);	/* Serial number of target system	*/
 
@@ -713,7 +713,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* MAC address upload
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_DATA,	MacAddr[6]);	/* MAC address of target system 	*/
 
@@ -722,7 +722,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Installation key upload
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_CHAR, szInstKey[35]);	/* HW dependent inst. key, with ZB! */
 
@@ -733,7 +733,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* License key download
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_CHAR, szLicKey[25]);	/* License key for feature, with ZB!*/
 
@@ -744,7 +744,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* Feature upload
  */
-typedef struct		/* --> aligned (2)	*/
+typedef struct ALIGNED_STRUCT(2)		/* --> aligned (2)	*/
 {
 	DEC_VAR(IEC_UINT, uLicensed);		/* Licensed features				*/
 
@@ -755,7 +755,7 @@ typedef struct		/* --> aligned (2)	*/
 
 /* LicenseEx
  */
-typedef struct		/* ---> aligned (2) */
+typedef struct ALIGNED_STRUCT(2)		/* ---> aligned (2) */
 {
 	DEC_VAR(IEC_UINT, uLicense);		/* License type 					*/
 	DEC_VAR(IEC_UINT, uLength); 		/* Length of license				*/

@@ -192,6 +192,10 @@ void CANopenDisableNode(u_int8_t channel, u_int8_t node)
 
 int CANopenReadPDOBit(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 {
+    (void)channel;
+    (void)address;
+    (void)pvalue;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -200,6 +204,10 @@ int CANopenReadPDOBit(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 
 int CANopenReadPDOByte(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 {
+    (void)channel;
+    (void)address;
+    (void)pvalue;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -208,6 +216,10 @@ int CANopenReadPDOByte(u_int8_t channel, u_int16_t address, u_int8_t *pvalue)
 
 int CANopenReadPDOWord(u_int8_t channel, u_int16_t address, u_int16_t *pvalue)
 {
+    (void)channel;
+    (void)address;
+    (void)pvalue;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -216,6 +228,10 @@ int CANopenReadPDOWord(u_int8_t channel, u_int16_t address, u_int16_t *pvalue)
 
 int CANopenReadPDODword(u_int8_t channel, u_int16_t address, u_int32_t *pvalue)
 {
+    (void)channel;
+    (void)address;
+    (void)pvalue;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -224,6 +240,10 @@ int CANopenReadPDODword(u_int8_t channel, u_int16_t address, u_int32_t *pvalue)
 
 int CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value)
 {
+    (void)channel;
+    (void)address;
+    (void)value;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -232,6 +252,10 @@ int CANopenWritePDOBit(u_int8_t channel, u_int16_t address, u_int8_t value)
 
 int CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value)
 {
+    (void)channel;
+    (void)address;
+    (void)value;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -240,6 +264,10 @@ int CANopenWritePDOByte(u_int8_t channel, u_int16_t address, u_int8_t value)
 
 int CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value)
 {
+    (void)channel;
+    (void)address;
+    (void)value;
+
     /***************************************
      *                 stub                *
      ***************************************/
@@ -248,6 +276,10 @@ int CANopenWritePDOWord(u_int8_t channel, u_int16_t address, u_int16_t value)
 
 int CANopenWritePDODword(u_int8_t channel, u_int16_t address, u_int32_t value)
 {
+    (void)channel;
+    (void)address;
+    (void)value;
+
     /***************************************
      *                 stub                *
      ***************************************/

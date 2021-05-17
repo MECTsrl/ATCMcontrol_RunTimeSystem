@@ -924,47 +924,47 @@ IEC_UINT vmmQueueMessage(SMsgQueue *pQueue, IEC_CHAR *szMessage)
  */
 IEC_UINT vmmQueueBPNotification(STaskInfoVM *pVM, IEC_UINT uState)
 {
-	IEC_UINT uRes = OK;
-
+    IEC_UINT uRes = OK;
 	SBPQueue *pQueue = &pVM->pShared->BPQueue;
 	SContext *pContext;
 
 	if (pVM->Local.uContext == 1)
 	{
-		RETURN(ERR_ERROR);
-	}
+        uRes = ERR_ERROR;
+    }
+    else
+    {
+        pContext = pVM->Local.pContext + pVM->Local.uContext - 1u;
 
-	pContext = pVM->Local.pContext + pVM->Local.uContext - 1u;
+        /* >>>	C R I T I C A L   S E C T I O N  -	B E G I N  -------------------- */
 
-	/* >>>	C R I T I C A L   S E C T I O N  -	B E G I N  -------------------- */
+        OS_BEGIN_CRITICAL_SECTION(SEM_BP_QUEUE)
+        {
+            SBPNotification *pNotify = pQueue->pQueue + pQueue->uNext;
 
-	OS_BEGIN_CRITICAL_SECTION(SEM_BP_QUEUE)
-	{
-		SBPNotification *pNotify = pQueue->pQueue + pQueue->uNext;
+            if ((pQueue->uNext + 1) % MAX_STR_MSG_QUEUE == pQueue->uLast)
+            {
+                /* Queue full, wait until next GetState command
+                 */
+                uRes = ERR_QUEUE_FULL;
+            }
 
-		if ((pQueue->uNext + 1) % MAX_STR_MSG_QUEUE == pQueue->uLast)
-		{
-			/* Queue full, wait until next GetState command
-			 */
-			uRes = ERR_QUEUE_FULL;
-		}
+            if (uRes == OK)
+            {
+                pNotify->BP.uCode		= pContext->uCode;
+                pNotify->BP.uCodePos	= pContext->uCodePos - 1u;
+                pNotify->BP.uData		= pContext->uData;
 
-		if (uRes == OK)
-		{
-			pNotify->BP.uCode		= pContext->uCode;
-			pNotify->BP.uCodePos	= pContext->uCodePos - 1u;
-			pNotify->BP.uData		= pContext->uData;
+                pNotify->uState 		= uState;
+                pNotify->uTask			= pVM->usTask;
 
-			pNotify->uState 		= uState;
-			pNotify->uTask			= pVM->usTask;
+                pQueue->uNext = (IEC_UINT)((pQueue->uNext + 1) % MAX_BP_QUEUE);
+            }
 
-			pQueue->uNext = (IEC_UINT)((pQueue->uNext + 1) % MAX_BP_QUEUE);
-		}
-
-	} OS_END_CRITICAL_SECTION(SEM_BP_QUEUE)
+        } OS_END_CRITICAL_SECTION(SEM_BP_QUEUE)
+    }
 
 	/* <<<	C R I T I C A L   S E C T I O N  -	E N D  ------------------------ */
-
 	RETURN(uRes);
 }
 

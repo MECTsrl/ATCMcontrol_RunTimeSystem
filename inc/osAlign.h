@@ -30,13 +30,13 @@
 	/* Set compiler alignment to 1 byte
 	 */
 	#pragma pack(1)
-    #define UNALIGNED  __attribute__((packed))
+    #define UNALIGNED  // __attribute__ ((__aligned__((1)))) /* ex __attribute__((packed)) */
 
 #elif defined(RTS_PRAGMA_PACK_DEF)
 	/* Set compiler aligment back to default
 	 */
 	#pragma pack()
-    #define UNALIGNED  __attribute__((packed))
+    #define UNALIGNED  // __attribute__ ((__aligned__((1)))) /* ex __attribute__((packed)) */
 
 #else
 	#error	Alignment type not defined!

@@ -315,10 +315,12 @@ IEC_UINT timMain(void *pPara)
 			}
 		}
 
-		if (tSuspend >= VMM_SLEEP_OFFSET)
+#if (VMM_SLEEP_OFFSET > 0)
+        if (tSuspend >= VMM_SLEEP_OFFSET)
 		{
 			tSuspend -= VMM_SLEEP_OFFSET;
 		}
+#endif
 
 
 		/* Suspend Timer

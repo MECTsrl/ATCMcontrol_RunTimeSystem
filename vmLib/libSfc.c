@@ -284,10 +284,11 @@ void sfc_calcdotrans (STDLIBFUNCALL)
 {
 	IEC_SINT  doNext;
 	IEC_SINT  manualmode;
-	
 	SFC_CALCDOTRANS OS_SPTR *pPar	 = (SFC_CALCDOTRANS OS_SPTR *)pIN;
 	SFC_Header		OS_DPTR *pSFCPOU = (SFC_Header OS_DPTR *)pPar->pPtr;
-	
+    (void)pVM;
+    (void)pIP;
+
 	/* manual mode check, do sfc-cycle if manual-mode is of,
 	 * or manual mode is on and donext signals that the user wants to do the next cycle 
 	 */
@@ -336,13 +337,15 @@ void sfc_calcdoact	 (STDLIBFUNCALL)
 {
 	SFC_CALCDOACT OS_SPTR *pPar    = (SFC_CALCDOACT OS_SPTR *)pIN;
 	SFC_Header	  OS_DPTR *pSFCPOU = (SFC_Header	OS_DPTR *)pPar->pPtr;
-	
+
 	/* manual mode check, do sfc-cycle if manual-mode is of, 
 	 * or manual mode is on and donext signals that the user wants to do the next cycle 
 	 */
 	IEC_SINT	doNext;
 	IEC_SINT	manualmode;
-	
+    (void)pVM;
+    (void)pIP;
+
 	doNext	   = (IEC_SINT) ((pSFCPOU->__control & 0x0002) ? 1 : 0);
 	manualmode = (IEC_SINT) ((pSFCPOU->__control & 0x0001) ? 1 : 0);
 	
@@ -369,6 +372,8 @@ void sfc_finalise (STDLIBFUNCALL)
 {
 	SFC_FINALISE OS_SPTR *pPar	  = (SFC_FINALISE OS_SPTR *)pIN;
 	SFC_Header	 OS_DPTR *pSFCPOU = (SFC_Header   OS_DPTR *)pPar->pPtr;
+    (void)pVM;
+    (void)pIP;
 
 	/* generate string for visualisation 
 	 */

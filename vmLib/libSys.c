@@ -55,7 +55,11 @@ extern EXECUTE_FB	g_pLibraryFB [];
  */
 void ClearTaskErrno(STDLIBFUNCALL)
 {
-	pVM->Local.pState->ulErrNo = OK;
+    (void)pVM;
+    (void)pIP;
+    (void)pIN;
+
+    pVM->Local.pState->ulErrNo = OK;
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -66,8 +70,8 @@ void ClearTaskErrno(STDLIBFUNCALL)
 void GetLocalTaskErrno(STDLIBFUNCALL)
 {
 	IEC_UINT	uTask;
-
 	SGetLocalTaskErrno OS_SPTR *pPar = (SGetLocalTaskErrno OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{
@@ -83,8 +87,8 @@ void GetLocalTaskErrno(STDLIBFUNCALL)
 void GetLocalTaskState(STDLIBFUNCALL)
 {
 	IEC_UINT	uTask;
-
 	SGetLocalTaskState OS_SPTR *pPar = (SGetLocalTaskState OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{
@@ -100,6 +104,7 @@ void GetLocalTaskState(STDLIBFUNCALL)
 void GetTaskErrno(STDLIBFUNCALL)
 {
 	SGetTaskErrno OS_SPTR *pPar = (SGetTaskErrno OS_SPTR *)pIN;
+    (void)pIP;
 
 	pPar->lRet = pVM->Local.pState->ulErrNo;
 }
@@ -112,6 +117,8 @@ void GetTaskErrno(STDLIBFUNCALL)
 void GetTimeSinceSystemBoot(STDLIBFUNCALL)
 {
 	SGetTimeSinceSystemBoot OS_SPTR *pPar = (SGetTimeSinceSystemBoot OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	pPar->tRet = osGetTime32();
 }
@@ -124,6 +131,7 @@ void GetTimeSinceSystemBoot(STDLIBFUNCALL)
 void OutputDebugString(STDLIBFUNCALL)
 {
 	SOutputDebugString OS_SPTR *pPar = (SOutputDebugString OS_SPTR *)pIN;
+    (void)pIP;
 
 	vmmQueueMessage(&pVM->pShared->MsgQueue, utilIecToAnsi(pPar->strMsg, pVM->Local.pBuffer));
 }
@@ -136,6 +144,7 @@ void OutputDebugString(STDLIBFUNCALL)
 void SignalError(STDLIBFBCALL)
 {
 	SSignalError OS_SPTR *pPar = (SSignalError OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (pPar->bEnable & 0x1)
 	{
@@ -151,8 +160,8 @@ void SignalError(STDLIBFBCALL)
 void StartLocalTask(STDLIBFUNCALL)
 {
 	IEC_UINT uTask;
-
 	SStartLocalTask OS_SPTR *pPar = (SStartLocalTask OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{
@@ -168,8 +177,8 @@ void StartLocalTask(STDLIBFUNCALL)
 void StopLocalTask(STDLIBFUNCALL)
 {
 	IEC_UINT uTask;
-
 	SStopLocalTask OS_SPTR *pPar = (SStopLocalTask OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{
@@ -184,9 +193,9 @@ void StopLocalTask(STDLIBFUNCALL)
  */
 void ClearLocalTaskErrno(STDLIBFUNCALL)
 {
-	IEC_UINT uTask;
-	
+	IEC_UINT uTask;	
 	SClearLocalTaskErrno OS_SPTR *pPar = (SClearLocalTaskErrno OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{
@@ -201,7 +210,10 @@ void ClearLocalTaskErrno(STDLIBFUNCALL)
  */
 void ThrowException(STDLIBFUNCALL)
 {
-	libSetException(pVM, EXCEPT_USER_EXCEPTION);
+    (void)pIP;
+    (void)pIN;
+
+    libSetException(pVM, EXCEPT_USER_EXCEPTION);
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -212,8 +224,8 @@ void ThrowException(STDLIBFUNCALL)
 void GetLocalTaskInfo(STDLIBFUNCALL)
 {
 	IEC_UINT uTask;
-
 	SGetLocalTaskInfo OS_SPTR *pPar = (SGetLocalTaskInfo OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (libGetTaskNo(pVM, pPar->strTask, &uTask) == OK)
 	{

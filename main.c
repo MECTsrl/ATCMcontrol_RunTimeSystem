@@ -78,7 +78,7 @@ volatile sig_atomic_t term_handler_active	= 0;
 volatile sig_atomic_t crash_handler_active	= 0;
 volatile sig_atomic_t log_ignore_crash		= 0;
 
-static char *app_name = NULL;
+static char *app_name = "FarosPLC"; // NULL;
 
 int configfd;
 
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    app_name = argv[0];
+    // app_name = argv[0];
 
     /* Enable Core Dumps
      * ------------------------------------------------------------------------
@@ -578,11 +578,13 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
     struct sigaction sa;
   #endif
 
-    char buf[128];
-    int fd,len,dummy;
+    char buf[256];
+    int fd,len;
 
     struct timeval	tv;
     struct tm		tm;
+
+    (void)context;
 
     fd = open(LOG_FILE_1, O_WRONLY|O_APPEND|O_CREAT, S_IRUSR|S_IWUSR);
     if (fd < 0)
@@ -598,7 +600,7 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
                        tm.tm_hour,tm.tm_min,tm.tm_sec,(int)(tv.tv_usec/1000));
 
     len += sprintf(buf+len, "User Mode Exception - Signal: %s\n", get_signal(signum));
-    dummy = write(fd,buf,len);
+    if (write(fd,buf,len)) {}
 
   #if defined (RTS_CFG_SYSLOAD)
 
@@ -626,10 +628,10 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
     len = sprintf(buf, "APP: %s, TASK: %d, ERRNO: %d, CODE: %08X\n",
                        app_name, getpid(), siginfo->si_errno, siginfo->si_code);
   #endif
-    dummy = write(fd,buf,len);
+    if (write(fd,buf,len)) {}
 
     len = sprintf(buf, "--------------------------------------------------------------------------\n");
-    dummy = write(fd,buf,len);
+    if (write(fd,buf,len)) {}
 
   #if defined(_SOF_4CFC_SRC_)
     len = sprintf(buf, "NIP: %08lX CTR: %08lX LR: %08lX SP: %08lX REGS: %08lX TRAP: %04lX\n",
@@ -709,8 +711,7 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
   #endif	/* _SOF_4CFC_SRC_ */
 
     len += sprintf(buf+len, "\n\n");
-    dummy = write(fd,buf,len);
-
+    if (write(fd,buf,len)) {}
     close(fd);
     sync();
 
@@ -782,6 +783,9 @@ void dump_retentives()
 void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
 {
     int n;
+    (void)signum;
+    (void)siginfo;
+    (void)context;
 
     // immediately block the engine
     dataEnginePwrFailStop();

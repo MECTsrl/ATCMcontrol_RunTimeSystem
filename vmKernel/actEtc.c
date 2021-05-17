@@ -343,6 +343,7 @@ IEC_UINT cmdFlash(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resFlash(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UINT uRes = OK;
+    (void)pVMM;
 
 	uRes = osFWFinish();
 	if (uRes != OK)
@@ -365,6 +366,8 @@ IEC_UINT resFlash(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdGetConfig(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
+    (void)pBlock;
 
 	RETURN(OK);
 }
@@ -377,6 +380,7 @@ IEC_UINT cmdGetConfig(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resGetConfig(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	XConfig *pConf = (XConfig *)pBlock->CMD.pData;
+    (void)pVMM;
 
   #if defined(RTS_CFG_BIGENDIAN)
 	pConf->usBigEndian	= 1;
@@ -696,7 +700,9 @@ IEC_UINT resSetLicEx(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdGetType(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	
+    (void)pVMM;
+    (void)pBlock;
+
 	RETURN(OK);
 }
 
@@ -708,8 +714,8 @@ IEC_UINT cmdGetType(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resGetType(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UINT uRes = OK;
-
 	XTypeInfo *pTI	= (XTypeInfo *)pBlock->CMD.pData;
+    (void)pVMM;
 
 	pBlock->uLen	= sizeof(XTypeInfo);
 	pBlock->byLast	= TRUE;
@@ -731,6 +737,8 @@ IEC_UINT resGetType(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdGetVersion(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
+    (void)pBlock;
 
 	RETURN(OK);
 }
@@ -743,8 +751,8 @@ IEC_UINT cmdGetVersion(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resGetVersion(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UINT uRes = OK;
-
 	XVersionInfo *pVI = (XVersionInfo *)pBlock->CMD.pData;
+    (void)pVMM;
 
 	pBlock->uLen	= sizeof(XVersionInfo);
 	pBlock->byLast	= TRUE;

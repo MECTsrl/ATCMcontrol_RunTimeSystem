@@ -713,6 +713,7 @@ IEC_UINT osExist(IEC_CHAR *szFile, IEC_BOOL *bpExist);
 /* osUtil.c - Utility Functions
  * ----------------------------------------------------------------------------
  */
+#define WRONG_THREAD 0xffffffff
 int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
 			void *(*start_routine) (void *), void *arg,
 			const char *name, size_t stacksize);

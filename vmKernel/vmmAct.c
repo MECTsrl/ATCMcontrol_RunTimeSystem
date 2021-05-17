@@ -990,8 +990,8 @@ IEC_UINT actGetRetainList(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC
 IEC_UINT actGetSegments(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, SObject *pData, SSegInfo *pSegInfo)
 {
 	static IEC_UINT uSegment = 0;
-
 	XObject xSegDesc;
+    (void)pSegInfo;
 
 	if (pBlock == NULL)
 	{

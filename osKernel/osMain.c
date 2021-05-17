@@ -212,9 +212,6 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 			break;
 			
 		case CMD_DOWNLOAD_END:
-			if(pVMM->bProjLoaded){
-			}		
-
 		case CMD_OC_END:
 			g_bDownloadInProgress = FALSE;
 			g_bDownloadFailed	  = FALSE;
@@ -238,7 +235,8 @@ IEC_UINT osOnCmdReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT osOnCmdComputed(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	IEC_UINT uRes = OK;
+    (void)pVMM;
+    IEC_UINT uRes = OK;
 
 	switch (pBlock->CMD.byCommand)
 	{
@@ -289,7 +287,9 @@ IEC_UINT osOnRespReceived(STaskInfoVMM *pVMM, XBlock *pBlock)
 
 IEC_UINT osOnCmdHandled(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uResult)
 {
-	IEC_UINT uRes = OK;
+    (void)pVMM;
+    (void)uResult;
+    IEC_UINT uRes = OK;
 
 	switch (pBlock->CMD.byCommand & 0x7fu)
 	{
@@ -361,7 +361,8 @@ IEC_UINT osOnRespHandled(STaskInfoVMM *pVMM, XBlock *pBlock, IEC_UINT uResult)
 
 IEC_UINT osCmdCustom(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	IEC_UINT uRes = OK;
+    (void)pVMM;
+    IEC_UINT uRes = OK;
 
 	if (pBlock == 0)
 	{
@@ -390,6 +391,7 @@ IEC_UINT osCmdCustom(STaskInfoVMM *pVMM, XBlock *pBlock)
 
 IEC_UINT osResCustom(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
 	IEC_UINT uRes = OK;
 
 	if (pBlock == 0)
@@ -424,7 +426,8 @@ IEC_UINT osResCustom(STaskInfoVMM *pVMM, XBlock *pBlock)
 
 IEC_UINT osBeginGetTaskImage(STaskInfoVM *pVM)
 {
-	IEC_UINT uRes = OK;
+    (void)pVM;
+    IEC_UINT uRes = OK;
 
 
 	RETURN(uRes);
@@ -444,7 +447,8 @@ IEC_UINT osBeginGetTaskImage(STaskInfoVM *pVM)
 
 IEC_UINT osEndGetTaskImage(STaskInfoVM *pVM)
 {
-	IEC_UINT uRes = OK;
+    (void)pVM;
+    IEC_UINT uRes = OK;
 
 
 	RETURN(uRes);
@@ -466,7 +470,8 @@ IEC_UINT osEndGetTaskImage(STaskInfoVM *pVM)
 
 IEC_UINT osBeginSetTaskImage(STaskInfoVM *pVM)
 {
-	IEC_UINT uRes = OK;
+    (void)pVM;
+    IEC_UINT uRes = OK;
 
 
 	RETURN(uRes);
@@ -486,7 +491,8 @@ IEC_UINT osBeginSetTaskImage(STaskInfoVM *pVM)
 
 IEC_UINT osEndSetTaskImage(STaskInfoVM *pVM)
 {
-	IEC_UINT uRes = OK;
+    (void)pVM;
+    IEC_UINT uRes = OK;
 
 
 	RETURN(uRes);
@@ -799,7 +805,9 @@ IEC_UINT osFreeMsgStr(IEC_UINT uMessage)
 
 IEC_DATA OS_DPTR *osCreateLocSegment(IEC_UINT uTask, IEC_UINT uSegment, IEC_UDINT ulSize)
 {
-	IEC_DATA OS_DPTR *pSegment = osMalloc(ulSize);
+    IEC_DATA OS_DPTR *pSegment = osMalloc(ulSize);
+    (void)uTask;
+    (void)uSegment;
 
 	OS_MEMSET(pSegment, 0x00, ulSize);
 
@@ -820,6 +828,8 @@ IEC_DATA OS_DPTR *osCreateLocSegment(IEC_UINT uTask, IEC_UINT uSegment, IEC_UDIN
 IEC_UINT osFreeLocSegment(IEC_UINT uTask, IEC_UINT uSegment, IEC_DATA OS_DPTR **ppSegment)
 {
 	IEC_UINT uRes = OK;
+    (void)uTask;
+    (void)uSegment;
 
 	if (*ppSegment)
 	{
@@ -846,6 +856,7 @@ IEC_UINT osFreeLocSegment(IEC_UINT uTask, IEC_UINT uSegment, IEC_DATA OS_DPTR **
 IEC_DATA OS_DPTR *osCreateWFSegment(IEC_UINT uTask, IEC_UDINT ulSize)
 {
 	IEC_DATA OS_DPTR *pSegment = osMalloc(ulSize);
+    (void)uTask;
 
 	OS_MEMSET(pSegment, 0x00, ulSize);
 
@@ -866,6 +877,7 @@ IEC_DATA OS_DPTR *osCreateWFSegment(IEC_UINT uTask, IEC_UDINT ulSize)
 IEC_UINT osFreeWFSegment(IEC_UINT uTask, IEC_DATA OS_DPTR** ppSegment)
 {
 	IEC_UINT uRes = OK;
+    (void)uTask;
 
 	if (*ppSegment != NULL)
 	{
@@ -887,7 +899,8 @@ IEC_UINT osFreeWFSegment(IEC_UINT uTask, IEC_DATA OS_DPTR** ppSegment)
 IEC_UINT osHandleException(STaskInfoVM *pVM, SException *pException)
 {
 	IEC_UINT uRes = OK;
-	
+    (void)pVM;
+    (void)pException;
 
 	RETURN(uRes);
 }
@@ -904,7 +917,13 @@ IEC_UINT osHandleException(STaskInfoVM *pVM, SException *pException)
  */
 IEC_UINT osNotifySetValue(STaskInfoVMM *pVMM, IEC_DATA *pVal, IEC_UINT uSegment, IEC_UDINT ulOffset, IEC_UINT uLen, IEC_USINT usBit)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)pVMM;
+    (void)pVal;
+    (void)uSegment;
+    (void)ulOffset;
+    (void)uLen;
+    (void)usBit;
 
 #ifdef VERBOSE_DEBUG
     int i;
@@ -932,7 +951,13 @@ IEC_UINT osNotifySetValue(STaskInfoVMM *pVMM, IEC_DATA *pVal, IEC_UINT uSegment,
  */
 IEC_UINT osNotifyGetValue(STaskInfoVMM *pVMM, IEC_DATA *pVal, IEC_UINT uSegment, IEC_UDINT ulOffset, IEC_UINT uLen, IEC_USINT usBit)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)pVMM;
+    (void)pVal;
+    (void)uSegment;
+    (void)ulOffset;
+    (void)uLen;
+    (void)usBit;
 
 
 	RETURN(uRes);
@@ -951,7 +976,8 @@ IEC_UINT osNotifyGetValue(STaskInfoVMM *pVMM, IEC_DATA *pVal, IEC_UINT uSegment,
 
 IEC_UINT osGetProjectDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 
@@ -972,7 +998,8 @@ IEC_UINT osGetProjectDir(IEC_CHAR *szDir, IEC_UINT uSize)
 
 IEC_UINT osGetFileDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 
@@ -993,7 +1020,8 @@ IEC_UINT osGetFileDir(IEC_CHAR *szDir, IEC_UINT uSize)
 
 IEC_UINT osGetDBIDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 
@@ -1014,7 +1042,8 @@ IEC_UINT osGetDBIDir(IEC_CHAR *szDir, IEC_UINT uSize)
 
 IEC_UINT osGetCustDownDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 
@@ -1035,7 +1064,8 @@ IEC_UINT osGetCustDownDir(IEC_CHAR *szDir, IEC_UINT uSize)
 
 IEC_UINT osGetFlashDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
-	IEC_UINT uRes = OK;
+    IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 
@@ -1099,6 +1129,7 @@ IEC_UINT osGetRetainDir(IEC_CHAR *szDir, IEC_UINT uSize)
 IEC_UINT osGetLoadDir(IEC_CHAR *szDir, IEC_UINT uSize)
 {
 	IEC_UINT uRes = OK;
+    (void)uSize;
 
 	OS_STRCPY(szDir, FC_ROOT_DIRECTORY);
 

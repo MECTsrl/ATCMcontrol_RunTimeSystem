@@ -65,6 +65,7 @@ int CanTimer;
 IEC_UINT osInitIOLayer(STaskInfoVMM *pVMM)
 {
 	IEC_UINT uRes = OK;
+    (void)pVMM;
 
 	OS_MEMSET(g_hIO, 0x00, sizeof(OS_HANDLE) * MAX_IO_LAYER);
 	OS_MEMSET(g_pIOIV, 0x00, sizeof(SIOLayerIniVal) * MAX_IO_LAYER);
@@ -236,6 +237,8 @@ IEC_UINT osCreateIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
  */
 IEC_UINT osKillIOLayer(STaskInfoVMM *pVMM, IEC_UINT uIOLayer)
 {
+    (void)pVMM;
+
 	if (uIOLayer >= MAX_IO_LAYER)
 	{
 		RETURN(ERR_INVALID_IOLAYER);

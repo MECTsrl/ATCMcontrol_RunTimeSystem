@@ -879,6 +879,7 @@ static IEC_UINT ldStrDiff(IEC_CHAR *szBuff, IEC_UDINT uLen, IEC_CHAR *szWhat, IE
 {
 	IEC_REAL fOveral = (IEC_REAL)(ulOveral != 0 ? ulOveral : 1);
 	IEC_REAL fSum	 = (IEC_REAL)(pTT_Diff->ulUser + pTT_Diff->ulSyst);
+    (void)uLen;
 
 	OS_SPRINTF(szBuff, "Load_%-5s: User:% 5.1f%%  Syst:% 5.1f%%  Sum: % 5.1f%%", szWhat,
 				(100.0 * (IEC_REAL)pTT_Diff->ulUser) / fOveral, 	  (100.0 * (IEC_REAL)pTT_Diff->ulSyst) / fOveral, 

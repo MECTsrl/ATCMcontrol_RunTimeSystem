@@ -113,6 +113,7 @@ IEC_UINT osStrLoadAvg(IEC_CHAR *szBuff, IEC_UDINT uLen)
 	IEC_REAL  f1, f5, f15;
 	IEC_UDINT ulPReady;
 	IEC_UDINT ulPSum;
+    (void)uLen;
 	
 	uRes = osGetLoadAvg(&f1, &f5, &f15, &ulPReady, &ulPSum);
 	if (uRes != OK)
@@ -196,6 +197,7 @@ IEC_UINT osStrMemInfo(IEC_CHAR *szBuff, IEC_UDINT uLen, IEC_UDINT *ulpMemTotal)
 
 	IEC_UDINT ulUsed  = 0;
 	IEC_UDINT ulFree  = 0;
+    (void)uLen;
 
 	uRes = osGetMemInfo(ulpMemTotal, &ulUsed, &ulFree);
 	if (uRes != OK)
@@ -265,8 +267,8 @@ IEC_UINT osGetStat(SProcTime *pPT)
 IEC_UINT osStrStat(IEC_CHAR *szBuff, IEC_UDINT uLen)
 {
 	IEC_UINT uRes = OK;
-
 	SProcTime PT;
+    (void)uLen;
 
 	uRes = osGetStat(&PT);
 	if (uRes != OK)
@@ -317,10 +319,9 @@ IEC_UINT osGetStatDiff(SProcTime *pPT, SProcTime *pPT_Diff)
 IEC_UINT osStrStatDiff(IEC_CHAR *szBuff, IEC_UDINT uLen, IEC_UDINT *ulpOveral, SProcTime *pPT)
 {
 	IEC_UINT uRes = OK;
-
 	SProcTime PT_Diff;
-
 	IEC_REAL  fSum;
+    (void)uLen;
 
 	uRes = osGetStatDiff(pPT, &PT_Diff);
 	if (uRes != OK)
@@ -443,11 +444,10 @@ IEC_UINT osGetTaskStatDiff(IEC_UDINT ulID, STaskTime *pTT, STaskTime *pTT_Diff)
 IEC_UINT osStrTaskStatDiff(IEC_UDINT ulID, IEC_CHAR *szBuff, IEC_UDINT uLen, IEC_UDINT ulOveral, STaskTime *pTT)
 {
 	IEC_UINT uRes = OK;
-
 	STaskTime TT_Diff;
-
 	IEC_REAL fSum;
 	IEC_REAL fOveral = (IEC_REAL)(ulOveral != 0 ? ulOveral : 1);
+    (void)uLen;
 
 	uRes = osGetTaskStatDiff(ulID, pTT, &TT_Diff);
 	if (uRes != OK)
@@ -532,11 +532,10 @@ IEC_UINT osGetTaskStatM(IEC_UDINT ulID, IEC_UDINT *ulpSize, IEC_UDINT *ulpRes)
 IEC_UINT osStrTaskStatM(IEC_UDINT ulID, IEC_CHAR *szBuff, IEC_UDINT uLen, IEC_UDINT ulOveral)
 {
 	IEC_UINT uRes = OK;
-
 	IEC_UDINT ulSize;
 	IEC_UDINT ulRes;
-
 	IEC_UDINT ulLocOveral = ulOveral != 0 ? ulOveral : 1;
+    (void)uLen;
 
 	uRes = osGetTaskStatM(ulID, &ulSize, &ulRes);
 	if (uRes != OK)

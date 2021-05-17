@@ -368,6 +368,8 @@ IEC_UINT resOCFinish(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdOCEnd(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pBlock;
+
 	if (pVMM->DLB.uDomain != OCHG_COMMIT)
 	{
 		RETURN(ERR_INVALID_DOMAIN);

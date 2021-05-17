@@ -102,6 +102,7 @@ IEC_UINT sysInitialize(void)
 IEC_UINT sysEnableIOLayer(IEC_CHAR *szName)
 {
 	IEC_UINT uRes = OK;
+    (void)szName;
 
 	if (g_bInitialized == FALSE)
 	{

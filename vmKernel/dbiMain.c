@@ -538,10 +538,9 @@ static IEC_UINT dbiFindInstance(SDBIInstance *pInst, IEC_UINT uLen, IEC_CHAR *sz
 	IEC_UINT uFrom	 = 0u;
 	IEC_UINT uTo	 = (IEC_UINT)(pInst->uChildren - 1);
 	IEC_UINT uMiddle = 0u;
-
 	IEC_DINT  iDiff;
-
 	SDBIInstance *pChild;
+    (void)uLen;
 
 	*upIndex = NO_INDEX;
 
@@ -999,10 +998,9 @@ static IEC_UINT dbiFindMember(SDBIType *pType, IEC_UINT uLen, IEC_CHAR *szMember
 	IEC_UINT uFrom	 = 0u;
 	IEC_UINT uTo	 = (IEC_UINT)(pType->uMember - 1);
 	IEC_UINT uMiddle = 0u;
-
 	IEC_DINT iDiff;
-
 	SDBIVar *pVar;
+    (void)uLen;
 
 	*upIndex = NO_INDEX;
 

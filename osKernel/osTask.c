@@ -228,6 +228,7 @@ SObject *osCreateCodeList(void)
 STaskInfoVM *osCreateTaskInfoVM(IEC_UINT uTask)
 {
 	STaskInfoVM *pVM = NULL;
+    (void)uTask;
 
   #if defined(RTS_CFG_FFO)
 	pVM = (STaskInfoVM *)osMalloc(sizeof(STaskInfoVM));
@@ -360,6 +361,7 @@ SImageReg *osCreateImageReg(STaskInfoVM *pVM, IEC_UINT uTasks)
  */
 IEC_UINT osFreeImageReg(STaskInfoVM *pVM)
 {
+    (void)pVM;
 
 	RETURN(OK);
 }
@@ -410,7 +412,7 @@ IEC_UINT osCreateVMTask (STaskInfoVM *pVM)
 	IEC_UINT uRes = OK;
 
 	pthread_t hThread = 0;
-	char name[3+VMM_MAX_IEC_IDENT];
+    char name[3+VMM_MAX_IEC_IDENT+1];
 	snprintf(name, sizeof(name), "%02u:%s", pVM->usTask, pVM->Task.szName);
 
 	int iRes = osPthreadCreate(&hThread, NULL, VM_Proc, pVM, name, 0);
@@ -439,9 +441,8 @@ IEC_UINT osKillVMTask(STaskInfoVM *pVM)
 {
 	IEC_UINT uRes = OK;
 
-	int iRes;
-	iRes = pthread_cancel(g_hVM[pVM->usTask]);
-	iRes = pthread_join(g_hVM[pVM->usTask], NULL);	/* Danger, may wait forever! */
+    (void)pthread_cancel(g_hVM[pVM->usTask]);
+    (void)pthread_join(g_hVM[pVM->usTask], NULL);	/* Danger, may wait forever! */
 
 	g_hVM[pVM->usTask] = 0;
 
@@ -474,7 +475,7 @@ IEC_UINT osKillVMTask(STaskInfoVM *pVM)
 IEC_UINT osOnVMTerminate(STaskInfoVM *pVM)
 {
 	IEC_UINT uRes = OK;
-
+    (void)pVM;
 
 	RETURN(uRes);
 }
@@ -770,7 +771,8 @@ IEC_UINT osCreatePBManagementTask(IEC_UINT uIOLayer)
 IEC_UINT osOnCommTerminate(STaskInfoVMM *pVMM, IEC_UINT uTask)
 {
 	IEC_UINT uRes = OK;
-
+    (void)pVMM;
+    (void)uTask;
 
 	RETURN(uRes);
 }
@@ -794,7 +796,7 @@ IEC_UINT osCreateSemaphore(IEC_UINT uSemaphore)
 		RETURN(ERR_INVALID_PARAM);
 	}
 
-	pthread_mutex_init(g_pCS + uSemaphore, NULL);
+    pthread_mutex_init(&g_pCS[uSemaphore], NULL);
 
 	RETURN(uRes);
 }
@@ -817,7 +819,7 @@ IEC_UINT osDeleteSemaphore(IEC_UINT uSemaphore)
 		RETURN(ERR_INVALID_PARAM);
 	}
 
-	if (pthread_mutex_destroy(g_pCS + uSemaphore) != 0)
+    if (pthread_mutex_destroy(&g_pCS[uSemaphore]) != 0)
 	{
 		RETURN_e(ERR_ERROR);
 	}
@@ -843,7 +845,7 @@ IEC_UINT osBeginCriticalSection(IEC_UINT uSemaphore)
 		RETURN(ERR_INVALID_PARAM);
 	}
 
-	if (pthread_mutex_lock((g_pCS + uSemaphore)) != 0)
+    if (pthread_mutex_lock(&g_pCS[uSemaphore]) != 0)
 	{
 		RETURN_e(ERR_ERROR);
 	}
@@ -868,7 +870,7 @@ IEC_UINT osEndCriticalSection(IEC_UINT uSemaphore)
 		RETURN(ERR_INVALID_PARAM);
 	}
 
-	if (pthread_mutex_unlock((g_pCS + uSemaphore)) != 0)
+    if (pthread_mutex_unlock(&g_pCS[uSemaphore]) != 0)
 	{
 		RETURN_e(ERR_ERROR);
 	}
@@ -949,7 +951,7 @@ IEC_USINT osConvert4CPriority(IEC_USINT usPriority)
 IEC_UINT osOnClearBegin(STaskInfoVMM *pVMM)
 {
 	IEC_UINT uRes = OK;
-
+    (void)pVMM;
 
 	RETURN(uRes);
 }
@@ -963,7 +965,7 @@ IEC_UINT osOnClearBegin(STaskInfoVMM *pVMM)
 IEC_UINT osOnClearAfterDelVM(STaskInfoVMM *pVMM)
 {
 	IEC_UINT uRes = OK;
-
+    (void)pVMM;
 
 	RETURN(uRes);
 }
@@ -977,7 +979,7 @@ IEC_UINT osOnClearAfterDelVM(STaskInfoVMM *pVMM)
 IEC_UINT osOnClearEnd(STaskInfoVMM *pVMM)
 {
 	IEC_UINT uRes = OK;
-
+    (void)pVMM;
 
 	RETURN(uRes);
 }

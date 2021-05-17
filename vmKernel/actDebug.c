@@ -51,7 +51,8 @@ IEC_UINT cmdGetState(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UDINT	ulActStateReq = osGetTime32();
 	IEC_UINT	i;
-	
+    (void)pBlock;
+
  	if (osElapsedTime32(ulActStateReq, pVMM->ulLastStateReq) > VMM_DEBUG_INTERVAL)
 	{
 		for (i = 0; i < pVMM->Project.uTasks; i++)
@@ -321,7 +322,9 @@ IEC_UINT resLogin(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdLogout(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	
+    (void)pVMM;
+    (void)pBlock;
+
 	RETURN(OK);
 }
 
@@ -342,6 +345,8 @@ IEC_UINT resLogout(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdStart(STaskInfoVMM *pVMM, XBlock *pBlock)
 {	
+    (void)pVMM;
+    (void)pBlock;
 
 	RETURN(OK);
 }
@@ -380,7 +385,9 @@ IEC_UINT resStart(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdResource(STaskInfoVMM *pVMM, XBlock *pBlock)
 {	
-	if (pVMM->bProjActive == FALSE)
+    (void)pBlock;
+
+    if (pVMM->bProjActive == FALSE)
 	{
 		RETURN(ERR_NO_PROJECT);
 	}
@@ -520,6 +527,9 @@ IEC_UINT resTask(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdOpenDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
+    (void)pBlock;
+
 	/* $TODO$
 	if (pVMM->usDebugMode != NO_DEBUG_CONN && pVMM->usDebugMode != pBlock->usSource)
 	{
@@ -536,6 +546,8 @@ IEC_UINT cmdOpenDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT resOpenDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pBlock;
+
 	pVMM->bDebugMode = TRUE;
 	/* pVMM->usDebugMode = pBlock->usSource; */
 	
@@ -548,6 +560,8 @@ IEC_UINT resOpenDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdCloseDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
+    (void)pBlock;
 
 	RETURN(OK);
 }
@@ -559,6 +573,7 @@ IEC_UINT cmdCloseDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resCloseDebugSession(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UINT uTask;
+    (void)pBlock;
 
 	pVMM->bDebugMode = FALSE;
 	/* pVMM->usDebugMode = NO_DEBUG_CONN; */
@@ -662,6 +677,8 @@ IEC_UINT resClearBreakpoint(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdClearAllBreakpoints(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
+    (void)pVMM;
+    (void)pBlock;
 
 	RETURN(OK);
 }
@@ -673,6 +690,7 @@ IEC_UINT cmdClearAllBreakpoints(STaskInfoVMM *pVMM, XBlock *pBlock)
 IEC_UINT resClearAllBreakpoints(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
 	IEC_UINT uRes = OK;
+    (void)pBlock;
 
 	if (pVMM->bProjLoaded == TRUE && pVMM->bDebugMode == TRUE)
 	{
@@ -1113,7 +1131,9 @@ IEC_UINT cmdSetValue(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT resSetValue(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	pBlock->byLast	= TRUE;
+    (void)pVMM;
+
+    pBlock->byLast	= TRUE;
 
 	RETURN(OK);
 }
@@ -1186,7 +1206,9 @@ IEC_UINT resInitialize(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT cmdGetProjectVersion(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	if (pVMM->bProjLoaded == FALSE)
+    (void)pBlock;
+
+    if (pVMM->bProjLoaded == FALSE)
 	{
 		RETURN(ERR_NO_PROJECT);
 	}

@@ -58,9 +58,9 @@ extern EXECUTE_FB	g_pLibraryFB [];
 void EVT_GetException(STDLIBFUNCALL)
 {
 	DEC_PARA(S_EVT_GetException);
-
 	STaskInfoVMM *pVMM = (STaskInfoVMM *)pVM->pShared->pVMM;
 	IEC_UINT	 uTask = 0xffffu;
+    (void)pIP;
 
   #if ! defined(RTS_CFG_EVENTS)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -96,6 +96,7 @@ void EVT_GetException(STDLIBFUNCALL)
 void EVT_Set(STDLIBFUNCALL)
 {
 	DEC_PARA(S_EVT_Set);
+    (void)pIP;
 
   #if ! defined(RTS_CFG_EVENTS)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -114,6 +115,7 @@ void EVT_Set(STDLIBFUNCALL)
 void MSG_SendToEng(STDLIBFUNCALL)
 {
 	DEC_PARA(S_MSG_SendToEng);
+    (void)pIP;
 
 	vmmQueueMessage(&pVM->pShared->MsgQueue, utilIecToAnsi(pPar->sMsg, pVM->Local.pBuffer));
 }
@@ -125,6 +127,9 @@ void MSG_SendToEng(STDLIBFUNCALL)
  */
 void MSG_Trace(STDLIBFUNCALL)
 {
+    (void)pVM;
+    (void)pIN;
+    (void)pIP;
   #if defined(RTS_CFG_DEBUG_OUTPUT)
 	DEC_PARA(S_MSG_Trace);
 
@@ -144,6 +149,8 @@ void MSG_Trace(STDLIBFUNCALL)
 void TIM_Get(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TIM_Get);
+    (void)pVM;
+    (void)pIP;
 
 	pPar->tRet = osGetTime32();
 }
@@ -156,8 +163,8 @@ void TIM_Get(STDLIBFUNCALL)
 void TSK_ClearError(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_ClearError);
-
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -174,6 +181,7 @@ void TSK_ClearError(STDLIBFUNCALL)
 void TSK_Exception(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_Exception);
+    (void)pIP;
 
 	pPar->wRet = libSetException(pVM, pPar->uException);
 }
@@ -185,6 +193,7 @@ void TSK_Exception(STDLIBFUNCALL)
 void TSK_GetCount(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetCount);
+    (void)pIP;
 
 	pPar->iRet = ((STaskInfoVMM *)pVM->pShared->pVMM)->Project.uTasks;
 }
@@ -197,8 +206,8 @@ void TSK_GetCount(STDLIBFUNCALL)
 void TSK_GetError(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetError);
-
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -215,8 +224,8 @@ void TSK_GetError(STDLIBFUNCALL)
 void TSK_GetInfo(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetInfo);
-
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -239,7 +248,8 @@ void TSK_GetInfo(STDLIBFUNCALL)
 void TSK_GetMyNumber(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetMyNumber);
-	
+    (void)pIP;
+
 	pPar->uTask = pVM->usTask;
 }
 
@@ -251,11 +261,11 @@ void TSK_GetMyNumber(STDLIBFUNCALL)
 void TSK_GetName(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetName);
-
 	STaskInfoVMM		*pVMM	= (STaskInfoVMM *)pVM->pShared->pVMM;
 	IEC_STRING OS_DPTR	*s		= pPar->sTask;
 	IEC_UINT			uLen;
-	
+    (void)pIP;
+
 	if (pPar->uTask >= pVMM->Project.uTasks)
 	{
 		pPar->wRet = ERR_ERROR;
@@ -278,8 +288,8 @@ void TSK_GetName(STDLIBFUNCALL)
 void TSK_GetState(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetState);
-
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -296,8 +306,8 @@ void TSK_GetState(STDLIBFUNCALL)
 void TSK_Start(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_Start);
-
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -314,8 +324,8 @@ void TSK_Start(STDLIBFUNCALL)
 void TSK_Stop(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_Stop);
-
-	IEC_UINT uTask;
+    IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 	if (pPar->wRet == OK)
@@ -332,8 +342,8 @@ void TSK_Stop(STDLIBFUNCALL)
 void WD_Disable(STDLIBFUNCALL)
 {
 	DEC_PARA(S_WD_Disable);
-
-	IEC_UINT uTask;
+    IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
   
@@ -353,9 +363,9 @@ void WD_Disable(STDLIBFUNCALL)
  */
 void WD_Enable(STDLIBFUNCALL)
 {
-	DEC_PARA(S_WD_Enable);
-
+    DEC_PARA(S_WD_Enable);
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 
@@ -375,9 +385,9 @@ void WD_Enable(STDLIBFUNCALL)
  */
 void EVT_GetEvent(STDLIBFUNCALL)
 {
-	DEC_PARA(S_EVT_GetEvent);
-
+    DEC_PARA(S_EVT_GetEvent);
 	IEC_UINT uTask = 0xffffu;
+    (void)pIP;
 
   #if ! defined(RTS_CFG_EVENTS)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -401,9 +411,9 @@ void EVT_GetEvent(STDLIBFUNCALL)
  */
 void WD_IsEnabled(STDLIBFUNCALL)
 {
-	DEC_PARA(S_WD_IsEnabled);
-
+    DEC_PARA(S_WD_IsEnabled);
 	IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
   
@@ -421,7 +431,8 @@ void WD_IsEnabled(STDLIBFUNCALL)
  */
 void TSK_GetMyName(STDLIBFUNCALL)
 {
-	DEC_PARA(S_TSK_GetMyName);
+    DEC_PARA(S_TSK_GetMyName);
+    (void)pIP;
 
 	utilAnsiToIec(pVM->Task.szName, pPar->sTask);
 }
@@ -433,7 +444,8 @@ void TSK_GetMyName(STDLIBFUNCALL)
  */
 void SYS_Coldstart(STDLIBFUNCALL)
 {
-	DEC_PARA(S_SYS_Coldstart);
+    DEC_PARA(S_SYS_Coldstart);
+    (void)pIP;
 
   #if ! defined(RTS_CFG_FLASH)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -463,7 +475,9 @@ void SYS_Coldstart(STDLIBFUNCALL)
  */
 void SYS_Reboot(STDLIBFUNCALL)
 {
-	DEC_PARA(S_SYS_Reboot);
+    DEC_PARA(S_SYS_Reboot);
+    (void)pVM;
+    (void)pIP;
 
 	pPar->wRet = OK;
 	
@@ -496,7 +510,9 @@ void SYS_Reboot(STDLIBFUNCALL)
  */
 void SYS_RetainWrite(STDLIBFUNCALL)
 {
-	DEC_PARA(S_SYS_RetainWrite);
+    DEC_PARA(S_SYS_RetainWrite);
+    (void)pVM;
+    (void)pIP;
 
   #if ! defined(RTS_CFG_EXT_RETAIN)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -521,7 +537,8 @@ void SYS_RetainWrite(STDLIBFUNCALL)
  */
 void SYS_Warmstart(STDLIBFUNCALL)
 {
-	DEC_PARA(S_SYS_Warmstart);
+    DEC_PARA(S_SYS_Warmstart);
+    (void)pIP;
 
   #if ! defined(RTS_CFG_FLASH)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -551,7 +568,9 @@ void SYS_Warmstart(STDLIBFUNCALL)
  */
 void LD_Get(STDLIBFUNCALL)
 {
-	DEC_PARA(S_LD_Get);
+    DEC_PARA(S_LD_Get);
+    (void)pVM;
+    (void)pIP;
 
   #if ! defined(RTS_CFG_SYSLOAD)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -572,8 +591,8 @@ void LD_Get(STDLIBFUNCALL)
 void WD_SetTrigger(STDLIBFUNCALL)
 {
 	DEC_PARA(S_WD_SetTrigger);
-
-	IEC_UINT uTask;
+    IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 
@@ -593,8 +612,8 @@ void WD_SetTrigger(STDLIBFUNCALL)
 void WD_GetTrigger(STDLIBFUNCALL)
 {
 	DEC_PARA(S_WD_GetTrigger);
-
-	IEC_UINT uTask;
+    IEC_UINT uTask;
+    (void)pIP;
 
 	pPar->wRet = libGetTaskNo(pVM, pPar->sTask, &uTask);
 
@@ -615,6 +634,7 @@ void WD_GetTrigger(STDLIBFUNCALL)
 void TSK_GetStatistic(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_GetStatistic);
+    (void)pIP;
 
   #if ! defined(RTS_CFG_TASKSTAT)
 	pPar->wRet = ERR_NOT_SUPPORTED;
@@ -650,6 +670,7 @@ void TSK_GetStatistic(STDLIBFUNCALL)
 void TSK_ClearStatistic(STDLIBFUNCALL)
 {
 	DEC_PARA(S_TSK_ClearStatistic);
+    (void)pIP;
 
   #if ! defined(RTS_CFG_TASKSTAT)
 	pPar->wRet = ERR_NOT_SUPPORTED;

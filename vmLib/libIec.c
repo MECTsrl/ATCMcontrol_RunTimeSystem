@@ -80,7 +80,8 @@ typedef struct
 void bool_to_string(STDLIBFUNCALL)
 {
 	BOOL_TO_STRING_PAR OS_SPTR *pPar = (BOOL_TO_STRING_PAR OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%s", (pPar->in & 1) ? "true" :"false") == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -97,7 +98,8 @@ void bool_to_string(STDLIBFUNCALL)
 void byte_to_string(STDLIBFUNCALL)
 {
 	BYTE_TO_STRING_PAR OS_SPTR *pPar = (BYTE_TO_STRING_PAR OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%hd", (IEC_INT)pPar->in) == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -114,7 +116,8 @@ void byte_to_string(STDLIBFUNCALL)
 void word_to_string(STDLIBFUNCALL)
 {
 	WORD_TO_STRING_PAR OS_SPTR *pPar = (WORD_TO_STRING_PAR OS_SPTR *)pIN;
-			
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%hu", pPar->in) == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -131,7 +134,8 @@ void word_to_string(STDLIBFUNCALL)
 void dword_to_string(STDLIBFUNCALL)
 {
 	DWORD_TO_STRING_PAR OS_SPTR *pPar = (DWORD_TO_STRING_PAR OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%lu", pPar->in) == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -148,7 +152,8 @@ void dword_to_string(STDLIBFUNCALL)
 void int_to_string(STDLIBFUNCALL)
 {
 	INT_TO_STRING_PAR OS_SPTR *pPar = (INT_TO_STRING_PAR OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%d", pPar->in) == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -165,7 +170,8 @@ void int_to_string(STDLIBFUNCALL)
 void dint_to_string(STDLIBFUNCALL)
 {
 	DINT_TO_STRING_PAR OS_SPTR *pPar = (DINT_TO_STRING_PAR OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%ld", pPar->in) == EXCEPT_NULL_PTR)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -182,6 +188,7 @@ void dint_to_string(STDLIBFUNCALL)
 void real_to_string(STDLIBFUNCALL)
 {
 	REAL_TO_STRING_PAR OS_SPTR *pPar = (REAL_TO_STRING_PAR OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%.16G" , pPar->in) == EXCEPT_NULL_PTR)
 	{
@@ -199,6 +206,7 @@ void real_to_string(STDLIBFUNCALL)
 void lreal_to_string(STDLIBFUNCALL)
 {
 	LREAL_TO_STRING_PAR OS_SPTR *pPar = (LREAL_TO_STRING_PAR OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "%.16G", pPar->in) == EXCEPT_NULL_PTR)
 	{
@@ -216,7 +224,9 @@ void lreal_to_string(STDLIBFUNCALL)
 void LenString_int(STDLIBFUNCALL)
 {
 	LEN_STRING_PAR_TYP OS_SPTR *pPar = (LEN_STRING_PAR_TYP OS_SPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->retVal = pPar->inStr->CurLen;
 }
 #endif
@@ -230,9 +240,10 @@ void LenString_int(STDLIBFUNCALL)
 void LeftString_int(STDLIBFUNCALL)
 {
 	LEFT_STRING_PAR_TYP OS_SPTR *pPar = (LEFT_STRING_PAR_TYP OS_SPTR OS_SPTR *)pIN;
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
-	libSubstring(pVM, pPar->inStr, retStr, 0, pPar->len, FALSE);
+    (void)pIP;
+
+    libSubstring(pVM, pPar->inStr, retStr, 0, pPar->len, FALSE);
 	COPY_STRING(pPar->retStr, retStr);
 }
 #endif
@@ -246,11 +257,11 @@ void LeftString_int(STDLIBFUNCALL)
 void RightString_int(STDLIBFUNCALL)
 {
 	RIGHT_STRING_PAR_TYP OS_SPTR *pPar = (RIGHT_STRING_PAR_TYP OS_SPTR *)pIN;
-	
 	IEC_UDINT ulStart = (IEC_UDINT)pPar->len > pPar->inStr->CurLen ? 0ul : pPar->inStr->CurLen - (IEC_UDINT)pPar->len;
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
-	libSubstring(pVM, pPar->inStr, retStr, ulStart, pPar->inStr->CurLen, FALSE);
+    (void)pIP;
+
+    libSubstring(pVM, pPar->inStr, retStr, ulStart, pPar->inStr->CurLen, FALSE);
 	COPY_STRING(pPar->retStr, retStr);
 }
 #endif
@@ -264,12 +275,12 @@ void RightString_int(STDLIBFUNCALL)
 void MidString_int(STDLIBFUNCALL)
 {
 	MID_STRING_PAR_TYP OS_SPTR *pPar = (MID_STRING_PAR_TYP OS_SPTR *)pIN; 
-	
 	IEC_UDINT ulStart = pPar->startPos != 0 ? ((IEC_UDINT)pPar->startPos & ~0x80000000) - 1ul : 0;
 	IEC_UDINT ulStop  = ulStart + ((IEC_UDINT)pPar->len & ~0x80000000ul);
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
-	libSubstring(pVM, pPar->inStr, retStr, ulStart, ulStop, FALSE);
+    (void)pIP;
+
+    libSubstring(pVM, pPar->inStr, retStr, ulStart, ulStop, FALSE);
 	COPY_STRING(pPar->retStr, retStr);
 }
 #endif
@@ -283,7 +294,8 @@ void MidString_int(STDLIBFUNCALL)
 void InsertString_int(STDLIBFUNCALL)
 {
 	INSERT_STRING_PAR_TYP OS_SPTR *pPar = (INSERT_STRING_PAR_TYP OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
 	libSubstring(pVM, pPar->inStr1, retStr, 0, pPar->startPos, FALSE);
 	libSubstring(pVM, pPar->inStr2, retStr, 0, pPar->inStr2->CurLen, TRUE);
@@ -301,11 +313,11 @@ void InsertString_int(STDLIBFUNCALL)
 void DeleteString_int(STDLIBFUNCALL)
 {
 	DELETE_STRING_PAR_TYP OS_SPTR *pPar = (DELETE_STRING_PAR_TYP OS_SPTR *)pIN;
-
 	IEC_UDINT ulStop  = pPar->startPos != 0 ? ((IEC_UDINT)pPar->startPos & ~0x80000000ul) - 1ul : 0;
 	IEC_UDINT ulStart = ulStop + ((IEC_UDINT)pPar->len & ~0x80000000ul);
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
+    (void)pIP;
+
 	libSubstring(pVM, pPar->inStr, retStr, 0, ulStop, FALSE);
 	libSubstring(pVM, pPar->inStr, retStr, ulStart, pPar->inStr->CurLen, TRUE);
 	COPY_STRING(pPar->retStr, retStr);
@@ -321,12 +333,12 @@ void DeleteString_int(STDLIBFUNCALL)
 void ReplaceString_int(STDLIBFUNCALL)
 {
 	REPLACE_STRING_PAR_TYP OS_SPTR *pPar = (REPLACE_STRING_PAR_TYP OS_SPTR *)pIN;
-
 	IEC_UDINT ulStop  = pPar->startPos != 0 ? ((IEC_UDINT)pPar->startPos & ~0x80000000ul) - 1ul : 0;
 	IEC_UDINT ulStart = ulStop + ((IEC_UDINT)pPar->len & ~0x80000000ul);
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
-	libSubstring(pVM, pPar->inStr1, retStr, 0, ulStop, FALSE);
+    (void)pIP;
+
+    libSubstring(pVM, pPar->inStr1, retStr, 0, ulStop, FALSE);
 	libSubstring(pVM, pPar->inStr2, retStr, 0, pPar->inStr2->CurLen, TRUE);
 	libSubstring(pVM, pPar->inStr1, retStr, ulStart, pPar->inStr1->CurLen, TRUE);
 	COPY_STRING(pPar->retStr, retStr);
@@ -343,14 +355,12 @@ void ConcatString(STDLIBFUNCALL)
 {
 	IEC_UINT	i;
 	IEC_UDINT	ulLen;
-
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_PTR,pIN);
 	DEC_EXT_FUN(pPar,SExtDec_PTR,CONCAT_STRING_PAR_TYP,pIN);
-	
 	IEC_STRING OS_DPTR *pS;
-
 	DECLARE_STRING(retStr, pPar->retStr->MaxLen);
+    (void)pIP;
 
 	if (pPar->inStr == 0 || pPar->retStr == 0)
 	{
@@ -386,10 +396,10 @@ void ConcatString(STDLIBFUNCALL)
 void FindString_int(STDLIBFUNCALL)
 {
 	FIND_STRING_PAR_TYP OS_SPTR *pPar = (FIND_STRING_PAR_TYP OS_SPTR *)pIN;
-	
 	IEC_UINT	i, j;
 	IEC_BOOL	bFound = FALSE;
-	
+    (void)pIP;
+
 	if (pPar->inStr1 == 0 || pPar->inStr2 == 0)
 	{
 		libSetException(pVM, EXCEPT_NULL_PTR);
@@ -444,11 +454,11 @@ void FindString_int(STDLIBFUNCALL)
 void string_to_bool(STDLIBFUNCALL)
 {
 	STRING_TO_BOOL OS_SPTR *pPar = (STRING_TO_BOOL OS_SPTR *)pIN;
-	
 	IEC_CHAR OS_DPTR *pStr;
 	IEC_UDINT ulStart;
 	IEC_UDINT ulStop;
-	
+    (void)pIP;
+
 	for(ulStart = 0; ulStart < pPar->inStr->CurLen && OS_ISSPACE(pPar->inStr->Contents[ulStart]); ulStart++)
 		;
 	
@@ -493,7 +503,8 @@ void string_to_byte(STDLIBFUNCALL)
 {		 
 	IEC_DINT lValue;
 	STRING_TO_BYTE OS_SPTR *pPar = (STRING_TO_BYTE OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilIECStrToLong(pPar->inStr, 1, pVM->Local.pBuffer, &lValue) != OK)
 	{
 		CONVERSION_ERROR;
@@ -513,7 +524,8 @@ void string_to_word(STDLIBFUNCALL)
 {
 	IEC_DINT lValue;
 	STRING_TO_WORD OS_SPTR *pPar = (STRING_TO_WORD OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilIECStrToLong(pPar->inStr, 1, pVM->Local.pBuffer, &lValue) != OK)
 	{
 		CONVERSION_ERROR;
@@ -533,7 +545,8 @@ void string_to_dword(STDLIBFUNCALL)
 { 
 	IEC_DINT lValue;
 	STRING_TO_DWORD OS_SPTR *pPar = (STRING_TO_DWORD OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilIECStrToLong(pPar->inStr, 1, pVM->Local.pBuffer, &lValue) != OK)
 	{
 		CONVERSION_ERROR;
@@ -553,7 +566,8 @@ void string_to_dint(STDLIBFUNCALL)
 {
 	IEC_DINT lValue;
 	STRING_TO_DINT OS_SPTR *pPar = (STRING_TO_DINT OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilIECStrToLong(pPar->inStr, 0, pVM->Local.pBuffer, &lValue) != OK)
 	{
 		CONVERSION_ERROR;
@@ -573,7 +587,8 @@ void string_to_int(STDLIBFUNCALL)
 {
 	IEC_DINT lValue;
 	STRING_TO_INT OS_SPTR *pPar = (STRING_TO_INT OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	if (utilIECStrToLong(pPar->inStr, 0, pVM->Local.pBuffer, &lValue) != OK)
 	{
 		CONVERSION_ERROR;
@@ -592,7 +607,8 @@ void string_to_int(STDLIBFUNCALL)
 void string_to_real(STDLIBFUNCALL)
 {
 	STRING_TO_REAL OS_SPTR *pPar = (STRING_TO_REAL OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	pPar->retVal = (IEC_REAL)OS_ATOF(utilIecToAnsi(pPar->inStr, pVM->Local.pBuffer));
 }
 #endif
@@ -606,7 +622,8 @@ void string_to_real(STDLIBFUNCALL)
 void string_to_lreal(STDLIBFUNCALL)
 {
 	STRING_TO_LREAL OS_SPTR *pPar = (STRING_TO_LREAL OS_SPTR *)pIN;
-	
+    (void)pIP;
+
 	pPar->retVal = OS_ATOF(utilIecToAnsi(pPar->inStr, pVM->Local.pBuffer));
 }
 #endif
@@ -620,18 +637,16 @@ void string_to_lreal(STDLIBFUNCALL)
 void string_to_time(STDLIBFUNCALL)
 {
 	STRING_TO_TIME OS_SPTR* pPar = (STRING_TO_TIME OS_SPTR*)pIN;
-	
 	IEC_BOOL	isNegative = FALSE;
 	IEC_DINT	lValue;
 	LOC_STRING	LocStr;
-	
 	IEC_CHAR OS_DPTR	*pWork = pPar->inStr->Contents;
 	IEC_UINT			uLen = pPar->inStr->CurLen;
-	
 	IEC_CHAR *pDest = LocStr.Contents;
 	LocStr.CurLen = 0;
 	LocStr.MaxLen = VMM_MAX_IEC_STRLEN;
-	
+    (void)pIP;
+
 	pPar->retVal = 0;
 	
 	/* Supported time format: 
@@ -731,6 +746,8 @@ void string_to_time(STDLIBFUNCALL)
 void iec_sin_real(STDLIBFUNCALL)
 {
 	SIN_REAL_PAR OS_SPTR *pPar = (SIN_REAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	pPar->ret = (IEC_REAL)OS_SIN(pPar->in);
 }
@@ -745,6 +762,8 @@ void iec_sin_real(STDLIBFUNCALL)
 void iec_sin_lreal(STDLIBFUNCALL)
 {
 	SIN_LREAL_PAR OS_SPTR *pPar = (SIN_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	pPar->ret = OS_SIN(pPar->in);
 }
@@ -759,6 +778,9 @@ void iec_sin_lreal(STDLIBFUNCALL)
 void iec_asin_real(STDLIBFUNCALL)
 {
 	ASIN_REAL_PAR OS_SPTR *pPar = (ASIN_REAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < -1.0 || pPar->in > 1.0)
 	{
@@ -779,6 +801,9 @@ void iec_asin_real(STDLIBFUNCALL)
 void iec_asin_lreal(STDLIBFUNCALL)
 {
 	ASIN_LREAL_PAR OS_SPTR *pPar = (ASIN_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < -1.0 || pPar->in > 1.0)
 	{
@@ -799,7 +824,9 @@ void iec_asin_lreal(STDLIBFUNCALL)
 void iec_cos_real(STDLIBFUNCALL)
 {
 	COS_REAL_PAR OS_SPTR *pPar = (COS_REAL_PAR OS_SPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	pPar->ret = (IEC_REAL)OS_COS(pPar->in);
 }
 #endif
@@ -813,6 +840,8 @@ void iec_cos_real(STDLIBFUNCALL)
 void iec_cos_lreal(STDLIBFUNCALL)
 {
 	COS_LREAL_PAR OS_SPTR *pPar = (COS_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	pPar->ret = OS_COS(pPar->in);
 }
@@ -827,6 +856,9 @@ void iec_cos_lreal(STDLIBFUNCALL)
 void iec_acos_real(STDLIBFUNCALL)
 {
 	ASIN_REAL_PAR OS_SPTR *pPar = (ASIN_REAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < -1.0 || pPar->in > 1.0)
 	{
@@ -847,6 +879,9 @@ void iec_acos_real(STDLIBFUNCALL)
 void iec_acos_lreal(STDLIBFUNCALL)
 {
 	ACOS_LREAL_PAR OS_SPTR *pPar = (ACOS_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < -1.0 || pPar->in > 1.0)
 	{
@@ -867,7 +902,10 @@ void iec_acos_lreal(STDLIBFUNCALL)
 void iec_tan_real(STDLIBFUNCALL)
 {
 	TAN_REAL_PAR OS_SPTR *pPar = (TAN_REAL_PAR OS_SPTR *)pIN;
-	pPar->ret = (IEC_REAL)OS_TAN(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = (IEC_REAL)OS_TAN(pPar->in);
 }
 #endif
 
@@ -880,7 +918,10 @@ void iec_tan_real(STDLIBFUNCALL)
 void iec_tan_lreal(STDLIBFUNCALL)
 {
 	TAN_LREAL_PAR OS_SPTR *pPar = (TAN_LREAL_PAR OS_SPTR *)pIN;
-	pPar->ret = OS_TAN(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = OS_TAN(pPar->in);
 }
 #endif
 
@@ -893,7 +934,10 @@ void iec_tan_lreal(STDLIBFUNCALL)
 void iec_atan_real(STDLIBFUNCALL)
 {
 	ATAN_REAL_PAR OS_SPTR *pPar = (ATAN_REAL_PAR OS_SPTR *) pIN;
-	pPar->ret = (IEC_REAL)OS_ATAN(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = (IEC_REAL)OS_ATAN(pPar->in);
 }
 #endif
 
@@ -906,7 +950,10 @@ void iec_atan_real(STDLIBFUNCALL)
 void iec_atan_lreal(STDLIBFUNCALL)
 {
 	ATAN_LREAL_PAR OS_SPTR *pPar = (ATAN_LREAL_PAR OS_SPTR *)pIN;
-	pPar->ret = OS_ATAN(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = OS_ATAN(pPar->in);
 }
 #endif
 
@@ -919,6 +966,9 @@ void iec_atan_lreal(STDLIBFUNCALL)
 void iec_ln_real(STDLIBFUNCALL)
 {
 	LN_REAL_PAR OS_SPTR *pPar = (LN_REAL_PAR OS_SPTR *) pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in <= 0.0)
 	{
@@ -939,6 +989,9 @@ void iec_ln_real(STDLIBFUNCALL)
 void iec_ln_lreal(STDLIBFUNCALL)
 {
 	LN_LREAL_PAR OS_SPTR *pPar = (LN_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in <= 0.0)
 	{
@@ -959,6 +1012,9 @@ void iec_ln_lreal(STDLIBFUNCALL)
 void iec_log_real(STDLIBFUNCALL)
 {
 	LOG_REAL_PAR OS_SPTR *pPar = (LOG_REAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < 0.0)
 	{
@@ -979,6 +1035,9 @@ void iec_log_real(STDLIBFUNCALL)
 void iec_log_lreal(STDLIBFUNCALL)
 {
 	LOG_LREAL_PAR OS_SPTR *pPar = (LOG_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < 0.0)
 	{
@@ -999,6 +1058,9 @@ void iec_log_lreal(STDLIBFUNCALL)
 void iec_sqrt_real(STDLIBFUNCALL)
 {
 	SQRT_REAL_PAR OS_SPTR *pPar = (SQRT_REAL_PAR OS_SPTR *) pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < 0.0)
 	{
@@ -1019,6 +1081,9 @@ void iec_sqrt_real(STDLIBFUNCALL)
 void iec_sqrt_lreal(STDLIBFUNCALL)
 {
 	SQRT_LREAL_PAR OS_SPTR *pPar = (SQRT_LREAL_PAR OS_SPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
+
 #if defined(IP_CFG_RANGE_CHECK)
 	if (pPar->in < 0.0)
 	{
@@ -1039,7 +1104,10 @@ void iec_sqrt_lreal(STDLIBFUNCALL)
 void iec_exp_real(STDLIBFUNCALL)
 {
 	EXP_REAL_PAR OS_SPTR *pPar = (EXP_REAL_PAR OS_SPTR *)pIN;
-	pPar->ret = (IEC_REAL) OS_EXP(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = (IEC_REAL) OS_EXP(pPar->in);
 }
 #endif
 
@@ -1052,7 +1120,10 @@ void iec_exp_real(STDLIBFUNCALL)
 void iec_exp_lreal(STDLIBFUNCALL)
 {
 	EXP_LREAL_PAR OS_SPTR *pPar = (EXP_LREAL_PAR OS_SPTR *) pIN;
-	pPar->ret = OS_EXP(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = OS_EXP(pPar->in);
 }
 #endif
 
@@ -1065,6 +1136,7 @@ void iec_exp_lreal(STDLIBFUNCALL)
 void time32_to_string(STDLIBFUNCALL)
 {
 	TIME_TO_STRING_PAR OS_SPTR *pPar = (TIME_TO_STRING_PAR OS_SPTR *)pIN;
+    (void)pIP;
 
 	if (utilFormatIECString(pPar->retStr, pVM->Local.pBuffer, "t#%ldms", pPar->in) == EXCEPT_NULL_PTR)
 	{
@@ -1084,6 +1156,7 @@ void mux_bit(STDLIBFUNCALL)
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_BYTE,pIN);
 	DEC_EXT_FUN(pPar,SExtDec_BYTE,MUX_BIT_PAR_TYP,pIN);
+    (void)pIP;
 
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
@@ -1109,7 +1182,8 @@ void mux_byte(STDLIBFUNCALL)
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_BYTE,pIN);
 	DEC_EXT_FUN(pPar,SExtDec_BYTE,MUX_BYTE_PAR_TYP,pIN);
-		
+    (void)pIP;
+
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
 		libSetException(pVM, EXCEPT_INVALID_ARG);
@@ -1134,7 +1208,8 @@ void mux_int(STDLIBFUNCALL)
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_INT,pIN);
 	DEC_EXT_FUN(pPar,SExtDec_INT,MUX_INT_PAR_TYP,pIN);
-		
+    (void)pIP;
+
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
 		libSetException(pVM, EXCEPT_INVALID_ARG);
@@ -1159,7 +1234,8 @@ void mux_dint(STDLIBFUNCALL)
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_DINT,pIN);
 	DEC_EXT_FUN(pPar,SExtDec_DINT,MUX_DINT_PAR_TYP,pIN);
-		
+    (void)pIP;
+
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
 		libSetException(pVM, EXCEPT_INVALID_ARG);
@@ -1183,9 +1259,9 @@ void mux_string(STDLIBFUNCALL)
 {
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,SExtDec_PTR,pIN);
-	DEC_EXT_FUN(pPar,SExtDec_PTR,MUX_STRING_PAR_TYP,pIN);
-	
+	DEC_EXT_FUN(pPar,SExtDec_PTR,MUX_STRING_PAR_TYP,pIN);	
 	IEC_STRING OS_DPTR *pS;
+    (void)pIP;
 
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
@@ -1218,7 +1294,8 @@ void mux_64bit(STDLIBFUNCALL)
 	DEC_EXT_CNT(argc,pIN);
 	DEC_EXT_PAR(argv,IEC_LREAL,pIN);
 	DEC_EXT_FUN(pPar,IEC_LREAL,MUX_64BIT_PAR_TYP,pIN);
-	
+    (void)pIP;
+
 	if(pPar->sel > (IEC_INT)argc || pPar->sel < 0)
 	{
 		libSetException(pVM, EXCEPT_INVALID_ARG);
@@ -1241,7 +1318,10 @@ void mux_64bit(STDLIBFUNCALL)
 void trunc_real_dint(STDLIBFUNCALL)
 {  
 	TRUNC_REAL_DINT_PAR_TYP OS_SPTR *pPar = (TRUNC_REAL_DINT_PAR_TYP OS_SPTR *) pIN;
-	pPar->ret = (IEC_DINT)(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = (IEC_DINT)(pPar->in);
 }
 #endif
 
@@ -1254,7 +1334,10 @@ void trunc_real_dint(STDLIBFUNCALL)
 void trunc_lreal_dint(STDLIBFUNCALL)
 {  
 	TRUNC_LREAL_DINT_PAR_TYP OS_SPTR *pPar = (TRUNC_LREAL_DINT_PAR_TYP OS_SPTR *) pIN;
-	pPar->ret = (IEC_DINT)(pPar->in);
+    (void)pVM;
+    (void)pIP;
+
+    pPar->ret = (IEC_DINT)(pPar->in);
 }
 #endif
 
@@ -1273,7 +1356,9 @@ void trunc_lreal_dint(STDLIBFUNCALL)
 void rs(STDLIBFBCALL)
 {
 	RS_TYP OS_DPTR *p = (RS_TYP OS_DPTR *) pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	p->b  = (IEC_BOOL)(/*(p->b & 0xFB) | */
 	  ((!(p->b & 2) && ((p->b & 4) || (p->b & 1))) ? (p->b | 4) : (p->b & (~4))));	/* 7 6 5 4 3 Q1 R S 	*/
 }
@@ -1288,7 +1373,9 @@ void rs(STDLIBFBCALL)
 void sr(STDLIBFBCALL)
 {
 	SR_TYP OS_DPTR *p = (SR_TYP OS_DPTR *) pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	p->b  = (IEC_BOOL)(/*(p->b & 0xFB) | */
 		((( !(p->b & 2) && (p->b & 4)) || (p->b & 1)) ? (p->b | 4) : (p->b & (~4))));  /* 7 6 5 4 3 Q1 R S	   */
 }
@@ -1303,7 +1390,9 @@ void sr(STDLIBFBCALL)
 void tp(STDLIBFBCALL)
 {
 	TP_TON_TOF_PAR OS_DPTR *pPar = (TP_TON_TOF_PAR OS_DPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	if (pPar->PT == 0)
 	{
 		/* Invalid parameter
@@ -1380,7 +1469,9 @@ void tp(STDLIBFBCALL)
 void ton(STDLIBFBCALL)
 {
 	TP_TON_TOF_PAR OS_DPTR *pPar = (TP_TON_TOF_PAR OS_DPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	if (pPar->PT == 0)
 	{
 		/* Invalid parameter
@@ -1442,7 +1533,9 @@ void ton(STDLIBFBCALL)
 void tof(STDLIBFBCALL)
 {
 	TP_TON_TOF_PAR OS_DPTR *pPar = (TP_TON_TOF_PAR OS_DPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	if (pPar->PT == 0)
 	{
 		/* Invalid parameter
@@ -1504,6 +1597,8 @@ void tof(STDLIBFBCALL)
 void ctu(STDLIBFBCALL)
 {
 	CTU_PAR OS_DPTR *pPar = (CTU_PAR OS_DPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	/* 7 6 5 4 3 CU_EDGE(helper) R CU */
 	IEC_UINT bTmp = (IEC_UINT)((((pPar->bIn & 0x4) == 0) && (pPar->bIn & 0x1) != 0) ? 1 : 0);
@@ -1528,7 +1623,9 @@ void ctu(STDLIBFBCALL)
 void ctd(STDLIBFBCALL)
 {
 	CTD_PAR OS_DPTR *pPar = (CTD_PAR OS_DPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	/* 7 6 5 4 3 CU_EDGE(helper) R CU */
 	IEC_UINT bTmp = (IEC_UINT)((((pPar->bIn & 0x4) == 0) && (pPar->bIn & 0x1)) ? 1 : 0);
 
@@ -1552,6 +1649,8 @@ void ctd(STDLIBFBCALL)
 void ctud(STDLIBFBCALL)
 {	
 	CTUD_PAR OS_DPTR *pPar = (CTUD_PAR OS_DPTR *)pIN;
+    (void)pVM;
+    (void)pIP;
 
 	/* IEC_BYTE  bIn; 7 6 CD_EDGE CU_EDGE LD R CD CU*/
 	IEC_UINT bTmpCU = (IEC_UINT)((((pPar->bIn & 0x10) == 0) && (pPar->bIn & 0x1)) ? 1 : 0);
@@ -1594,7 +1693,9 @@ void ctud(STDLIBFBCALL)
 void r_trig(STDLIBFBCALL)
 {
 	TRIG_PAR OS_DPTR *pPar = (TRIG_PAR OS_DPTR *)pIN;
-	
+    (void)pVM;
+    (void)pIP;
+
 	if(((pPar->b & 0x1) != 0) && ((pPar->b & 0x4) == 0))
 		pPar->b |= 0x2;
 	else
@@ -1616,6 +1717,8 @@ void r_trig(STDLIBFBCALL)
 void f_trig(STDLIBFBCALL)
 {
 	TRIG_PAR OS_DPTR *pPar = (TRIG_PAR OS_DPTR*)pIN;
+    (void)pVM;
+    (void)pIP;
 	
 	if(((pPar->b & 0x1) == 0) && ((pPar->b & 0x4) == 0))
 		pPar->b |= 0x2;

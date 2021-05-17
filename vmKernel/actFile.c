@@ -100,7 +100,9 @@ IEC_UINT cmdSaveProject(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT resSaveProject(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	
+    (void)pVMM;
+    (void)pBlock;
+
 	RETURN(OK);
 }
 
@@ -339,7 +341,9 @@ IEC_UINT cmdDelFile(STaskInfoVMM *pVMM, XBlock *pBlock)
  */
 IEC_UINT resDelFile(STaskInfoVMM *pVMM, XBlock *pBlock)
 {
-	
+    (void)pVMM;
+    (void)pBlock;
+
 	RETURN(OK);
 }
 
