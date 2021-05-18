@@ -32,10 +32,6 @@
   #include "inc/osSocket.h"
 #endif
 
-#if defined(RTS_CFG_IOCANOPEN)
-#include "inc.mect/mectCfgUtil.h"
-#endif
-
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
 #include "inc.fc/fcMain.h"

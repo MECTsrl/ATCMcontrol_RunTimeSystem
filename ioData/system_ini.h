@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Mect s.r.l
+ * Copyright 2021 Mect s.r.l
  *
  * This file is part of FarosPLC.
  *
@@ -7,21 +7,21 @@
  * the terms of the GNU General Public License as published by the Free Software
  * Foundation, either version 3 of the License, or (at your option) any later
  * version.
- * 
+ *
  * FarosPLC is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
  * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along with
  * FarosPLC. If not, see http://www.gnu.org/licenses/.
 */
 
 /*
- * Filename: mectCfgUtil.h
+ * Filename: system_ini.h
  */
 
-#ifndef H_MECTCFGUTIL
-#define H_MECTCFGUTIL
+#ifndef SYSTEM_INI_H
+#define SYSTEM_INI_H
 
 #include "inc/stdInc.h"
 
@@ -40,10 +40,10 @@
  *
  */
 struct serial_conf {
-	u_int32_t baudrate;     // baudrate = 38400
-	u_int16_t databits;      // databits = 8
-	char parity;            // parity = N
-	u_int16_t stopbits;     // stopbits = 1
+    u_int32_t baudrate;     // baudrate = 38400
+    u_int16_t databits;      // databits = 8
+    char parity;            // parity = N
+    u_int16_t stopbits;     // stopbits = 1
     u_int16_t silence_ms;   // silence_ms = 30
     u_int16_t timeout_ms;   // timeout_ms = 130
     u_int16_t max_block_size; // max_block_size = 64
@@ -88,5 +88,4 @@ struct system_ini {
 int app_config_load(struct system_ini * system_ini);
 void app_config_dump(struct system_ini * system_ini);
 
-#endif
-
+#endif // SYSTEM_INI_H

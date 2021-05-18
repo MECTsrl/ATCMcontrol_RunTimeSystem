@@ -35,33 +35,13 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include <time.h>
-#include <signal.h>
-#include <assert.h>
-#include "inc.mect/mectCfgUtil.h"
-
 /* ----  Local Defines:   ----------------------------------------------------- */
-/* step in ms of the canopen stack manager */
-#define STACK_RATE_MS   10
-/* step in ms of the canopen message manager */
-#define MESSAGE_RATE_MS 1
-/*
-   kind of clock (could be CLOCK_MONOTONIC or REAL_TIME)
-CLOCK_MONOTONIC: the timer return time in seconds and milliseconds since the timer creation
-CLOCK_REALTIME: the timer return the time in seconds and milliseconds since the Epoch (January 1, 1970)
- */
-#define CLOCKID CLOCK_MONOTONIC
-
-#define SIG_STACK SIGRTMIN
-#define SIG_MSG   SIGRTMAX
-#define MAX_LINE_SIZE 81
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
 /* ----  Local Functions:	--------------------------------------------------- */
 
 /* ----  Implementations:	--------------------------------------------------- */
-
 
 /* ---------------------------------------------------------------------------- */
 /**

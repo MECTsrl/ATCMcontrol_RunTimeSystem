@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Mect s.r.l
+ * Copyright 2021 Mect s.r.l
  *
  * This file is part of FarosPLC.
  *
@@ -7,25 +7,28 @@
  * the terms of the GNU General Public License as published by the Free Software
  * Foundation, either version 3 of the License, or (at your option) any later
  * version.
- * 
+ *
  * FarosPLC is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
  * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along with
  * FarosPLC. If not, see http://www.gnu.org/licenses/.
- */
+*/
 
 /*
- * Filename: mectCfgUtil.c
+ * Filename: dataClients.c
  */
+
+#include "system_ini.h"
+
+#define __4CFILE__	"system_ini.c"
+
+/* ---------------------------------------------------------------------------- */
 
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
-
-#include "inc.mect/mectCfgUtil.h"
-
 //#define DBG_MECT_UTIL
 
 #define TAG_CONF_SYSTEM    "[SYSTEM]"
@@ -40,7 +43,7 @@
 #define TAG_CONF_CANOPEN_n "[CANOPEN_n]"
 
 enum app_conf_section {
-	APP_CONF_NONE = 0,
+    APP_CONF_NONE = 0,
     APP_CONF_SYSTEM,
     APP_CONF_SERIAL_PORT_0,
     APP_CONF_SERIAL_PORT_1,
@@ -63,19 +66,19 @@ enum app_conf_section {
  *
  * @ingroup config
  */
-	static char *
+    static char *
 app_property_name_check(char *line, const char *prop)
 {
-	unsigned pl = 0;
+    unsigned pl = 0;
 
-	assert(line != NULL);
-	assert(prop != NULL);
+    assert(line != NULL);
+    assert(prop != NULL);
 
-	pl = strlen(prop);
-	if ((strstr(line, prop) == line) && (strspn(&line[pl], " =\t") > 0))
-		return &line[pl];
-	else
-		return NULL;
+    pl = strlen(prop);
+    if ((strstr(line, prop) == line) && (strspn(&line[pl], " =\t") > 0))
+        return &line[pl];
+    else
+        return NULL;
 }
 
 /**
@@ -91,25 +94,25 @@ app_property_name_check(char *line, const char *prop)
  *
  * @ingroup config
  */
-	static char *
+    static char *
 app_expect_equal(const char *fn, char *line, unsigned ln, const char *cf)
 {
-	assert(fn != NULL);
-	assert(line != NULL);
-	assert(ln > 0);
-	assert(cf != NULL);
+    assert(fn != NULL);
+    assert(line != NULL);
+    assert(ln > 0);
+    assert(cf != NULL);
 
-	line += strspn(line, " \t");
-	if (*line != '=') {
-		fprintf(stderr, "%s: expecting `=' after identifier on line %d in file %s\n", fn, ln, cf);
+    line += strspn(line, " \t");
+    if (*line != '=') {
+        fprintf(stderr, "%s: expecting `=' after identifier on line %d in file %s\n", fn, ln, cf);
 
-		return NULL;
-	}
-	else
-		line++;
-	line += strspn(line, " \t");
+        return NULL;
+    }
+    else
+        line++;
+    line += strspn(line, " \t");
 
-	return line;
+    return line;
 }
 
 int get_u_int16(char *ptr, const char *id, u_int16_t *value, unsigned line_num, const char *filename)
@@ -282,9 +285,9 @@ int get_canopen_conf(char *ptr, struct canopen_conf *canopen, unsigned line_num,
 int app_config_load(struct system_ini *system_ini)
 {
 
-	char line[MAX_LINE_SIZE];
-	FILE *cf = NULL;
-	unsigned line_num = 0;
+    char line[MAX_LINE_SIZE];
+    FILE *cf = NULL;
+    unsigned line_num = 0;
     enum app_conf_section actual_section = APP_CONF_NONE;
 
     /* reset values */
@@ -294,45 +297,45 @@ int app_config_load(struct system_ini *system_ini)
     bzero(system_ini, sizeof(struct system_ini));
 
     fprintf(stderr, "loading '%s' ...", APP_CONFIG_FILE);
-	cf = fopen(APP_CONFIG_FILE, "r");
-	if (cf == NULL) {
-		perror(APP_CONFIG_FILE);
-		return 1;
-	}
+    cf = fopen(APP_CONFIG_FILE, "r");
+    if (cf == NULL) {
+        perror(APP_CONFIG_FILE);
+        return 1;
+    }
 
-	for (line_num = 1; fgets(line, MAX_LINE_SIZE, cf) != NULL; ++line_num) {
-		char *ptr = line;
-		unsigned line_len =  strlen(line);
+    for (line_num = 1; fgets(line, MAX_LINE_SIZE, cf) != NULL; ++line_num) {
+        char *ptr = line;
+        unsigned line_len =  strlen(line);
         if (line[line_len - 1] == '\n') {
-			line[line_len - 1] = '\0';
+            line[line_len - 1] = '\0';
         }
         ptr += strspn(ptr, " \t\r");  // skip blanks
-		if (*ptr == '[') {  // section start
-			if (strstr(ptr, TAG_CONF_SYSTEM) != NULL)
-				actual_section = APP_CONF_SYSTEM;
-			else if (strstr(ptr, TAG_CONF_SERIAL_PORT_0) != NULL)
-				actual_section = APP_CONF_SERIAL_PORT_0;
-			else if (strstr(ptr, TAG_CONF_SERIAL_PORT_1) != NULL)
-				actual_section = APP_CONF_SERIAL_PORT_1;
-			else if (strstr(ptr, TAG_CONF_SERIAL_PORT_2) != NULL)
-				actual_section = APP_CONF_SERIAL_PORT_2;
-			else if (strstr(ptr, TAG_CONF_SERIAL_PORT_3) != NULL)
-				actual_section = APP_CONF_SERIAL_PORT_3;
-			else if (strstr(ptr, TAG_CONF_TCP_IP_PORT) != NULL)
-				actual_section = APP_CONF_TCP_IP_PORT;
+        if (*ptr == '[') {  // section start
+            if (strstr(ptr, TAG_CONF_SYSTEM) != NULL)
+                actual_section = APP_CONF_SYSTEM;
+            else if (strstr(ptr, TAG_CONF_SERIAL_PORT_0) != NULL)
+                actual_section = APP_CONF_SERIAL_PORT_0;
+            else if (strstr(ptr, TAG_CONF_SERIAL_PORT_1) != NULL)
+                actual_section = APP_CONF_SERIAL_PORT_1;
+            else if (strstr(ptr, TAG_CONF_SERIAL_PORT_2) != NULL)
+                actual_section = APP_CONF_SERIAL_PORT_2;
+            else if (strstr(ptr, TAG_CONF_SERIAL_PORT_3) != NULL)
+                actual_section = APP_CONF_SERIAL_PORT_3;
+            else if (strstr(ptr, TAG_CONF_TCP_IP_PORT) != NULL)
+                actual_section = APP_CONF_TCP_IP_PORT;
             else if (strstr(ptr, TAG_CONF_CANOPEN_0) != NULL)
                 actual_section = APP_CONF_CANOPEN_0;
             else if (strstr(ptr, TAG_CONF_CANOPEN_1) != NULL)
                 actual_section = APP_CONF_CANOPEN_1;
-			else {
-				fprintf(stderr, "%s: Unknown section '%s' on line nb. %d in file '%s'\n", __func__, ptr, line_num, APP_CONFIG_FILE);
-				actual_section = APP_CONF_NONE;
-			}
-		}
-		else {
-			int r = 0;
+            else {
+                fprintf(stderr, "%s: Unknown section '%s' on line nb. %d in file '%s'\n", __func__, ptr, line_num, APP_CONFIG_FILE);
+                actual_section = APP_CONF_NONE;
+            }
+        }
+        else {
+            int r = 0;
 
-			switch (actual_section) {
+            switch (actual_section) {
             case APP_CONF_NONE:
                 break;
             case APP_CONF_SYSTEM:
@@ -366,11 +369,11 @@ int app_config_load(struct system_ini *system_ini)
                fclose(cf);
                return 1;
             }
-		}
-	}
-	fclose(cf);
+        }
+    }
+    fclose(cf);
     fprintf(stderr, " OK\n");
-	return 0;
+    return 0;
 }
 
 void app_config_dump(struct system_ini *system_ini)
@@ -418,3 +421,5 @@ void app_config_dump(struct system_ini *system_ini)
         fprintf(stderr, "max_block_size = %u\n", system_ini->canopen[n].max_block_size);
     }
 }
+
+/* ---------------------------------------------------------------------------- */

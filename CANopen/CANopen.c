@@ -16,12 +16,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include <time.h>
-#include <signal.h>
-#include <assert.h>
-#include "inc.mect/mectCfgUtil.h"
-
-
 #include <pthread.h>
 #include "inc.data/CANopen.h"
 

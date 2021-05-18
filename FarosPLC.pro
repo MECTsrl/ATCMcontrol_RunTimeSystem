@@ -11,16 +11,24 @@ TARGET = fcrts
 
 SOURCES += \
         CANopen/CANopen.c \
+        ioData/crosstable.c \
+        ioData/dataClients.c \
+        ioData/dataDiagnostics.c \
+        ioData/dataEngine.c \
+        ioData/dataFbMect.c \
+        ioData/dataHmiPlc.c \
         ioData/dataImpl.c \
         ioData/dataMain.c \
+        ioData/dataServers.c \
+        ioData/dataUtils.c \
         ioData/hmi_plc.c \
+        ioData/system_ini.c \
         ioTest/tstImpl.c \
         ioTest/tstMain.c \
         ioTest/tstSimu.c \
         main.c \
         osKernel/fcAdapt.c \
         osKernel/mectAdapt.c \
-        osKernel/mectCfgUtil.c \
         osKernel/osFieldB.c \
         osKernel/osFlash.c \
         osKernel/osLib.c \
@@ -77,7 +85,6 @@ HEADERS += \
     inc.data/dataMain.h \
     inc.fc/fcDef.h \
     inc.fc/fcMain.h \
-    inc.mect/mectCfgUtil.h \
     inc.mect/mectMain.h \
     inc.mect/mectRetentive.h \
     inc/BuildNr.h \
@@ -97,7 +104,10 @@ HEADERS += \
     inc/vmShared.h \
     inc/vmmDef.h \
     inc/vmmMain.h \
+    ioData/crosstable.h \
+    ioData/dataImpl.h \
     ioData/hmi_plc.h \
+    ioData/system_ini.h \
     vmKernel/vmmSys.h \
     vmLib/fbIec.h \
     vmLib/fbSys.h \
