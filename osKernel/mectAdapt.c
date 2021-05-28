@@ -26,11 +26,11 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
-#include "inc.fc/fcDef.h"
-#include "inc.data/dataMain.h"
-#include "inc.mect/mectMain.h"
+#include "../inc.fc/fcDef.h"
+#include "../inc.data/dataMain.h"
+#include "../inc.mect/mectMain.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>

@@ -22,27 +22,26 @@
 
 #define __4CFILE__	"dataImpl.c"
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_IODAT)
 
 #include "dataImpl.h"
-
-#define REVISION_HI  2
-#define REVISION_LO  25
 
 /* ----  Local Functions:	--------------------------------------------------- */
 
 static inline void doWriteBytes(u_int32_t *values, u_int32_t *flags, unsigned ulOffs, unsigned uLen);
 static inline void doWriteBit(unsigned ulOffs, unsigned usBit, int bit);
 
-static unsigned plc_product_id();
-static unsigned plc_serial_number();
-
 /* ----  Global Variables:	 -------------------------------------------------- */
 
-extern int verbose_print_enabled = 0;
-extern int timer_overflow_enabled = 0;
+int verbose_print_enabled = 0;
+int timer_overflow_enabled = 0;
+
+struct system_ini system_ini;
+
+static pthread_t theEngineThread_id = WRONG_THREAD;
+static enum threadStatus theEngineThreadStatus = NOT_STARTED;
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -434,87 +433,6 @@ static inline void doWriteBit(unsigned ulOffs, unsigned usBit, int bit)
     if (written > 1)
         fprintf(stderr, "%s() wrote %u variables instead of 1", __func__, written);
 }
-
-/* ---------------------------------------------------------------------------- */
-
-static unsigned plc_product_id()
-{
-    unsigned retval = 0xFFFFffff;
-    FILE *f;
-
-    f = fopen(ROOTFS_VERSION, "r");
-    if (f) {
-        char buf[42];
-        char str[42];
-        unsigned x = 0, y = 0, z = 0;
-
-        if (fgets(buf, 42, f) == NULL)
-            goto close_file;
-        if (sscanf(buf, "Release: %5s", str) != 1)
-            goto close_file;
-        if (fgets(buf, 42, f) == NULL)
-            goto close_file;
-
-        // the order of following tests is important
-
-        // TP1043_01_A TP1043_01_B TP1043_02_A TP1043_02_B
-        // TP1057_01_A TP1057_01_B
-        // TP1070_01_A TP1070_01_B TP1070_01_C
-        // TP1070_02_E
-        if (sscanf(buf, "Target: TP%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
-        // TPX1070_03_D TPX1070_03_E
-        else if (sscanf(buf, "Target: TPX%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
-        // TPAC1007_04_AA TPAC1007_04_AB TPAC1007_04_AC TPAC1007_04_AD TPAC1007_04_AE
-        // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
-        // TPAC1008_03_AC TPAC1008_03_AD
-        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
-        // TPAC1007_03 TPAC1008_01
-        else if (sscanf(buf, "Target: TPAC%x_%x", &x, &y) == 2)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8);
-
-        // TPAC1007_LV
-        else if (strcmp(buf, "Target: TPAC1007_LV") == 0)
-            retval = 0x10075500;
-
-        // TPAC1005 TPAC1006
-        else if (sscanf(buf, "Target: TPAC%x", &x) == 1)
-            retval = ((x & 0xFFFF) << 16);
-
-        // TPLC050_01_AA TPLC100_01_AA TPLC100_01_AB
-        else if (sscanf(buf, "Target: TPLC%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
-    close_file:
-        fclose(f);
-    }
-
-    return retval;
-}
-
-static unsigned plc_serial_number()
-{
-    unsigned retval = 0xFFFFffff;
-    FILE *f;
-
-    f = fopen(SERIAL_CONF, "r");
-    if (f) {
-        char buf[80]; // YYYYMM1234
-
-        if (fgets(buf, (4+2+4+1), f)) {
-            retval = strtoul(buf, NULL, 10);
-        }
-        fclose(f);
-    }
-
-    return retval;
-}
-
 
 #endif /* RTS_CFG_IODAT */
 

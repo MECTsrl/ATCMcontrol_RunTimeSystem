@@ -28,11 +28,11 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_SYSLOAD)
 
-#include "inc/osFile.h"
+#include "../inc/osFile.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 

@@ -55,7 +55,7 @@ void GetLocalTaskInfo(STDLIBFUNCALL);
 
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 typedef struct
@@ -160,7 +160,7 @@ typedef struct
 } SGetLocalTaskInfo;	/* ---------------------------------------------------- */
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 #endif	/* RTS_CFG_SYSTEM_LIB */

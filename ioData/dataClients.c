@@ -280,7 +280,7 @@ void *clientThread(void *arg)
 #endif
                     errno = saved_errno;
                     if (errno ==  EINVAL) {
-                        fprintf(stderr, "%s@%09llu ms: problem with (%ds, %ldns).\n",
+                        fprintf(stderr, "%s@%09llu ms: problem with (%lds, %ldns).\n",
                             theDevice->name, theDevice->current_time_ns, abstime.tv_sec, abstime.tv_nsec);
 #ifdef VERBOSE_DEBUG
                         invalid_timeout = TRUE;

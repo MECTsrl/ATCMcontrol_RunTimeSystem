@@ -26,8 +26,8 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
-#include "inc.fc/fcDef.h"
+#include "../inc/stdInc.h"
+#include "../inc.fc/fcDef.h"
 
 #if defined(RTS_CFG_ALI_TRACE)
 #include "libIec.h"

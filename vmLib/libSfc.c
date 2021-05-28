@@ -28,7 +28,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_SFC)
 
@@ -217,7 +217,7 @@ typedef struct _SFC_Header
  * ----------------------------------------------------------------------------
  */
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
  typedef struct
@@ -240,7 +240,7 @@ typedef struct
 } SFC_FINALISE;
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 /* ----  Global Variables:	 -------------------------------------------------- */

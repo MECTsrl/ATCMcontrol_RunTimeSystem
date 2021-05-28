@@ -26,6 +26,17 @@
 
 /* ---------------------------------------------------------------------------- */
 
+unsigned buzzer_beep_ms = 0;
+unsigned buzzer_on_cs = 0;
+unsigned buzzer_off_cs = 0;
+unsigned buzzer_replies = 0;
+
+unsigned buzzer_period_tics = 0;
+unsigned buzzer_tic = 0;
+unsigned buzzer_periods = 0;
+
+/* ---------------------------------------------------------------------------- */
+
 char *strtok_csv(char *string, const char *separators, char **savedptr)
 {
     char *p, *s;

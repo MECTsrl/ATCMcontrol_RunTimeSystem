@@ -27,7 +27,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 

@@ -8,16 +8,16 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
-#include "inc.fc/fcDef.h"
-#include "inc.mect/mectMain.h"
+#include "../inc.fc/fcDef.h"
+#include "../inc.mect/mectMain.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>
 
 #include <pthread.h>
-#include "inc.data/CANopen.h"
+#include "../inc.data/CANopen.h"
 
 #define NO_THREAD 0xFFFFFFFFL
 #define STACK_RATE_MS   10

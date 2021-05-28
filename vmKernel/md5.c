@@ -61,7 +61,7 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_LICENSE)
 

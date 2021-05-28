@@ -63,7 +63,7 @@
 #endif
 
 #ifndef _LIBDEF_H_
-#include "inc/libDef.h"
+#include "libDef.h"
 #endif
 
 #ifndef _VMMMAIN_H_

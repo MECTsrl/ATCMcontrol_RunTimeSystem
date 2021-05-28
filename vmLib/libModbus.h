@@ -19,8 +19,8 @@
 #ifndef _MODBUS_H_
 #define _MODBUS_H_
 
-#include "inc/stdInc.h"
-#include "inc/libDef.h"
+#include "../inc/stdInc.h"
+#include "../inc/libDef.h"
 #if defined(RTS_CFG_MODBUS_LIB)
 
 /* Add this for macros that defined unix flavor */

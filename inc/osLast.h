@@ -41,7 +41,7 @@
 
 /* Adaptation specific code ... 
  */
-#include "inc.fc/fcMain.h"
+#include "../inc.fc/fcMain.h"
 								
  
 #endif /* _OSLAST_H_ */

@@ -27,12 +27,12 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_IODAT)
 
-#include "inc.data/dataMain.h"
-#include "inc/iolDef.h"
+#include "../inc.data/dataMain.h"
+#include "../inc/iolDef.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 

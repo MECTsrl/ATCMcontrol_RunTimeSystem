@@ -23,7 +23,7 @@
 #ifndef SYSTEM_INI_H
 #define SYSTEM_INI_H
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #define APP_CONFIG_DIR                  "/local/etc/sysconfig/"
 #define APP_CONFIG_FILE                 APP_CONFIG_DIR "system.ini"

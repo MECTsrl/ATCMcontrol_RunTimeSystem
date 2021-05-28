@@ -28,10 +28,10 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
-#include "inc.fc/fcDef.h"
-#include "inc.fc/fcMain.h"
+#include "../inc.fc/fcDef.h"
+#include "../inc.fc/fcMain.h"
 
 #include <sys/mman.h>
 #include <fcntl.h>

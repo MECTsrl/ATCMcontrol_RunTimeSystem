@@ -26,10 +26,10 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_TCP_NATIVE)
-  #include "inc/osSocket.h"
+  #include "../inc/osSocket.h"
 #endif
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */

@@ -84,7 +84,7 @@ void make_lword(STDLIBFUNCALL);
 #endif
 
 #define RTS_PRAGMA_PACK_1	/* >>>> Align 1 Begin >>>>>>>>>>>>>>>>>>>>>>>>>>>>> */
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_1
 
 #if defined(IP_CFG_DWORD) && defined(IP_CFG_BYTE)
@@ -417,7 +417,7 @@ typedef struct
 
 
 #define RTS_PRAGMA_PACK_DEF 	
-#include "inc/osAlign.h"
+#include "../inc/osAlign.h"
 #undef	RTS_PRAGMA_PACK_DEF 	/* <<<< Align 1 end <<<<<<<<<<<<<<<<<<<<<<<<<<< */
 
 #endif	/* RTS_CFG_UTILITY_LIB */

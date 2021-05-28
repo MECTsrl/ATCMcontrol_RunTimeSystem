@@ -26,9 +26,9 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
-#include "inc/iolDef.h"
+#include "../inc/iolDef.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 

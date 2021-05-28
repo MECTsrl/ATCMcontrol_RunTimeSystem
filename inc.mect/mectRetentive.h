@@ -23,7 +23,7 @@
 #ifndef H_MECTRETENTIVE
 #define H_MECTRETENTIVE
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #define RETENTIVE_FILE 			"/local/retentive"
 

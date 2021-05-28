@@ -28,10 +28,10 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_FILE_NATIVE)
-  #include "inc/osFile.h"
+  #include "../inc/osFile.h"
 #endif
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */

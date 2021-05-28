@@ -28,13 +28,13 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 #if defined(RTS_CFG_CUSTOMER_LIB)
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "vmLib/libFile.h"
+#include "../vmLib/libFile.h"
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 

@@ -31,20 +31,23 @@
 #include <semaphore.h>
 #include <ctype.h>
 
-
-#include "inc.data/dataMain.h"
-#include "inc/iolDef.h"
-#include "inc.fc/fcDef.h"
+#include "../inc/stdInc.h"
+#include "../inc.data/dataMain.h"
+#include "../inc/iolDef.h"
+#include "../inc.fc/fcDef.h"
 #if defined(RTS_CFG_MECT_RETAIN)
 #include <sys/mman.h>
-#include "inc.mect/mectRetentive.h"
+#include "../inc.mect/mectRetentive.h"
 #endif
 
 #include "system_ini.h"
 #include "hmi_plc.h"
 
-#include "vmLib/libModbus.h"
-#include "inc.data/CANopen.h"
+#include "../vmLib/libModbus.h"
+#include "../inc.data/CANopen.h"
+
+#define REVISION_HI  2
+#define REVISION_LO  26
 
 #if defined(__linux__) && defined(__arm__)
 
@@ -55,6 +58,10 @@
 #endif
 
 #elif defined(__linux__) && defined(__amd64__)
+
+#define SERIAL_DEVNAME "/dev/ttyUSB%u"
+
+#elif defined(__linux__) && defined(__i686__)
 
 #define SERIAL_DEVNAME "/dev/ttyUSB%u"
 
@@ -206,7 +213,7 @@ static inline uint64_t rt_timer_read()
 #define DimAlarmsCT     1152
 #define LAST_RETENTIVE  192
 
-static struct system_ini system_ini;
+extern struct system_ini system_ini;
 
 // -------- ALL SERVERS (RTU_SRV, TCP_SRV, TCPRTU_SRV) ------------
 #define REG_SRV_NUMBER      4096
@@ -281,8 +288,9 @@ struct ServerStruct {
     RTIME busy_time_ns;
     RTIME last_time_ns;
     RTIME last_update_ns;
-} theServers[MAX_SERVERS];
-static u_int16_t theServersNumber = 0;
+};
+extern struct ServerStruct theServers[MAX_SERVERS];
+extern u_int16_t theServersNumber;
 
 #define MaxLocalQueue 64
 struct PLCwriteRequest {
@@ -343,9 +351,10 @@ struct ClientStruct {
     u_int16_t PLCwriteRequestGet;
     u_int16_t PLCwriteRequestPut;
     u_int16_t diagnosticAddr;
-} theDevices[MAX_DEVICES];
-static u_int16_t theDevicesNumber = 0;
-static u_int16_t theTcpDevicesNumber = 0;
+};
+extern struct ClientStruct theDevices[MAX_DEVICES];
+extern u_int16_t theDevicesNumber;
+extern u_int16_t theTcpDevicesNumber;
 
 struct NodeStruct {
     u_int16_t device;
@@ -355,8 +364,9 @@ struct NodeStruct {
     int16_t retries;
     int16_t blacklist;
     u_int16_t diagnosticAddr;
-} theNodes[MAX_NODES];
-static u_int16_t theNodesNumber = 0;
+};
+extern struct NodeStruct theNodes[MAX_NODES];
+extern u_int16_t theNodesNumber;
 
 struct CrossTableRecord {
     int16_t Enable;
@@ -398,34 +408,27 @@ struct Alarms {
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
-extern int verbose_print_enabled = 0;
-extern int timer_overflow_enabled = 0;
+extern int verbose_print_enabled;
+extern int timer_overflow_enabled;
 
 #if defined(RTS_CFG_MECT_RETAIN)
-static u_int32_t *retentive = NULL;
-static int do_flush_retentives = FALSE;
+extern u_int32_t *retentive;
+extern int do_flush_retentives;
 #endif
 
-static pthread_t theEngineThread_id = WRONG_THREAD;
-static pthread_t theDataSyncThread_id = WRONG_THREAD;
-static enum threadStatus theEngineThreadStatus = NOT_STARTED;
-static enum threadStatus theDataSyncThreadStatus = NOT_STARTED;
+extern unsigned buzzer_beep_ms;
+extern unsigned buzzer_on_cs;
+extern unsigned buzzer_off_cs;
+extern unsigned buzzer_replies;
 
-static STaskInfoVMM *pVMM = NULL;
-
-static unsigned buzzer_beep_ms = 0;
-static unsigned buzzer_on_cs = 0;
-static unsigned buzzer_off_cs = 0;
-static unsigned buzzer_replies = 0;
-
-static unsigned buzzer_period_tics = 0;
-static unsigned buzzer_tic = 0;
-static unsigned buzzer_periods = 0;
+extern unsigned buzzer_period_tics;
+extern unsigned buzzer_tic;
+extern unsigned buzzer_periods;
 
 /* ------- dataEngine.c -------- */
 
-extern enum EngineStatus engineStatus = enIdle;
-extern pthread_mutex_t theCrosstableClientMutex = PTHREAD_MUTEX_INITIALIZER;
+extern enum EngineStatus engineStatus;
+extern pthread_mutex_t theCrosstableClientMutex;
 extern pthread_cond_t theAlarmsEventsCondvar;
 extern sem_t newOperations[MAX_DEVICES];
 

@@ -65,7 +65,7 @@
   /* Structures in this file MUST be compiled with one byte alignment!
    */
   #define RTS_PRAGMA_PACK_1
-  #include "inc/osAlign.h"
+  #include "../inc/osAlign.h"
   #undef  RTS_PRAGMA_PACK_1
 
 #endif
@@ -1227,7 +1227,7 @@ typedef struct ALIGNED_STRUCT(2)		/* ---> aligned (2) */
 #else
 
   #define RTS_PRAGMA_PACK_DEF
-  #include "inc/osAlign.h"
+  #include "../inc/osAlign.h"
   #undef  RTS_PRAGMA_PACK_DEF
 
 #endif

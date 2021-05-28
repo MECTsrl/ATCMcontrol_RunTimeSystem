@@ -28,11 +28,11 @@
 
 /* ----  Includes:	 ---------------------------------------------------------- */
 
-#include "inc/stdInc.h"
+#include "../inc/stdInc.h"
 
 /* ----  Target Specific Includes:	 ------------------------------------------ */
 
-#include "inc.fc/fcDef.h"
+#include "../inc.fc/fcDef.h"
 
 #include <sys/mman.h>
 #include <sys/vfs.h>
