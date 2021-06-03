@@ -694,13 +694,13 @@ IEC_UINT sockInitialize(STaskInfoVMM *pVMM)
 static IEC_UINT sockRecv(VMS_SOCKET hSocket, IEC_DATA *pData, IEC_UINT *upLen)
 {
 	IEC_UINT  uDataLen	   = 0;
-	IEC_UDINT ulTransfered = 0;
+    int transfered = 0;
 
-	for(;;)
+    for (;;)
 	{
-		ulTransfered = osRecv(hSocket, (IEC_CHAR OS_LPTR *)(pData + uDataLen), *upLen - uDataLen, 0);
+        transfered = osRecv(hSocket, (IEC_CHAR OS_LPTR *)(pData + uDataLen), *upLen - uDataLen, 0);
 
-		if (ulTransfered == VMS_SOCKET_ERROR)
+        if (transfered == VMS_SOCKET_ERROR)
 		{
 			if (VMS_ERRNO != VMS_ETIMEDOUT)
 			{
@@ -715,14 +715,14 @@ static IEC_UINT sockRecv(VMS_SOCKET hSocket, IEC_DATA *pData, IEC_UINT *upLen)
 			continue;
 		}
 
-		if (ulTransfered == 0)
+        if (transfered == 0)
 		{
 			/* Connection closed by client
 			 */
 			return ERR_ERROR;
 		}
 			
-		uDataLen = (IEC_UINT)(uDataLen + ulTransfered);
+        uDataLen = (IEC_UINT)(uDataLen + transfered);
 
 		if (uDataLen >= *upLen)
 		{
@@ -759,13 +759,13 @@ static IEC_UINT sockRecv(VMS_SOCKET hSocket, IEC_DATA *pData, IEC_UINT *upLen)
 static IEC_UINT sockSend(VMS_SOCKET hSocket, IEC_DATA *pData, IEC_UINT uLen)
 {
 	IEC_UINT  uDataLen	   = 0;
-	IEC_UDINT ulTransfered = 0;
+    int transfered = 0;
 
 	for(;;)
 	{
-		ulTransfered = osSend(hSocket, (const IEC_CHAR OS_LPTR *)(pData + uDataLen), uLen - uDataLen, 0);
+        transfered = osSend(hSocket, (const IEC_CHAR OS_LPTR *)(pData + uDataLen), uLen - uDataLen, 0);
 
-		if (ulTransfered == VMS_SOCKET_ERROR)
+        if (transfered == VMS_SOCKET_ERROR)
 		{
 			if (VMS_ERRNO != VMS_ETIMEDOUT)
 			{
@@ -780,14 +780,14 @@ static IEC_UINT sockSend(VMS_SOCKET hSocket, IEC_DATA *pData, IEC_UINT uLen)
 			continue;
 		}
 
-		if (ulTransfered == 0)
+        if (transfered == 0)
 		{
 			/* Connection closed by client
 			 */
 			return ERR_ERROR;
 		}
 
-		uDataLen = (IEC_UINT)(uDataLen + ulTransfered);
+        uDataLen = (IEC_UINT)(uDataLen + transfered);
 
 		if (uDataLen >= uLen)
 		{
@@ -915,7 +915,7 @@ IEC_UINT sockListen(void *pPara)
 	while (bFirst)
 	{
 		IEC_DINT nSelRet = 0;
-		IEC_UINT i;
+        IEC_UINT i = 0;
 		IEC_BOOL bContinue = FALSE;
 
 		while (nSelRet == 0)

@@ -50,7 +50,7 @@ static u_int16_t modbusRegistersNumber(u_int16_t DataAddr, u_int16_t DataNumber)
 static inline unsigned get_byte_bit(u_int8_t data, unsigned n);
 static inline unsigned get_word_bit(u_int16_t data, unsigned n);
 static inline unsigned get_dword_bit(u_int32_t data, unsigned n);
-static inline void set_byte_bit(u_int8_t *data, unsigned n, unsigned value);
+//static inline void set_byte_bit(u_int8_t *data, unsigned n, unsigned value);
 static inline void set_word_bit(u_int16_t *data, unsigned n, unsigned value);
 static inline void set_dword_bit(u_int32_t *data, unsigned n, unsigned value);
 
@@ -612,7 +612,7 @@ void *clientThread(void *arg)
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                         }
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        // DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // write operation and we cannot retry
                         changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
@@ -633,7 +633,7 @@ void *clientThread(void *arg)
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                         }
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        // DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // write operation and we cannot retry
                         changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
@@ -665,7 +665,7 @@ void *clientThread(void *arg)
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                         }
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        // DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // any operation and we cannot retry
                         changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
@@ -683,7 +683,7 @@ void *clientThread(void *arg)
                         for (i = 0; i < DataNumber; ++i) {
                             writeQdataRegisters(DataAddr + i, 0, DATA_WARNING);
                         }
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        // DataAddr = DataAddr; // i.e. RETRY this immediately
                     } else {
                         // any operation and we cannot retry
                         changeNodeStatus(d, Data_node, BLACKLIST); // also data=0 status=DATA_ERROR
@@ -709,7 +709,7 @@ void *clientThread(void *arg)
                         }
                     } else {
                         changeNodeStatus(d, Data_node, TIMEOUT);
-                        DataAddr = DataAddr; // i.e. RETRY this immediately
+                        // DataAddr = DataAddr; // i.e. RETRY this immediately
                     }
                     break;
                 case DISCONNECTED:
@@ -1890,15 +1890,15 @@ static inline unsigned get_dword_bit(u_int32_t data, unsigned n)
     }
 }
 
-static inline void set_byte_bit(u_int8_t *data, unsigned n, unsigned value)
-{
-    // bits 1..8
-    if (value) {
-        *data |= (1 << (n - 1));
-    } else {
-        *data &= ~(1 << (n - 1));
-    }
-}
+//static inline void set_byte_bit(u_int8_t *data, unsigned n, unsigned value)
+//{
+//    // bits 1..8
+//    if (value) {
+//        *data |= (1 << (n - 1));
+//    } else {
+//        *data &= ~(1 << (n - 1));
+//    }
+//}
 
 static inline void set_word_bit(u_int16_t *data, unsigned n, unsigned value)
 {

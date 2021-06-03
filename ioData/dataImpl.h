@@ -35,10 +35,6 @@
 #include "../inc.data/dataMain.h"
 #include "../inc/iolDef.h"
 #include "../inc.fc/fcDef.h"
-#if defined(RTS_CFG_MECT_RETAIN)
-#include <sys/mman.h>
-#include "../inc.mect/mectRetentive.h"
-#endif
 
 #include "system_ini.h"
 #include "hmi_plc.h"
@@ -389,7 +385,8 @@ struct CrossTableRecord {
     //
     u_int16_t device;
     u_int16_t node;
-} CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
+};
+extern struct CrossTableRecord CrossTable[1 + DimCrossTable];	 // campi sono riempiti a partire dall'indice 1
 
 struct Alarms {
     enum EventAlarm ALType;
@@ -404,17 +401,13 @@ struct Alarms {
     u_int16_t ALFilterCount;
     u_int16_t ALError;
     int comparison;
-} ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
+};
+extern struct Alarms ALCrossTable[1 + DimAlarmsCT]; // campi sono riempiti a partire dall'indice 1
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
 extern int verbose_print_enabled;
 extern int timer_overflow_enabled;
-
-#if defined(RTS_CFG_MECT_RETAIN)
-extern u_int32_t *retentive;
-extern int do_flush_retentives;
-#endif
 
 extern unsigned buzzer_beep_ms;
 extern unsigned buzzer_on_cs;
@@ -426,6 +419,11 @@ extern unsigned buzzer_tic;
 extern unsigned buzzer_periods;
 
 /* ------- dataEngine.c -------- */
+
+#if defined(RTS_CFG_MECT_RETAIN)
+extern u_int32_t *retentive;
+extern int do_flush_retentives;
+#endif
 
 extern enum EngineStatus engineStatus;
 extern pthread_mutex_t theCrosstableClientMutex;
@@ -528,5 +526,11 @@ void initServerDiagnostic(u_int16_t s);
 void initDeviceDiagnostic(u_int16_t d);
 void setDiagnostic(u_int16_t addr, u_int16_t offset, u_int32_t value);
 void incDiagnostic(u_int16_t addr, u_int16_t offset);
+
+/* ------- dataRetentives.c -------- */
+
+u_int32_t *initRetentives();
+void syncRetentives();
+void dumpRetentives();
 
 #endif // DATAIMPL_H

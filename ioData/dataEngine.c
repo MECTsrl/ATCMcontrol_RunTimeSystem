@@ -53,6 +53,9 @@ static enum threadStatus theDataSyncThreadStatus = NOT_STARTED;
 
 static STaskInfoVMM *pVMM = NULL;
 
+struct CrossTableRecord CrossTable[1 + DimCrossTable];
+struct Alarms ALCrossTable[1 + DimAlarmsCT];
+
 /* ---------------------------------------------------------------------------- */
 
 #define OPER_GREATER    41
@@ -136,16 +139,11 @@ void engineInit()
 
     // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
-    if (ptRetentive == MAP_FAILED) {
-        retentive = NULL;
-        fprintf(stderr, "Missing retentive file.\n");
+    retentive = initRetentives();
+    if (retentive == NULL) {
+        fprintf(stderr, "Missing or wrong retentive file.\n");
     } else {
-        retentive = (u_int32_t *)ptRetentive;
-        if (lenRetentive == LAST_RETENTIVE * 4) {
-            OS_MEMCPY(&VAR_VALUE(1), retentive, LAST_RETENTIVE * 4);
-        } else {
-            fprintf(stderr, "Wrong retentive file size: got %ld expecting %u.\n", lenRetentive, LAST_RETENTIVE * 4);
-        }
+        OS_MEMCPY(&VAR_VALUE(1), retentive, LAST_RETENTIVE * 4);
     }
 #endif
 
@@ -424,7 +422,7 @@ void *engineThread(void *statusAdr)
             pthread_mutex_unlock(&theCrosstableClientMutex);
             {
                 // syncing the retentive file but without holding the mutex
-                msync((void *)retentive, lenRetentive, MS_SYNC);
+                syncRetentives();
             }
             pthread_mutex_lock(&theCrosstableClientMutex);
         }

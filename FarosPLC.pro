@@ -19,6 +19,7 @@ SOURCES += \
         ioData/dataHmiPlc.c \
         ioData/dataImpl.c \
         ioData/dataMain.c \
+        ioData/dataRetentives.c \
         ioData/dataServers.c \
         ioData/dataUtils.c \
         ioData/hmi_plc.c \
@@ -86,7 +87,6 @@ HEADERS += \
     inc.fc/fcDef.h \
     inc.fc/fcMain.h \
     inc.mect/mectMain.h \
-    inc.mect/mectRetentive.h \
     inc/BuildNr.h \
     inc/intDef.h \
     inc/intOpcds.h \

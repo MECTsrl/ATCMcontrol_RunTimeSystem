@@ -16,7 +16,6 @@ set(BUILD_SOURCES
     inc/libDef.h
     inc/md5.h
     inc.mect/mectMain.h
-    inc.mect/mectRetentive.h
     inc/osAlign.h
     inc/osDef.h
     inc/osFile.h

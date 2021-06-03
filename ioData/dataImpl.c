@@ -90,6 +90,7 @@ void dataEngineStop(void)
         theEngineThread_id = WRONG_THREAD;
         fprintf(stderr, "joined engine\n");
     }
+    dumpRetentives();
 }
 
 void dataEnginePwrFailStop(void)
@@ -99,6 +100,8 @@ void dataEnginePwrFailStop(void)
     // NB: there is no unlock, it's correct
 
     pthread_mutex_lock(&theCrosstableClientMutex);
+
+    dumpRetentives();
 }
 
 /* ---------------------------------------------------------------------------- */

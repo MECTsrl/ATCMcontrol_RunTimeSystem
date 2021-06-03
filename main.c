@@ -50,7 +50,6 @@
 #define PID_FILE "signalconfpid"
 #define PID_PATH "/sys/kernel/debug/signalconfpid"
 
-#include "inc.mect/mectRetentive.h"
 #include <sys/ioctl.h>
 #endif
 #include <getopt.h>
@@ -93,7 +92,6 @@ static char *get_signal(int signum);
 IEC_UINT writepid(void);
 
 void ReleaseResources(void);
-void dump_retentives(void);
 
 /* ----  Implementations:	--------------------------------------------------- */
 
@@ -201,11 +199,6 @@ static int application_options(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
     IEC_UINT uRes;
-
-#ifdef RTS_CFG_MECT_RETAIN
-    int fd;
-    struct stat sb;
-#endif
 
 #ifdef __XENO__
     printf("Xenomai enabled\n");
@@ -364,48 +357,9 @@ int main(int argc, char *argv[])
 #ifdef __XENO__
     writepid();
 #endif
-    /* open and load retentive file */
-    fd = open (RETENTIVE_FILE, O_RDWR | O_SYNC);
-    if(fd == -1)
-    {
-        perror ("open");
-        RETURN(ERR_ERROR);
-    }
-
-        if(fstat (fd, &sb) == -1) {
-                perror ("fstat");
-                RETURN(ERR_ERROR);
-        }
-
-        if(!S_ISREG (sb.st_mode)) {
-                fprintf (stderr, "%s is not a file\n", RETENTIVE_FILE);
-                RETURN(ERR_ERROR);
-        }
-
-        ptRetentive = mmap (0, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        lenRetentive = sb.st_size;
-        if(ptRetentive == MAP_FAILED) {
-                perror ("mmap");
-                RETURN(ERR_ERROR);
-        }
-
-        if(close (fd) == -1) {
-                perror ("close");
-                RETURN(ERR_ERROR);
-        }
-
-#ifdef MECT_RETAIN_DEBUG
-
-    fprintf(stderr,"[%s],configfd %d\n", __func__, configfd);
-    if(ioctl(configfd, RETENTIVE_GPIOCTRL) < 0)
-    {
-         printf("ioctl failed and returned errno %s \n",strerror(errno));
-    }
-    fprintf(stderr,"[%s], called ioctl\n", __func__);
-#endif
-
 
 #endif
+
     /* Set Scheduling Parameters
      * ------------------------------------------------------------------------
      */
@@ -737,48 +691,9 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
 
 #if defined(RTS_CFG_MECT_RETAIN)
 /**
- * Dump retentive variable handler
+ * power fail handler
  *
  */
-void dump_retentives()
-{
-    IEC_UINT uRes;
-#ifdef DBG_MAIN
-    printf("%s Retain variables dumping...\n", __func__);
-#endif
-
-#ifdef RTS_NATIVE_RETAIN
-    /* Stop Retain Update task
-     */
-    uRes = msgTXCommand(MSG_RT_CLOSE, Q_LIST_RET, Q_RESP_VMM_RET, VMM_TO_IPC_MSG_LONG, TRUE);
-    if (uRes != OK)
-    {
-        printf("%s CANNOT dump retain variables!\n", __func__);
-    }
-#else
-
-    uRes = msync((void *)ptRetentive, lenRetentive, MS_SYNC);
-    if (uRes != OK)
-    {
-        fprintf(stderr,"%s CANNOT sync retain variables!\n", __func__);
-    }
-    uRes = munmap((void *)ptRetentive, lenRetentive);
-    if (uRes != OK)
-    {
-        fprintf(stderr,"%s CANNOT unmap retain variables!\n", __func__);
-    }
-#ifdef MECT_RETAIN_DEBUG
-    ioctl(configfd, RETENTIVE_GPIOCTRL);
-    fprintf(stderr,"[%s], called ioctl\n", __func__);
-#endif
-    sync();
-
-#endif
-
-#ifdef DBG_MAIN
-    fprintf(stderr,"%s Retain variables dumped!\n", __func__);
-#endif
-}
 
 void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
 {
@@ -787,10 +702,8 @@ void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
     (void)siginfo;
     (void)context;
 
-    // immediately block the engine
+    // immediately block the engine and sync the retentive file
     dataEnginePwrFailStop();
-    // sync the retentive file
-    dump_retentives();
 
     // in case of power hole we will have the chance of rebooting
     for (n = 0; n < 500000000; ++n)
@@ -808,7 +721,6 @@ void pwrfail_handler(int signum, siginfo_t *siginfo, void *context)
  */
 IEC_UINT writepid(void)
 {
-    //int configfd;
     char buf[10];
 
     configfd = open(PID_PATH, O_CREAT | O_WRONLY, S_IRUSR|S_IWUSR);
@@ -821,10 +733,6 @@ IEC_UINT writepid(void)
         fprintf(stderr, "write '%s' failed (reason:%d (%s))\r\n", buf, os_errno, OS_STRERROR);
         RETURN(ERR_ERROR);
     }
-#ifdef MECT_RETAIN_DEBUG
-    fprintf(stderr,"[%s], configfd = %d\n", __func__, configfd);
-#endif
-
     RETURN(OK);
 }
 #endif
@@ -863,7 +771,6 @@ void ReleaseResources(void)
 #endif
 
     dataEngineStop();
-    dump_retentives();
 
 #ifdef DBG_MAIN
     fprintf(stdout, "[%s] - done.\n", __func__);
