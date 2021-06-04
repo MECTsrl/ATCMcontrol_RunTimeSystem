@@ -368,7 +368,7 @@ IEC_UINT intWide64Ops(STaskInfoVM *pVM, CPTR_TYP *ppIP, DPTR_TYP *ppIN, SPTR_TYP
 	#define STK_UCHK_VBITPTR(x) STK_UCHK8(x)
 
 #elif defined (IP_CFG_PTR64)
-	#define VPTR				IEC_LWORD
+    #define VPTR				DATAPTR /* IEC_LWORD */
 	#define SP_INC_VPTR 		SP_INC8
 	#define SP_DEC_VPTR 		SP_DEC8
 	#define STK_OCHK_VPTR(x)	STK_OCHK8(x)
@@ -778,7 +778,7 @@ IEC_UINT intWide64Ops(STaskInfoVM *pVM, CPTR_TYP *ppIP, DPTR_TYP *ppIN, SPTR_TYP
 #define POPBITPL(des,bit)													\
 		STK_UCHK_VBITPTR(1);												\
 		(des) = (IEC_BYTE OS_DPTR *)*(VBITPTR OS_SPTR *)pSP;				\
-		(bit) = *(((IEC_BYTE*)pSP)+sizeof(VPTR));							\
+        (bit) = *(((IEC_BYTE*)pSP) + sizeof(VPTR));							\
 		SP_INC_VBITPTR;
 
 #define PUSH8L(des) 														\

@@ -422,7 +422,7 @@
 
 #else	/* DEBUG */
 
-#undef 	RTS_CFG_DEBUG_OUTPUT
+#define 	RTS_CFG_DEBUG_OUTPUT
 #undef	RTS_CFG_DEBUG_FILE
 #define	RTS_CFG_DEBUG_GPIO
 #undef	RTS_CFG_COMM_TRACE

@@ -381,7 +381,7 @@ IEC_UINT osInitializeVM(STaskInfoVM *pVM)
 	SObject* pCode = pVM->pShared->pCode;
 	size_t	 unAlign;
 
-	unAlign = ((int)pCode->pAdr + getpagesize()) % getpagesize();
+    unAlign = ((unsigned long)pCode->pAdr + getpagesize()) % getpagesize();
 	ptr = pCode->pAdr - unAlign;
 
 	if(mprotect(ptr, pCode->ulSize+unAlign, PROT_READ|PROT_WRITE|PROT_EXEC) == -1)

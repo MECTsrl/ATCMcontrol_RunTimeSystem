@@ -1065,7 +1065,15 @@
 			   IEC_STRING OS_DPTR *pd;
 			   IEC_UINT   i;
 
+#if 0 /* FIXME: restore original code */
 			   POPPL(d);
+#else
+               /* inc/intDef.h */
+               STK_UCHK_VPTR(1);
+               (d) = (IEC_BYTE OS_DPTR *)*(VPTR OS_SPTR *)pSP;
+               SP_INC_VPTR;
+
+#endif
 			   POPPL(s);
 
 			   ps = (IEC_STRING OS_DPTR *)s;

@@ -1093,6 +1093,10 @@ IEC_UINT sockComm(void *pPara)
 	TR_RET(uRes);
   #endif
 
+#if 1
+    fprintf(stderr, "%s(): HD_BLOCK=%lu MAX_DATA=%d sizeof(XBlock)=%lu", __func__, HD_BLOCK, MAX_DATA,  sizeof(XBlock));
+#endif
+
 	for( ; ; )
 	{
 		XBlock	  *pBlock = (XBlock *)Message.pData;

@@ -280,7 +280,13 @@ void *clientThread(void *arg)
 #endif
                     errno = saved_errno;
                     if (errno ==  EINVAL) {
+#if __SIZEOF_POINTER__ == 4 /* 32 bit */
                         fprintf(stderr, "%s@%09llu ms: problem with (%lds, %ldns).\n",
+#elif __SIZEOF_POINTER__ == 8 /* 64 bit */
+                        fprintf(stderr, "%s@%09lu ms: problem with (%lds, %ldns).\n",
+#else
+#error unknown size
+#endif
                             theDevice->name, theDevice->current_time_ns, abstime.tv_sec, abstime.tv_nsec);
 #ifdef VERBOSE_DEBUG
                         invalid_timeout = TRUE;

@@ -491,7 +491,9 @@ void *IO_Layer_ProfiDP(void *lpParam)
 
 void VMM_CleanUp_Mutex(void *lpParam)
 {
-	osEndCriticalSection((IEC_UDINT)lpParam);
+    unsigned long semaphore = (unsigned long)lpParam;
+
+    osEndCriticalSection(semaphore);
 }
 
 #endif /* RTS_CFG_SINGLE_TASK */
