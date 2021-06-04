@@ -196,18 +196,19 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 {
 #ifdef USE_POSIX_MQUEUE
 	int retval;
+
 	if (ulTimeOut == VMM_WAIT_FOREVER) {
         	// wait forever
 		retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
 	} else if (ulTimeOut == VMM_NO_WAIT) {
 		struct mq_attr mattr;
 
-	        // check if there are queued messages
-        	if (mq_getattr(g_hQueue[uQueue], &mattr) == -1) {
-			RETURN_e(ERR_IPC_RECV_FAILED);
+        // check if there are queued messages
+        if (mq_getattr(g_hQueue[uQueue], &mattr) == -1) {
+            RETURN_e(ERR_IPC_RECV_FAILED);
 		}
 		if (mattr.mq_curmsgs == 0) {
-			RETURN_e(WRN_TIME_OUT);
+            RETURN_e(WRN_TIME_OUT);
 		}
 	        // receive will succeed immediately
 		retval = mq_receive(g_hQueue[uQueue], (char *)pMessage, sizeof(SMessage), NULL);
@@ -246,7 +247,7 @@ IEC_UINT osRecvMessage(SMessage *pMessage, IEC_UINT uQueue, IEC_UDINT ulTimeOut)
 	}
 	if (retval != -1) {
 		if (pMessage->uLen > FC_MAX_MSG_LEN) {
-			IEC_DATA *pData = (IEC_DATA *)*(IEC_UDINT *)pMessage->pData;
+            DATAPTR pData = *(DATAPTR *)pMessage->pData;
 			OS_MEMCPY(pMessage->pData, pData, pMessage->uLen);
 			osFree(&pData);
 		}
@@ -356,12 +357,12 @@ IEC_UINT osSendMessage(SMessage *pMessage, IEC_UINT uQueue)
 	
 	if (pMessage->uLen > FC_MAX_MSG_LEN)
 	{
-		IEC_DATA *pData = osMalloc(pMessage->uLen); 
+        DATAPTR pData = osMalloc(pMessage->uLen);
 
 		OS_MEMCPY(pData, pMessage->pData, pMessage->uLen);
 		 
-		uSendLen = sizeof(IEC_UDINT);
-		*(IEC_UDINT *)pMessage->pData = (IEC_UDINT)pData;
+        uSendLen = sizeof(DATAPTR);
+        *(DATAPTR *)pMessage->pData = pData;
 	}
 #ifdef USE_POSIX_MQUEUE
     if (mq_send(g_hQueue[uQueue], (char *)pMessage, HD_MESSAGE + uSendLen, 0) == -1)

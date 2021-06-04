@@ -36,7 +36,13 @@
  * ----------------------------------------------------------------------------
  */
 #define IP_CFG_IDX16		/* 16 bit index in object map			*/
+#if __SIZEOF_POINTER__ == 4
 #define IP_CFG_PTR32		/* 32 bit pointer size					*/
+#elif  __SIZEOF_POINTER__ == 8
+#define IP_CFG_PTR64		/* 64 bit pointer size					*/
+#else
+#error unknown pointer size
+#endif
 #define IP_CFG_AIS16		/* 16 bit max array size				*/
  
 
@@ -367,8 +373,15 @@ IEC_UINT intWide64Ops(STaskInfoVM *pVM, CPTR_TYP *ppIP, DPTR_TYP *ppIN, SPTR_TYP
 	#define SP_DEC_VPTR 		SP_DEC8
 	#define STK_OCHK_VPTR(x)	STK_OCHK8(x)
 	#define STK_UCHK_VPTR(x)	STK_UCHK8(x)
+#if 0
 	/* there is no representation for bit pointer on 64 address machines */
-
+#else
+    #define VBITPTR 			IEC_LWORD
+    #define SP_INC_VBITPTR		SP_INC8
+    #define SP_DEC_VBITPTR		SP_DEC8
+    #define STK_OCHK_VBITPTR(x) STK_OCHK8(x)
+    #define STK_UCHK_VBITPTR(x) STK_UCHK8(x)
+#endif
 #endif
 
 

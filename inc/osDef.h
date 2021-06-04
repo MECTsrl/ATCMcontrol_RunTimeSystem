@@ -834,6 +834,8 @@ typedef struct
 #define FILEPTR     void *
 #define FILEBAD     NULL
 
+#define DATAPTR     IEC_DATA *
+
 /* Interpreter - Supported Data Types
  * ----------------------------------------------------------------------------
  */
@@ -920,8 +922,15 @@ typedef struct
 
 #undef	IP_CFG_STACK8
 #undef	IP_CFG_STACK16
+#if __SIZEOF_POINTER__ == 4
 #define IP_CFG_STACK32
 #undef	IP_CFG_STACK64
+#elif  __SIZEOF_POINTER__ == 8
+#undef  IP_CFG_STACK32
+#define	IP_CFG_STACK64
+#else
+#error unknown pointer size
+#endif
 
 #undef	IP_CFG_INST8
 #undef	IP_CFG_INST16

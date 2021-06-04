@@ -131,7 +131,7 @@ IEC_UINT intSetException(STaskInfoVM *pVM, IEC_UINT uErrNo, IEC_DATA OS_CPTR *pI
 			(pIP <	pVM->pShared->pCode[u].pAdr + pVM->pShared->pCode[u].ulSize))
 		{
 			pEX->uCode		= u;
-			pEX->ulOffset	= (IEC_UDINT)pIP - (IEC_UDINT)pVM->pShared->pCode[u].pAdr;
+            pEX->ulOffset	= pIP - pVM->pShared->pCode[u].pAdr; /* DATAPTR */
 			break;
 		}
 	}
