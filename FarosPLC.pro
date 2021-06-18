@@ -14,6 +14,8 @@ QMAKE_CFLAGS_RELEASE += -O3
 LIBS += -pthread -lrt
 
 TARGET = fcrts
+target.path = /local/root # path on device
+INSTALLS += target
 
 SOURCES += \
         CANopen/CANopen.c \

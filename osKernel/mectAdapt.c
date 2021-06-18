@@ -54,7 +54,8 @@ void *IO_Layer_DAT(void *lpParam)
 {
 	int iRes = osPthreadSetSched(FC_SCHED_IO_DAT, FC_PRIO_IO_DAT);
     if (iRes != 0) {
-		return NULL;
+        //return NULL;
+        osTrace("ERR %s(%04ld): continuing anyway\n", __4CFILE__, (IEC_UDINT)__LINE__, (iRes));
     }
 
 #if defined(RTS_CFG_TASK_TRACE)

@@ -1094,7 +1094,7 @@ IEC_UINT sockComm(void *pPara)
   #endif
 
 #if 1
-    fprintf(stderr, "%s(): HD_BLOCK=%lu MAX_DATA=%d sizeof(XBlock)=%lu", __func__, HD_BLOCK, MAX_DATA,  sizeof(XBlock));
+    fprintf(stderr, "%s(): HD_BLOCK=%lu MAX_DATA=%d sizeof(XBlock)=%lu\n", __func__, HD_BLOCK, MAX_DATA,  sizeof(XBlock));
 #endif
 
 	for( ; ; )
