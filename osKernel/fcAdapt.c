@@ -59,13 +59,13 @@ void *VM_Proc(void *lpParam)
 	pthread_cleanup_push(VM_CleanUp_Common , lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '" TASK_NAME_IEC_VM "' created with pid %d.\r\n", ((STaskInfoVM *)lpParam)->usTask, getpid());
+    osTrace("--- TSK: Task '" TASK_NAME_IEC_VM "' created with pid %d/%lu.\r\n", ((STaskInfoVM *)lpParam)->usTask, getpid(), pthread_self());
   #endif
 
 	vmMain(pVM);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '" TASK_NAME_IEC_VM "' terminated with pid %d.\r\n", ((STaskInfoVM *)lpParam)->usTask, getpid());
+    osTrace("--- TSK: Task '" TASK_NAME_IEC_VM "' terminated with pid %d/%lu.\r\n", ((STaskInfoVM *)lpParam)->usTask, getpid(), pthread_self());
   #endif
 
 	pthread_cleanup_pop(0);
@@ -88,13 +88,13 @@ void *SOCKET_ListenThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_LIST, FC_PRIO_LIST);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_COM_LIS, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_COM_LIS, getpid(), pthread_self());
   #endif
 
 	sockListen((SComTCP *)lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_COM_LIS, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_COM_LIS, getpid(), pthread_self());
   #endif
 
 	pthread_detach(pthread_self());
@@ -117,13 +117,13 @@ void *SOCKET_CommThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_COM, FC_PRIO_COM);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '" TASK_NAME_COM_WRK "' created with pid %d.\r\n", ((SComTCP *)lpParam)->uTask, getpid());
+    osTrace("--- TSK: Task '" TASK_NAME_COM_WRK "' created with pid %d/%lu.\r\n", ((SComTCP *)lpParam)->uTask, getpid(), pthread_self());
   #endif
 
 	sockComm((SComTCP *)lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '" TASK_NAME_COM_WRK "' terminated with pid %d.\r\n", ((SComTCP *)lpParam)->uTask, getpid());
+    osTrace("--- TSK: Task '" TASK_NAME_COM_WRK "' terminated with pid %d/%lu.\r\n", ((SComTCP *)lpParam)->uTask, getpid(), pthread_self());
   #endif
 
 	pthread_detach(pthread_self());
@@ -146,13 +146,13 @@ void *VMM_OnlineChangeThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_OC, FC_PRIO_OC);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d\r\n", TASK_NAME_SYS_OCH, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu\r\n", TASK_NAME_SYS_OCH, getpid(), pthread_self());
   #endif
 
 	ocMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d\r\n", TASK_NAME_SYS_OCH, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu\r\n", TASK_NAME_SYS_OCH, getpid(), pthread_self());
   #endif
 
 	pthread_detach(pthread_self());
@@ -175,13 +175,13 @@ void *VM_TimerThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_VMTIMER, FC_PRIO_VMTIMER);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_SYS_TIM, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_SYS_TIM, getpid(), pthread_self());
   #endif
 
 	timMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_SYS_TIM, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_SYS_TIM, getpid(), pthread_self());
   #endif
 
 	pthread_detach(pthread_self());
@@ -204,13 +204,13 @@ void *VMM_RetainThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_RET, FC_PRIO_RET);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_SYS_RET, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_SYS_RET, getpid(), pthread_self());
   #endif
 
 	retMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_SYS_RET, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_SYS_RET, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -233,13 +233,13 @@ void *BAC_DeviceThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_BAC_DEV, FC_PRIO_BAC_DEV);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_DEV, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_BAC_DEV, getpid(), pthread_self());
   #endif
 
 	devMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_BAC_DEV, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_BAC_DEV, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -262,13 +262,13 @@ void *BAC_COVThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_BAC_COV, FC_PRIO_BAC_COV);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_COV, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_BAC_COV, getpid(), pthread_self());
   #endif
 
 	covMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_BAC_COV, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_BAC_COV, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -291,13 +291,13 @@ void *BAC_ScanThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_BAC_SCN, FC_PRIO_BAC_SCN);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_SCN, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_BAC_SCN, getpid(), pthread_self());
   #endif
 
 	scnMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_BAC_SCN, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_BAC_SCN, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -320,13 +320,13 @@ void *BAC_FlashThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_BAC_FLH, FC_PRIO_BAC_FLH);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_FLH, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_BAC_FLH, getpid(), pthread_self());
   #endif
 
 	flhMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_BAC_FLH, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_BAC_FLH, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -349,13 +349,13 @@ void *BAC_ConfigThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_BAC_CFG, FC_PRIO_BAC_CFG);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_BAC_CFG, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_BAC_CFG, getpid(), pthread_self());
   #endif
 
 	cfgMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_BAC_CFG, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_BAC_CFG, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -378,13 +378,13 @@ void *PDP_ManagementThread(void *lpParam)
 	osPthreadSetSched(FC_SCHED_PDP_MGT, FC_PRIO_PDP_MGT);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_PDP_MGT, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_PDP_MGT, getpid(), pthread_self());
   #endif
 
 	dpMgt(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_PDP_MGT, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_PDP_MGT, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -407,13 +407,13 @@ void *IO_Layer_BACnet(void *lpParam)
 	osPthreadSetSched(FC_SCHED_IO_BACNET, FC_PRIO_IO_BACNET);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_BAC, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_IOL_BAC, getpid(), pthread_self());
   #endif
 
 	bacMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_IOL_BAC, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_IOL_BAC, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -436,13 +436,13 @@ void *IO_Layer_Test(void *lpParam)
 	osPthreadSetSched(FC_SCHED_IO_TEST, FC_PRIO_IO_TEST);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_TST, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_IOL_TST, getpid(), pthread_self());
   #endif
 
 	tstMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_IOL_TST, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_IOL_TST, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());
@@ -465,13 +465,13 @@ void *IO_Layer_ProfiDP(void *lpParam)
 	osPthreadSetSched(FC_SCHED_IO_PROFI_DP, FC_PRIO_IO_PROFI_DP);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_PDP, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_IOL_PDP, getpid(), pthread_self());
   #endif
 
 	dpMain(lpParam);
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_IOL_PDP, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_IOL_PDP, getpid(), pthread_self());
   #endif
 	
 	pthread_detach(pthread_self());

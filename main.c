@@ -209,18 +209,34 @@ int main(int argc, char *argv[])
 #else
     struct rlimit rlimit;
     int retval;
+
     rlimit.rlim_cur = rlimit.rlim_max = 1024 * 1024;
     retval = setrlimit(RLIMIT_STACK, &rlimit);
     if (retval) {
         perror("setrlimit");
         return 1;
     }
+    bzero(&rlimit, sizeof(rlimit));
+    retval = getrlimit(RLIMIT_MSGQUEUE, &rlimit);
+    fprintf(stderr, "%s: getrlimit RLIMIT_MSGQUEUE: cur=%lu max=%lu, retval=%d\n", __func__, rlimit.rlim_cur, rlimit.rlim_max, retval);
+    rlimit.rlim_cur = 8192*8*52;
+    rlimit.rlim_max = rlimit.rlim_cur;
+    retval = setrlimit(RLIMIT_MSGQUEUE, &rlimit);
+    fprintf(stderr, "%s: setrlimit RLIMIT_MSGQUEUE: cur=%lu max=%lu, retval=%d\n", __func__, rlimit.rlim_cur, rlimit.rlim_max, retval);
+
+    bzero(&rlimit, sizeof(rlimit));
+    retval = getrlimit(RLIMIT_NOFILE, &rlimit);
+    fprintf(stderr, "%s: getrlimit RLIMIT_NOFILE: cur=%lu max=%lu, retval=%d\n", __func__, rlimit.rlim_cur, rlimit.rlim_max, retval);
+#if 0
+    rlimit.rlim_cur = 2048;
+    retval = setrlimit(RLIMIT_NOFILE, &rlimit);
+    fprintf(stderr, "%s: setrlimit RLIMIT_NOFILE: cur=%lu max=%lu, retval=%d\n", __func__, rlimit.rlim_cur, rlimit.rlim_max, retval);
+#endif
 #endif
     mlockall(MCL_CURRENT | MCL_FUTURE);
 
     if (application_options(argc, argv) != 0) {
         fprintf(stderr, "%s: command line option error.\n", __func__);
-
         return 1;
     }
 
@@ -570,8 +586,8 @@ void crash_handler(int signum, siginfo_t *siginfo, void *context)
 
     if (uRes == OK && uTask != 0xffffu)
     {
-        len = sprintf(buf, "APP: %s, TASK: %d(%s), ERRNO: %d, CODE: %08X\n",
-                           app_name, getpid(), szTask, siginfo->si_errno, siginfo->si_code);
+        len = sprintf(buf, "APP: %s, TASK: %d/%lu(%s), ERRNO: %d, CODE: %08X\n",
+                           app_name, getpid(), pthread_self(), szTask, siginfo->si_errno, siginfo->si_code);
     }
     else
     {

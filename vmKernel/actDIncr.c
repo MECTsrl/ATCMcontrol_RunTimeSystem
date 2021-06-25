@@ -530,6 +530,7 @@ IEC_UINT cmdOCCommit(STaskInfoVMM *pVMM, XBlock *pBlock)
 	  #endif /* ! RTS_CFG_VM_IPC */
 
 		uEnsureOnlyOnce = 0x4711u;
+        (void)uEnsureOnlyOnce;
 	
 	} /* ---------------------------------------------------------------------- */
 

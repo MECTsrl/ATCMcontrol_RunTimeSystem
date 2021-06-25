@@ -503,6 +503,7 @@ static void doEnabledTransitionsPass1(SFC_Header OS_DPTR * pSFCPOU, SFC_BOOL man
 		}
 		enTCount++;
 	}
+    (void)transVal;
 }
 
 

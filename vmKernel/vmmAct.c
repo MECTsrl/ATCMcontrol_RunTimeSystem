@@ -54,7 +54,7 @@ static IEC_UINT actDataDiv(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT uToCopy, IEC
 	{
 		/* Data is divided
 		 */
-		if (pDL->uRecv + pBlock->uLen - *upCount > sizeof(pDL->pRecv))
+        if (pDL->uRecv + pBlock->uLen > *upCount + sizeof(pDL->pRecv))
 		{
 			RETURN(ERR_BUFFER_TOO_SMALL);
 		}
@@ -572,7 +572,7 @@ IEC_UINT actGetOCConfig(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, SOnlC
 
 		/* Check if the new project fits in the object lists
 		 */
-		if (pProject->uCode + pOC->iCodeDiff > MAX_CODE_OBJ)
+        if (pProject->uCode + pOC->iCodeDiff > (int)MAX_CODE_OBJ)
 		{
 			RETURN(ERR_OVERRUN_CLASS);
 		}
@@ -1316,8 +1316,7 @@ IEC_UINT actGetTask(SDLBuffer *pDL, XBlock *pBlock, IEC_UINT *upCount, IEC_UINT 
 		pTask->bWDogEnable		= (IEC_BOOL)(xTask.ulWatchDogMS != 0 ? TRUE : FALSE);
 		pTask->bWDogOldEnable	= (IEC_BOOL)(xTask.ulWatchDogMS != 0 ? TRUE : FALSE);
 		pTask->ulWDogCounter	= 0;
-		pTask->ulWDogTrigger	= (xTask.ulWatchDogMS == -1 || xTask.ulWatchDogMS == 0) ?
-									  WD_TRIGGER_DEFAULT : xTask.ulWatchDogMS;
+        pTask->ulWDogTrigger	= xTask.ulWatchDogMS == 0 ? WD_TRIGGER_DEFAULT : xTask.ulWatchDogMS;
 
 	  #if defined(RTS_CFG_COPY_DOMAIN)
 		pTask->uCpyRegions	= xTask.uCpyRegions;

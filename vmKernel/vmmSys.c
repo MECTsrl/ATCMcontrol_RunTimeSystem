@@ -203,7 +203,11 @@ IEC_UINT sysGetType(IEC_CHAR *szType)
 		/* ... */
 
 		default:			
-			szProd = "FarosPLC Embedded Windows-RTS";
+#ifdef __XENO__
+            szProd = "FarosPLC Embedded GNU/Linux Xenomai";
+#else
+            szProd = "FarosPLC Embedded GNU/Linux POSIX";
+#endif
 			break;
 	
 	} /* switch (g_uVariant) */

@@ -142,10 +142,11 @@ IEC_UINT osCreateIPCQueue(IEC_UINT uQueue)
 #endif
 	if (g_hQueue[uQueue] == OS_INVALID_QUEUE)
 	{
+        fprintf(stderr, "%s: failure, mqueue[%u]=%s\n", __func__, uQueue, sQueueId);
 		RETURN_e(ERR_CREATE_QUEUE);
 	}
-
-	RETURN(uRes);
+    fprintf(stderr, "%s: success, mqueue[%u]=%s\n", __func__, uQueue, sQueueId);
+    RETURN(uRes);
 }
 
 /* ---------------------------------------------------------------------------- */

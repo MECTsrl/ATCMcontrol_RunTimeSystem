@@ -540,6 +540,7 @@ IEC_UINT dataMain(void *pPara)
 
 	} /* for ( ; ; ) */
 
+    (void)bWarmStart;
 	RETURN(OK);
 }
 

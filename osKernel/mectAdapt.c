@@ -59,13 +59,13 @@ void *IO_Layer_DAT(void *lpParam)
     }
 
 #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d.\r\n", TASK_NAME_IOL_DAT, getpid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu.\r\n", TASK_NAME_IOL_DAT, getpid(), pthread_self());
 #endif
 
 	dataMain(lpParam);
 
 #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' terminated with pid %d.\r\n", TASK_NAME_IOL_DAT, getpid());
+    osTrace("--- TSK: Task '%s' terminated with pid %d/%lu.\r\n", TASK_NAME_IOL_DAT, getpid(), pthread_self());
 #endif
 
 	pthread_detach(pthread_self());

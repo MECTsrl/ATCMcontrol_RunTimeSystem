@@ -439,7 +439,7 @@
 #undef	RTS_CFG_IO_PRC_TRACE
 #undef	RTS_CFG_IO_BAC_TRACE
 #undef	RTS_CFG_IO_BAC_TRACE_EX
-#undef	RTS_CFG_TASK_TRACE
+#define	RTS_CFG_TASK_TRACE
 
 #undef	RTS_CFG_MEMORY_CHECK
 
@@ -1214,8 +1214,18 @@ typedef struct
 
 #endif	/* RTS_CFG_DEBUG_OUTPUT */
 
+#if defined(TP1000)
 #define XX_GPIO_MAX 18
 #define XX_GPIO_MAX_TEST 8
+#elif defined(TP2000)
+#define XX_GPIO_MAX 0
+#define XX_GPIO_MAX_TEST 0
+#warning missing implementation
+#elif defined(TP3000)
+#define XX_GPIO_MAX 0
+#define XX_GPIO_MAX_TEST 0
+#warning missing implementation
+#endif
 
 #if defined(RTS_CFG_DEBUG_GPIO)
 

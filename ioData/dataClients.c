@@ -896,7 +896,7 @@ static enum fieldbusError fieldbusRead(u_int16_t d, u_int16_t DataAddr, u_int32_
             retval = CommError;
             break;
         }
-        // no break, continue in the following code
+        __attribute__ ((fallthrough)); // no break, continue in the following code
     case RTU_SRV:
     case TCP_SRV:
     case TCPRTU_SRV:
@@ -1260,7 +1260,7 @@ static enum fieldbusError fieldbusWrite(u_int16_t d, u_int16_t DataAddr, u_int32
             retval = CommError;
             break;
         }
-        // no break, continue in the following code
+        __attribute__ ((fallthrough)); // no break, continue in the following code
     case RTU_SRV:
     case TCP_SRV:
     case TCPRTU_SRV:

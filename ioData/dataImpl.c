@@ -154,7 +154,6 @@ IEC_UINT dataNotifyConfig(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT uRes = OK;
     (void)uIOLayer;
-    (void)pIO;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyConfig() ...\n");
@@ -174,7 +173,6 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 {
 	IEC_UINT uRes = OK;
     (void)uIOLayer;
-    (void)pIO;
 
 #if defined(RTS_CFG_DEBUG_OUTPUT)
 	fprintf(stderr,"running dataNotifyStart() ... \n");
@@ -184,7 +182,7 @@ IEC_UINT dataNotifyStart(IEC_UINT uIOLayer, SIOConfig *pIO)
 	void *pvIsegment = (void *)(((char *)(pIO->I.pAdr + pIO->I.ulOffs)) + 4);
     void *pvQsegment = (void *)(((char *)(pIO->Q.pAdr + pIO->Q.ulOffs)) + 4);
 
-    OS_MEMCPY(pvIsegment, plcBlock.values, sizeof(plcBlock.values)); // always Qdata
+    OS_MEMCPY(pvIsegment, plcBlock.values, sizeof(plcBlock.values));
     OS_MEMCPY(pvQsegment, plcBlock.values, sizeof(plcBlock.values));
 
 	RETURN(uRes);

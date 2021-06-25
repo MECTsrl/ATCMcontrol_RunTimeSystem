@@ -416,6 +416,10 @@ IEC_UINT osCreateVMTask (STaskInfoVM *pVM)
 	{
 		RETURN_e(ERR_CREATE_TASK);
 	}
+    while (! (pVM->usFlags & TASK_FLAG_INITIALIZED)) {
+        osSleep(1000); // not sched_yield();
+        fprintf(stderr, "[%s] still waiting thread %s\n", __func__, pVM->Task.szName);
+    }
 
 	g_hVM[pVM->usTask] = hThread;
 

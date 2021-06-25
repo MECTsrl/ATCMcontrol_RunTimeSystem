@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <sys/timeb.h>
 #include <sys/reboot.h>
+#include <unistd.h>
 
 /* ----  Local Defines:   ----------------------------------------------------- */
 
@@ -96,7 +97,7 @@ IEC_UINT osMain(IEC_UINT argc, IEC_CHAR *argv[])
 	IEC_UINT i;
 
   #if defined(RTS_CFG_TASK_TRACE)
-	osTrace("--- TSK: Task '%s' created with pid %d from ppid %d.\r\n", "SYS_VMM", getpid(), getppid());
+    osTrace("--- TSK: Task '%s' created with pid %d/%lu from ppid %d.\r\n", "SYS_VMM", getpid(), pthread_self(), getppid());
   #endif
 
 	/* Check parameters 

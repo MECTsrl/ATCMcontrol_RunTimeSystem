@@ -50,6 +50,7 @@
 
 #define VM_MAGIC            0xA5A5u
 
+#if defined(TP1000)
 #define XX_GPIO_BASE        0x80000000
 #define XX_GPIO_SIZE        0x00100000
 #define XX_GPIO_SET_OFFSET  0x0004
@@ -68,6 +69,11 @@
 #define XX_PWM3_ACTIVE_OFFS 0x00000070 // 0x80064070 HW_PWM_ACTIVE3
 #define XX_PWM3_PERIOD_OFFS 0x00000080 // 0x80064080 HW_PWM_ACTIVE3
 
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 
 /* ----  Global Variables:	 -------------------------------------------------- */
 
@@ -86,6 +92,7 @@ static IEC_DINT g_lMemObject = 0;
 
 /* Use FGPIO and SDCARD pins as GPIO */
 
+#if defined(TP1000)
 static void *xx_base_ptr = NULL;
 static int xx_fd = -1;
 static struct {
@@ -427,6 +434,11 @@ static struct {
     // THE END
     { 0xffff, 0xffffffff }
 };
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 
 #endif
 
@@ -539,6 +551,7 @@ int osPthreadCreate(pthread_t *thread, /*const*/ pthread_attr_t *attr,
         fprintf(stderr, ", %s.\n", strerror(errno));
         *thread = WRONG_THREAD;
     } else {
+        fprintf(stderr, "[%s] success creating %s thread\n", __func__, name);
 #ifdef __XENO__
         pthread_set_name_np(*thread, name);
 #endif
@@ -933,16 +946,22 @@ unsigned xx_gpio_enabled;
 void xx_gpio_init(void)
 {
     xx_gpio_enabled = 0;
-
-	xx_fd = open("/dev/mem", O_RDWR, 0);
-	if (xx_fd <= 0)
-		return;
-
+#if defined(TP1000)
+    xx_base_ptr = NULL;
+    xx_fd = open("/dev/mem", O_RDWR, 0);
+    if (xx_fd <= 0)
+        return;
     xx_base_ptr = mmap(NULL, XX_GPIO_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, xx_fd, XX_GPIO_BASE);
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_gpio_enable(unsigned n)
 {
+#if defined(TP1000)
     if (xx_base_ptr && n < XX_GPIO_MAX) {
         // configure as GPIO
         unsigned i = 0;
@@ -957,10 +976,17 @@ void xx_gpio_enable(unsigned n)
         xx_gpio_config(n, 0);
         xx_gpio_enabled |= (1 << n);
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
+
 }
 
 void xx_gpio_config(unsigned n, int output)
 {
+#if defined(TP1000)
     if (xx_base_ptr && n < XX_GPIO_MAX && (xx_gpio_enabled & (1 << n))) {
         register unsigned *reg_ptr;
 
@@ -970,95 +996,149 @@ void xx_gpio_config(unsigned n, int output)
             reg_ptr = (unsigned *)(xx_base_ptr + XX_PINCTL_BASE + xx_gpio_doe[n].offset + XX_GPIO_CLR_OFFSET);
         *reg_ptr = xx_gpio_doe[n].mask;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_gpio_set(unsigned n)
 {
+#if defined(TP1000)
     if (xx_base_ptr && n < XX_GPIO_MAX && (xx_gpio_enabled & (1 << n))) {
-		register unsigned *reg_ptr;
+        register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_PINCTL_BASE + xx_gpio_dout[n].offset + XX_GPIO_SET_OFFSET);
         *reg_ptr = xx_gpio_dout[n].mask;
-	}
+    }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_gpio_clr(unsigned n)
 {
+#if defined(TP1000)
     if (xx_base_ptr && n < XX_GPIO_MAX && (xx_gpio_enabled & (1 << n))) {
-		register unsigned *reg_ptr;
+        register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_PINCTL_BASE + xx_gpio_dout[n].offset + XX_GPIO_CLR_OFFSET);
         *reg_ptr = xx_gpio_dout[n].mask;
-	}
+    }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 int xx_gpio_get(unsigned n)
 {
     register int retval = 0;
 
+#if defined(TP1000)
     if (xx_base_ptr && n < XX_GPIO_MAX && (xx_gpio_enabled & (1 << n))) {
         retval = (*((unsigned *)(xx_base_ptr + XX_PINCTL_BASE + xx_gpio_din[n].offset)) & xx_gpio_din[n].mask) ? 1 : 0;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
     return retval;
 }
 
 void xx_gpio_close(void)
 {
-	if (xx_base_ptr) {
-		munmap(xx_base_ptr, XX_GPIO_SIZE);
-		xx_base_ptr = NULL;
-	}
-
-	if (xx_fd > 0) {
-		close(xx_fd);
-		xx_fd = -1;
-	}
+#if defined(TP1000)
+    if (xx_base_ptr) {
+        munmap(xx_base_ptr, XX_GPIO_SIZE);
+        xx_base_ptr = NULL;
+    }
+    if (xx_fd > 0) {
+        close(xx_fd);
+        xx_fd = -1;
+    }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_watchdog_enable()
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_RTCCTL_BASE + XX_WATCHDOGEN_OFFS + XX_GPIO_SET_OFFSET);
         *reg_ptr = XX_WATCHDOGEN_MASK;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_watchdog_disable()
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_RTCCTL_BASE + XX_WATCHDOGEN_OFFS + XX_GPIO_CLR_OFFSET);
         *reg_ptr = XX_WATCHDOGEN_MASK;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_watchdog_reset(unsigned value_ms)
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_RTCCTL_BASE + XX_WATCHDOGms_OFFS);
         *reg_ptr = value_ms;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 unsigned xx_watchdog_get()
 {
     register unsigned retval = 0;
 
+#if defined(TP1000)
+
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
         reg_ptr = (unsigned *)(xx_base_ptr + XX_RTCCTL_BASE + XX_WATCHDOGms_OFFS);
         retval = *reg_ptr;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
     return retval;
 }
 
 void xx_pwm3_set(unsigned duty_cycle)
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
         //register unsigned period_cycles = 37495; // 100ms = 37495 * 2.667us (24Mhz/64)
@@ -1074,26 +1154,43 @@ void xx_pwm3_set(unsigned duty_cycle)
         reg_ptr = (unsigned *)(xx_base_ptr + XX_PWMCTL_BASE + XX_PWM3_ACTIVE_OFFS);
         *reg_ptr = (period_cycles * duty_cycle / 100) << 16;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_pwm3_enable()
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_PWMCTL_BASE + XX_PMW3_ENABLE_OFFS + XX_GPIO_SET_OFFSET);
         *reg_ptr = XX_PMW3_ENABLE_MASK;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 void xx_pwm3_disable()
 {
+#if defined(TP1000)
     if (xx_base_ptr) {
         register unsigned *reg_ptr;
 
         reg_ptr = (unsigned *)(xx_base_ptr + XX_PWMCTL_BASE + XX_PMW3_ENABLE_OFFS  + XX_GPIO_CLR_OFFSET);
         *reg_ptr = XX_PMW3_ENABLE_MASK;
     }
+#elif defined(TP2000)
+#warning missing implementation
+#elif defined(TP3000)
+#warning missing implementation
+#endif
 }
 
 
