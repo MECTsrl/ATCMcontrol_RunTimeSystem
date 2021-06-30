@@ -73,6 +73,8 @@
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 
 /* ----  Global Variables:	 -------------------------------------------------- */
@@ -437,6 +439,8 @@ static struct {
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
 
@@ -956,6 +960,8 @@ void xx_gpio_init(void)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -980,6 +986,8 @@ void xx_gpio_enable(unsigned n)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 
 }
@@ -1000,6 +1008,8 @@ void xx_gpio_config(unsigned n, int output)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1015,6 +1025,8 @@ void xx_gpio_set(unsigned n)
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
 }
@@ -1032,6 +1044,8 @@ void xx_gpio_clr(unsigned n)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1046,6 +1060,8 @@ int xx_gpio_get(unsigned n)
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
     return retval;
@@ -1066,6 +1082,8 @@ void xx_gpio_close(void)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1081,6 +1099,8 @@ void xx_watchdog_enable()
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
 }
@@ -1098,6 +1118,8 @@ void xx_watchdog_disable()
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1113,6 +1135,8 @@ void xx_watchdog_reset(unsigned value_ms)
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
 }
@@ -1131,6 +1155,8 @@ unsigned xx_watchdog_get()
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
     return retval;
@@ -1158,6 +1184,8 @@ void xx_pwm3_set(unsigned duty_cycle)
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1174,6 +1202,8 @@ void xx_pwm3_enable()
 #warning missing implementation
 #elif defined(TP3000)
 #warning missing implementation
+#elif defined(DESKTOP)
+#warning missing implementation
 #endif
 }
 
@@ -1189,6 +1219,8 @@ void xx_pwm3_disable()
 #elif defined(TP2000)
 #warning missing implementation
 #elif defined(TP3000)
+#warning missing implementation
+#elif defined(DESKTOP)
 #warning missing implementation
 #endif
 }

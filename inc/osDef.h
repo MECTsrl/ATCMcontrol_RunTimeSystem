@@ -1225,6 +1225,10 @@ typedef struct
 #define XX_GPIO_MAX 0
 #define XX_GPIO_MAX_TEST 0
 #warning missing implementation
+#elif defined(DESKTOP)
+#define XX_GPIO_MAX 0
+#define XX_GPIO_MAX_TEST 0
+#warning missing implementation
 #endif
 
 #if defined(RTS_CFG_DEBUG_GPIO)
