@@ -1392,8 +1392,8 @@ static int LoadXTable(void)
         default             : ;
         }
 
-        if (ALCrossTable[lastAlarmEvent].ALOperator != OPER_FALLING
-         && ALCrossTable[lastAlarmEvent].ALOperator != OPER_RISING) {
+        if (ALCrossTable[indx].ALOperator != OPER_FALLING
+         && ALCrossTable[indx].ALOperator != OPER_RISING) {
 
             // if the comparison is with a variable
             if (ALCrossTable[indx].ALCompareVar[0] != 0) {
