@@ -111,6 +111,7 @@ static int timer_overflow_enabled = 0;
 #define PLC_PRODUCT_ID    5420 // UDINT;0;[RO] 0x100803AC <--> TPAC1008_03_AC
 #define PLC_SERIAL_NUMBER 5421 // UDINT;0;[RO] 2019014321 <--> 2019014321
 #define PLC_HMI_PAGE      5422 // DINT;0;[RW] 0x100 <--> page100; -1 <--> menu; ...
+#define PLC_MS_VERSION    5423 // UDINT;0;[RO] 0x03030A <--> Mect Suite 3.3.10
 
 #define PLC_5430          5430
 
@@ -510,7 +511,7 @@ static int mect_read_hexad(int fd, unsigned node, unsigned command, unsigned *va
 static int mect_write_hexad(int fd, unsigned node, unsigned command, unsigned value);
 static void mect_close(int fd);
 
-static unsigned plc_product_id();
+static unsigned plc_product_id(unsigned *msVersion);
 static unsigned plc_serial_number();
 
 /* ----  Implementations:	--------------------------------------------------- */
@@ -4982,9 +4983,11 @@ void dataEngineStart(void)
     VAR_VALUE(PLC_TOUCH_VOLUME) = 0x00000064; // duty=100%
     VAR_VALUE(PLC_ALARM_VOLUME) = 0x00000064; // duty=100%
 
-    // P/N and S/N
-    VAR_VALUE(PLC_PRODUCT_ID) = plc_product_id();
+    // P/N and S/N and MS VERSION
+    unsigned msVer = 0;
+    VAR_VALUE(PLC_PRODUCT_ID) = plc_product_id(&msVer);
     VAR_VALUE(PLC_SERIAL_NUMBER) = plc_serial_number();
+    VAR_VALUE(PLC_MS_VERSION) = msVer;
 
     // retentive variables
 #if defined(RTS_CFG_MECT_RETAIN)
@@ -5592,21 +5595,31 @@ IEC_UINT dataNotifyGet(IEC_UINT uIOLayer, SIOConfig *pIO, SIONotify *pNotify)
 
 /* ---------------------------------------------------------------------------- */
 
-static unsigned plc_product_id()
+static unsigned plc_product_id(unsigned *msVersion)
 {
     unsigned retval = 0xFFFFffff;
+    *msVersion = 0;
     FILE *f;
 
     f = fopen(ROOTFS_VERSION, "r");
     if (f) {
         char buf[42];
         char str[42];
-        unsigned x = 0, y = 0, z = 0;
+        unsigned uX = 0, uY = 0, uZ = 0;
 
         if (fgets(buf, 42, f) == NULL)
             goto close_file;
-        if (sscanf(buf, "Release: %5s", str) != 1)
+        // MS Version
+        if (sscanf(buf, "Release: %6s", str) != 1)  {
             goto close_file;
+        }
+        else {
+            // Get MS Version
+            if(sscanf(str, "%d.%d.%d", &uX, &uY, &uZ) == 3)  {
+                *msVersion = uZ | (uY << 8) | (uX << 16);;
+            }
+        }
+
         if (fgets(buf, 42, f) == NULL)
             goto close_file;
 
@@ -5616,35 +5629,35 @@ static unsigned plc_product_id()
         // TP1057_01_A TP1057_01_B
         // TP1070_01_A TP1070_01_B TP1070_01_C
         // TP1070_02_E
-        if (sscanf(buf, "Target: TP%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
+        if (sscanf(buf, "Target: TP%x_%x_%x", &uX, &uY, &uZ) == 3)  {
+            retval = ((uX & 0xFFFF) << 16) + ((uY & 0xFF) << 8) + (uZ & 0xFF);
+        }
         // TPX1070_03_D TPX1070_03_E
-        else if (sscanf(buf, "Target: TPX%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
+        else if (sscanf(buf, "Target: TPX%x_%x_%x", &uX, &uY, &uZ) == 3)  {
+            retval = ((uX & 0xFFFF) << 16) + ((uY & 0xFF) << 8) + (uZ & 0xFF);
+        }
         // TPAC1007_04_AA TPAC1007_04_AB TPAC1007_04_AC TPAC1007_04_AD TPAC1007_04_AE
         // TPAC1008_02_AA TPAC1008_02_AB TPAC1008_02_AD TPAC1008_02_AE TPAC1008_02_AF
         // TPAC1008_03_AC TPAC1008_03_AD
-        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
+        else if (sscanf(buf, "Target: TPAC%x_%x_%x", &uX, &uY, &uZ) == 3)  {
+            retval = ((uX & 0xFFFF) << 16) + ((uY & 0xFF) << 8) + (uZ & 0xFF);
+        }
         // TPAC1007_03 TPAC1008_01
-        else if (sscanf(buf, "Target: TPAC%x_%x", &x, &y) == 2)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8);
-
+        else if (sscanf(buf, "Target: TPAC%x_%x", &uX, &uY) == 2)  {
+            retval = ((uX & 0xFFFF) << 16) + ((uY & 0xFF) << 8);
+        }
         // TPAC1007_LV
-        else if (strcmp(buf, "Target: TPAC1007_LV") == 0)
+        else if (strcmp(buf, "Target: TPAC1007_LV") == 0)  {
             retval = 0x10075500;
-
+        }
         // TPAC1005 TPAC1006
-        else if (sscanf(buf, "Target: TPAC%x", &x) == 1)
-            retval = ((x & 0xFFFF) << 16);
-
+        else if (sscanf(buf, "Target: TPAC%x", &uX) == 1)  {
+            retval = ((uX & 0xFFFF) << 16);
+        }
         // TPLC050_01_AA TPLC100_01_AA TPLC100_01_AB
-        else if (sscanf(buf, "Target: TPLC%x_%x_%x", &x, &y, &z) == 3)
-            retval = ((x & 0xFFFF) << 16) + ((y & 0xFF) << 8) + (z & 0xFF);
-
+        else if (sscanf(buf, "Target: TPLC%x_%x_%x", &uX, &uY, &uZ) == 3)  {
+            retval = ((uX & 0xFFFF) << 16) + ((uY & 0xFF) << 8) + (uZ & 0xFF);
+        }
     close_file:
         fclose(f);
     }
