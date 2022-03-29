@@ -57,7 +57,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  26
+#define REVISION_LO  27
 
 #if DEBUG
 #undef VERBOSE_DEBUG
