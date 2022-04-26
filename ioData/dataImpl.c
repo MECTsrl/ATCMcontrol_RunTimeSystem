@@ -57,7 +57,7 @@
 #define TIMESPEC_FROM_RTIME(ts, rt) { ts.tv_sec = rt / UN_MILIARDO_ULL; ts.tv_nsec = rt % UN_MILIARDO_ULL; }
 
 #define REVISION_HI  2
-#define REVISION_LO  27
+#define REVISION_LO  28
 
 #if DEBUG
 #undef VERBOSE_DEBUG
@@ -635,7 +635,7 @@ static inline void writeQdataRegisters(u_int16_t addr, u_int32_t value, u_int8_t
         // if the variable is used in alarms/events conditions
         // ... and the value changed or the state became OK (at boot-time, ...)
         if (CrossTable[addr].usedInAlarmsEvents
-          && (value != VAR_VALUE(addr)|| VAR_STATE(addr) != DATA_OK)) {
+                && (value != (VAR_VALUE(addr)) || (VAR_STATE(addr)) != DATA_OK)) {
             // change value and/or status ... and then re-check the alarms/events conditions
             VAR_VALUE(addr) = value;
             VAR_STATE(addr) = DATA_OK;
@@ -1687,9 +1687,25 @@ static int LoadXTable(void)
                 }
             }
         }
-        fprintf(stderr, "\n");
+        fprintf(stderr, "\n");       
     }
-
+//        for (indx = 1; indx <= lastAlarmEvent; ++indx) {
+//            fprintf(stderr, "Alarm/Event[%d]: Type[%d] TagAddr[%d] SourceExp[%s] CompareVar[%s] SourceAddr[%d] CompareAdr[%d] CompareVal[%d] Operator[%d] FilterTime[%d] FilterCount[%d] ALError[%d] Comparison[%d]\n",
+//                        indx,
+//                        ALCrossTable[indx].ALType,
+//                        ALCrossTable[indx].TagAddr,
+//                        ALCrossTable[indx].ALSource,
+//                        ALCrossTable[indx].ALCompareVar,
+//                        ALCrossTable[indx].SourceAddr,
+//                        ALCrossTable[indx].CompareAddr,
+//                        ALCrossTable[indx].ALCompareVal,
+//                        ALCrossTable[indx].ALOperator,
+//                        ALCrossTable[indx].ALFilterTime,
+//                        ALCrossTable[indx].ALFilterCount,
+//                        ALCrossTable[indx].ALError,
+//                        ALCrossTable[indx].comparison
+//                    );
+//        }
     // close file
 exit_function:
     if (xtable) {
@@ -1743,11 +1759,14 @@ static void AlarmMngr(void)
     // already in pthread_mutex_lock(&theCrosstableClientMutex)
     for (i = 1; i <= lastAlarmEvent; ++i) {
 
+        // fprintf(stderr, "AlarmMngr: Checking Variable Tag Adr: [%d] Source:[ %s]\n", ALCrossTable[i].TagAddr, ALCrossTable[i].ALSource);
+
         register u_int16_t SourceAddr = ALCrossTable[i].SourceAddr;
         register u_int16_t Operator = ALCrossTable[i].ALOperator;
 
         if (VAR_STATE(SourceAddr) != DATA_OK) {
             // unreliable values
+            fprintf(stderr, "AlarmMngr: VAR_STATE of SourceAddr Variable [%d] is not Ok, Skip", SourceAddr);
             continue;
         }
 
@@ -2582,7 +2601,7 @@ static void *engineThread(void *statusAdr)
     pthread_mutex_lock(&theCrosstableClientMutex);
     *threadStatusPtr = RUNNING;
     while (engineStatus != enExiting) {
-
+        int alarmProcessed = 0;
         // trivial scenario
         if (engineStatus != enRunning) {
             // XX_GPIO_CLR(1);
@@ -2619,6 +2638,7 @@ static void *engineThread(void *statusAdr)
             if (e == ETIMEDOUT) {
                 break;
             }
+            alarmProcessed = 1;
             AlarmMngr();
         }
 
@@ -2636,6 +2656,22 @@ static void *engineThread(void *statusAdr)
                 VAR_VALUE(PLC_Day) = datetime.tm_mday;
                 VAR_VALUE(PLC_Month) = datetime.tm_mon + 1;
                 VAR_VALUE(PLC_Year) = 1900 + datetime.tm_year;
+                // Check if PLC Time Variables are used in Alarm/Events
+                if (alarmProcessed == 0 &&
+                    (CrossTable[PLC_Seconds].usedInAlarmsEvents   ||
+                     CrossTable[PLC_Minutes].usedInAlarmsEvents   ||
+                     CrossTable[PLC_Hours].usedInAlarmsEvents     ||
+                     CrossTable[PLC_Day].usedInAlarmsEvents       ||
+                     CrossTable[PLC_Month].usedInAlarmsEvents     ||
+                     CrossTable[PLC_Year].usedInAlarmsEvents      ||
+                     CrossTable[PLC_UPTIME_cs].usedInAlarmsEvents ||
+                     CrossTable[PLC_UPTIME_s].usedInAlarmsEvents)
+                    )
+                {
+                        // Call AlarmMngr();
+                        AlarmMngr();
+                        alarmProcessed = 1;
+                }
             }
         }
 
