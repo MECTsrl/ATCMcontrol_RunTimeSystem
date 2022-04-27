@@ -2657,7 +2657,8 @@ static void *engineThread(void *statusAdr)
                 VAR_VALUE(PLC_Month) = datetime.tm_mon + 1;
                 VAR_VALUE(PLC_Year) = 1900 + datetime.tm_year;
                 // Check if PLC Time Variables are used in Alarm/Events
-                if (alarmProcessed == 0 &&
+                if (lastAlarmEvent > 0          &&
+                    alarmProcessed == 0         &&
                     (CrossTable[PLC_Seconds].usedInAlarmsEvents   ||
                      CrossTable[PLC_Minutes].usedInAlarmsEvents   ||
                      CrossTable[PLC_Hours].usedInAlarmsEvents     ||
