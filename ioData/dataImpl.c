@@ -2666,7 +2666,16 @@ static void *engineThread(void *statusAdr)
                      CrossTable[PLC_Month].usedInAlarmsEvents     ||
                      CrossTable[PLC_Year].usedInAlarmsEvents      ||
                      CrossTable[PLC_UPTIME_cs].usedInAlarmsEvents ||
-                     CrossTable[PLC_UPTIME_s].usedInAlarmsEvents)
+                     CrossTable[PLC_UPTIME_s].usedInAlarmsEvents  ||
+                     // Added also FastIO in checking issue #1591
+                     CrossTable[PLC_FastIO_1].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_2].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_3].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_4].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_5].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_6].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_7].usedInAlarmsEvents  ||
+                     CrossTable[PLC_FastIO_8].usedInAlarmsEvents)
                     )
                 {
                         // Call AlarmMngr();
