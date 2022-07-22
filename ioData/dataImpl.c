@@ -2657,6 +2657,7 @@ static void *engineThread(void *statusAdr)
                 VAR_VALUE(PLC_Month) = datetime.tm_mon + 1;
                 VAR_VALUE(PLC_Year) = 1900 + datetime.tm_year;
                 // Check if PLC Time Variables are used in Alarm/Events
+                // Added also FastIO in checking issue #1591
                 if (lastAlarmEvent > 0          &&
                     alarmProcessed == 0         &&
                     (CrossTable[PLC_Seconds].usedInAlarmsEvents   ||
@@ -2667,7 +2668,6 @@ static void *engineThread(void *statusAdr)
                      CrossTable[PLC_Year].usedInAlarmsEvents      ||
                      CrossTable[PLC_UPTIME_cs].usedInAlarmsEvents ||
                      CrossTable[PLC_UPTIME_s].usedInAlarmsEvents  ||
-                     // Added also FastIO in checking issue #1591
                      CrossTable[PLC_FastIO_1].usedInAlarmsEvents  ||
                      CrossTable[PLC_FastIO_2].usedInAlarmsEvents  ||
                      CrossTable[PLC_FastIO_3].usedInAlarmsEvents  ||
